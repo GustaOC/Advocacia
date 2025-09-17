@@ -1,4 +1,4 @@
-// components/login-form.tsx
+// components/login-form.tsx - VERSÃO CORRIGIDA
 "use client"
 
 import { useState } from "react"
@@ -23,19 +23,41 @@ export default function LoginForm() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    
     try {
+      console.log("[LoginForm] Iniciando login para:", email)
+      
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       })
+      
       const data = await res.json().catch(() => ({}))
+      console.log("[LoginForm] Resposta da API:", { status: res.status, data })
 
-      if (!res.ok) throw new Error(data?.error || "Não foi possível entrar.")
+      if (!res.ok) {
+        throw new Error(data?.error || "Não foi possível entrar.")
+      }
 
-      // pequeno delay para garantir Set-Cookie
-      setTimeout(() => router.push("/dashboard"), 250)
+      // ✅ CORREÇÃO: Define cookies que o auth-guard espera
+      if (typeof window !== "undefined") {
+        document.cookie = "sb-auth-token-client=authenticated; path=/; max-age=604800"
+        document.cookie = `user-info=${JSON.stringify({ email, id: data.user?.id || 'temp' })}; path=/; max-age=604800`
+        sessionStorage.setItem("just-logged-in", "true")
+        console.log("[LoginForm] ✅ Cookies e sessionStorage definidos")
+      }
+
+      console.log("[LoginForm] ✅ Login bem-sucedido, redirecionando...")
+      
+      // ✅ CORREÇÃO: Tempo maior para garantir que cookies sejam salvos
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 500)
+      
     } catch (err: any) {
+      console.error("[LoginForm] ❌ Erro no login:", err)
       setError(err?.message || "Erro ao entrar")
     } finally {
       setLoading(false)

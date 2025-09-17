@@ -29,13 +29,13 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         cases (id, title, case_number),
-        created_by:employees!created_by_employee_id (id, name),
-        assigned_to:employees!assigned_to_employee_id (id, name)
+        created_by_employee:employees!created_by_employee_id (id, name, email),
+        assigned_to_employee:employees!assigned_to_employee_id (id, name, email)
       `)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(data);
+    return NextResponse.json({ petitions: data });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -60,11 +60,10 @@ export async function POST(req: NextRequest) {
     
     // Opcional: Criar uma notificação para o funcionário responsável
     await supabase.from('notifications').insert({
-        employee_id: parsedData.assigned_to_employee_id,
+        user_id: parsedData.assigned_to_employee_id,
         title: 'Nova Petição Atribuída',
         message: `Você foi designado para revisar a petição: "${parsedData.title}"`,
         related_petition_id: data.id,
-        related_case_id: parsedData.case_id
     });
 
     return NextResponse.json(data, { status: 201 });

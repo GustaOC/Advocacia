@@ -1,4 +1,4 @@
-// components/auth-guard.tsx - VERSÃO CORRIGIDA SEM LOOP
+// components/auth-guard.tsx - VERSÃO CORRIGIDA E SIMPLIFICADA
 "use client"
 
 import { useEffect, useState } from "react"
@@ -23,48 +23,47 @@ export function AuthGuard({
   
   useEffect(() => {
     let mounted = true
+    let authCheckComplete = false
     
     const checkAuth = async () => {
+      // ✅ CORREÇÃO: Evita verificações duplicadas
+      if (authCheckComplete) return
+      
       try {
         console.log("[AuthGuard] Iniciando verificação de autenticação...")
         
-        // PRIMEIRA VERIFICAÇÃO: Flag just-logged-in (mais alta prioridade)
+        // ✅ VERIFICAÇÃO 1: Flag just-logged-in (máxima prioridade)
         if (typeof window !== 'undefined') {
           const justLoggedIn = sessionStorage.getItem('just-logged-in')
           if (justLoggedIn) {
-            console.log("[AuthGuard] ✅ Flag just-logged-in encontrada - usuário acabou de fazer login")
+            console.log("[AuthGuard] ✅ Flag just-logged-in encontrada")
             sessionStorage.removeItem('just-logged-in')
             if (mounted) {
               setIsAuthenticated(true)
               setIsLoading(false)
+              authCheckComplete = true
             }
             return
           }
         }
 
-        // SEGUNDA VERIFICAÇÃO: Cookies de client-side (definidos pelo login-form)
+        // ✅ VERIFICAÇÃO 2: Cookies client-side
         if (typeof window !== 'undefined') {
           const cookies = document.cookie
-          console.log("[AuthGuard] Verificando cookies client-side...")
+          const hasAuthCookie = cookies.includes('sb-auth-token-client=authenticated')
           
-          // Verifica os cookies que o login-form define
-          const hasClientAuthCookie = cookies.includes('sb-auth-token-client=authenticated')
-          const hasJustLoggedInCookie = cookies.includes('just-logged-in=true')
-          
-          if (hasClientAuthCookie || hasJustLoggedInCookie) {
-            console.log("[AuthGuard] ✅ Cookies client-side válidos encontrados", {
-              hasClientAuthCookie,
-              hasJustLoggedInCookie
-            })
+          if (hasAuthCookie) {
+            console.log("[AuthGuard] ✅ Cookie de autenticação encontrado")
             if (mounted) {
               setIsAuthenticated(true)
               setIsLoading(false)
+              authCheckComplete = true
             }
             return
           }
         }
 
-        // TERCEIRA VERIFICAÇÃO: Sessão Supabase
+        // ✅ VERIFICAÇÃO 3: Sessão Supabase
         console.log("[AuthGuard] Verificando sessão Supabase...")
         const supabase = createClient()
         const { data: { user }, error } = await supabase.auth.getUser()
@@ -72,29 +71,38 @@ export function AuthGuard({
         if (!mounted) return
         
         if (!error && user) {
-          console.log("[AuthGuard] ✅ Sessão Supabase válida encontrada:", user.email)
+          console.log("[AuthGuard] ✅ Sessão Supabase válida:", user.email)
+          // ✅ CORREÇÃO: Define cookie para próximas verificações
+          if (typeof window !== 'undefined') {
+            document.cookie = 'sb-auth-token-client=authenticated; path=/; max-age=604800'
+          }
           setIsAuthenticated(true)
           setIsLoading(false)
+          authCheckComplete = true
           return
         }
 
-        // QUARTA VERIFICAÇÃO: Verificar se há dados do usuário no middleware
-        // (O middleware já verificou e permitiu acesso, então deve estar autenticado)
-        const response = await fetch('/api/auth/me', {
-          method: 'GET',
-          credentials: 'include'
-        })
-        
-        if (response.ok) {
-          console.log("[AuthGuard] ✅ API /me retornou usuário válido")
-          if (mounted) {
-            setIsAuthenticated(true)
-            setIsLoading(false)
+        // ✅ VERIFICAÇÃO 4: API fallback
+        try {
+          const response = await fetch('/api/auth/me', {
+            method: 'GET',
+            credentials: 'include'
+          })
+          
+          if (response.ok) {
+            console.log("[AuthGuard] ✅ API /me retornou usuário válido")
+            if (mounted) {
+              setIsAuthenticated(true)
+              setIsLoading(false)
+              authCheckComplete = true
+            }
+            return
           }
-          return
+        } catch (apiError) {
+          console.warn("[AuthGuard] API /me falhou:", apiError)
         }
 
-        // NENHUMA AUTENTICAÇÃO ENCONTRADA
+        // ❌ NENHUMA AUTENTICAÇÃO ENCONTRADA
         console.log("[AuthGuard] ❌ Nenhuma autenticação válida encontrada")
         if (mounted) {
           setIsAuthenticated(false)
@@ -102,22 +110,24 @@ export function AuthGuard({
           console.log("[AuthGuard] Redirecionando para:", redirectUrl)
           router.push(redirectUrl)
           setIsLoading(false)
+          authCheckComplete = true
         }
         
       } catch (error) {
-        console.error("[AuthGuard] Erro inesperado na verificação:", error)
-        if (mounted) {
+        console.error("[AuthGuard] Erro inesperado:", error)
+        if (mounted && !authCheckComplete) {
           setIsAuthenticated(false)
           router.push(fallbackUrl)
           setIsLoading(false)
+          authCheckComplete = true
         }
       }
     }
     
-    // Executa verificação
-    checkAuth()
+    // ✅ CORREÇÃO: Pequeno delay para evitar race conditions
+    const timer = setTimeout(checkAuth, 50)
     
-    // Configura listener para mudanças de autenticação Supabase
+    // ✅ CORREÇÃO: Listener Supabase simplificado
     const supabase = createClient()
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       console.log(`[AuthGuard] Auth event: ${event}`)
@@ -125,17 +135,16 @@ export function AuthGuard({
       if (event === 'SIGNED_OUT') {
         console.log("[AuthGuard] Usuário deslogou")
         setIsAuthenticated(false)
-        // Limpar todos os cookies de autenticação
         if (typeof window !== 'undefined') {
-          document.cookie = 'sb-auth-token-client=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
-          document.cookie = 'user-info=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
-          document.cookie = 'just-logged-in=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC'
+          // ✅ CORREÇÃO: Limpeza simplificada de cookies
+          ['sb-auth-token-client', 'user-info', 'just-logged-in'].forEach(name => {
+            document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
+          })
         }
         router.push(fallbackUrl)
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        console.log("[AuthGuard] Usuário logou ou token renovado")
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        console.log("[AuthGuard] Usuário logou")
         setIsAuthenticated(true)
-        // Define cookie de cliente para compatibilidade
         if (typeof window !== 'undefined') {
           document.cookie = 'sb-auth-token-client=authenticated; path=/; max-age=604800'
         }
@@ -144,9 +153,10 @@ export function AuthGuard({
     
     return () => {
       mounted = false
+      clearTimeout(timer)
       authListener?.subscription?.unsubscribe()
     }
-  }, [pathname, requiredPermission, fallbackUrl, router])
+  }, [pathname, fallbackUrl, router]) // ✅ CORREÇÃO: Removeu requiredPermission das dependências
   
   // Loading state
   if (isLoading) {
@@ -168,17 +178,16 @@ export function AuthGuard({
     return null // Já redirecionou
   }
   
-  // Verificação de permissão (se necessário)
+  // ✅ CORREÇÃO: Verificação de permissão simplificada
   if (requiredPermission) {
-    // Implementar verificação de permissão aqui se necessário
-    // Por enquanto, sempre permite se autenticado
+    console.log(`[AuthGuard] Verificação de permissão '${requiredPermission}' não implementada - permitindo acesso`)
   }
   
-  // Autenticado e com permissão
+  // Autenticado
   return <>{children}</>
 }
 
-// Hook useAuth atualizado
+// ✅ CORREÇÃO: Hook useAuth simplificado
 export function useAuth() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -189,7 +198,6 @@ export function useAuth() {
     
     const loadUser = async () => {
       try {
-        // Primeira tentativa: Supabase
         const supabase = createClient()
         const { data: { user: currentUser }, error } = await supabase.auth.getUser()
         
@@ -201,30 +209,11 @@ export function useAuth() {
               metadata: currentUser.user_metadata,
               role: currentUser.app_metadata?.role || 'user'
             })
-          } else {
-            // Segunda tentativa: API /me
-            try {
-              const response = await fetch('/api/auth/me', { 
-                credentials: 'include' 
-              })
-              
-              if (response.ok) {
-                const userData = await response.json()
-                setUser({
-                  id: userData.user.id,
-                  email: userData.user.email,
-                  role: userData.user.role,
-                  metadata: {}
-                })
-              }
-            } catch (apiError) {
-              console.warn("[useAuth] API /me falhou:", apiError)
-            }
           }
+          setLoading(false)
         }
       } catch (error) {
         console.error("[useAuth] Erro ao carregar usuário:", error)
-      } finally {
         if (mounted) {
           setLoading(false)
         }
@@ -233,7 +222,6 @@ export function useAuth() {
     
     loadUser()
     
-    // Listener para mudanças
     const supabase = createClient()
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -259,25 +247,15 @@ export function useAuth() {
       const supabase = createClient()
       await supabase.auth.signOut()
       
-      // Limpar todos os cookies
       if (typeof window !== 'undefined') {
-        const cookiesToClear = [
-          'sb-auth-token-client',
-          'user-info', 
-          'sb-access-token',
-          'sb-refresh-token',
-          'just-logged-in'
-        ]
-        
-        cookiesToClear.forEach(cookieName => {
-          document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
+        ['sb-auth-token-client', 'user-info', 'just-logged-in'].forEach(name => {
+          document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC`
         })
       }
       
       router.push('/login')
     } catch (error) {
       console.error("[useAuth] Erro no logout:", error)
-      // Force redirect mesmo se houver erro
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
       }
