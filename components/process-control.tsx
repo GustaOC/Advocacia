@@ -8,15 +8,19 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Importar Tabs
 import { 
   Trash2, Plus, Search, Download, Eye, Edit, Clock, AlertCircle, CheckCircle, XCircle, 
   Users, Save, Database, Wifi, WifiOff, ArrowUpRight, TrendingUp, Filter, MoreVertical,
-  FileText, Scale, AlertTriangle
+  FileText, Scale, AlertTriangle, FolderOpen // Novo ícone
 } from "lucide-react"
 import { DatabaseService, type Process, type ProcessTimeline, type Client } from "@/lib/supabase"
+import { DocumentsModule } from "./documents-module"; // Importar o novo módulo
+
+// ... (Componentes ModernLoader, ProcessStatsCard, ConnectionStatus permanecem os mesmos) ...
 
 // Componente de loading moderno
 function ModernLoader() {
@@ -102,6 +106,7 @@ function ConnectionStatus({ isOnline, lastSaved, isSaving }: {
     </div>
   )
 }
+
 
 export function ProcessControl() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -237,20 +242,18 @@ export function ProcessControl() {
   }
 
   const filteredProcesses = processes.filter((process) => {
-    const matchesSearch =
-      (process.process_number || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (process.client_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (process.title || "").toLowerCase().includes(searchTerm.toLowerCase())
+    const searchString = process.number + process.client_name + process.type;
+    const matchesSearch = searchString.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = filterStatus === "all" || process.status === filterStatus
+    const matchesStatus = filterStatus === "all" || process.status === filterStatus;
     const matchesSource =
       filterSource === "all" ||
       (filterSource === "client" && process.source === "client") ||
       (filterSource === "manual" && process.source === "manual") ||
-      (filterSource === "no-client" && !process.client_id)
+      (filterSource === "no-client" && !process.client_id);
 
-    return matchesSearch && matchesStatus && matchesSource
-  })
+    return matchesSearch && matchesStatus && matchesSource;
+  });
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -271,7 +274,7 @@ export function ProcessControl() {
     )
   }
 
-  const getSourceBadge = (source: string, clientId: string | null) => {
+  const getSourceBadge = (source: string, clientId: number | undefined) => {
     if (source === "client" && clientId) {
       return (
         <Badge className="bg-purple-100 text-purple-800 border-purple-200 flex items-center space-x-1 px-3 py-1">
@@ -320,25 +323,22 @@ export function ProcessControl() {
   }
 
   const handleEditProcess = (process: Process) => {
-    console.log("[v0] Edit process clicked:", process.id)
     setEditingProcess(process)
   }
 
   const handleDeleteProcess = (process: Process) => {
-    console.log("[v0] Delete process clicked:", process.id)
     setDeleteConfirmation({ show: true, process })
   }
 
   const confirmDeleteProcess = async () => {
     if (deleteConfirmation.process) {
       try {
-        console.log("[v0] Deleting process:", deleteConfirmation.process.id)
         await DatabaseService.deleteProcess(deleteConfirmation.process.id)
         await loadProcessesFromDatabase()
         setDeleteConfirmation({ show: false, process: null })
         alert("Processo excluído com sucesso!")
       } catch (error) {
-        console.error("[v0] Error deleting process:", error)
+        console.error("Error deleting process:", error)
         alert("Erro ao excluir processo")
       }
     }
@@ -351,17 +351,13 @@ export function ProcessControl() {
     }
 
     try {
-      console.log("[v0] Creating new process:", newProcessForm)
       await DatabaseService.createProcess({
-        process_number: newProcessForm.number,
+        number: newProcessForm.number,
         client_id: Number.parseInt(newProcessForm.clientId),
-        title: newProcessForm.type,
-        description: newProcessForm.observations || `Processo de ${newProcessForm.type}`,
+        type: newProcessForm.type,
         court: newProcessForm.court,
+        value: Number.parseFloat(newProcessForm.value),
         status: newProcessForm.status,
-        start_date: new Date().toISOString().split("T")[0],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       await loadProcessesFromDatabase()
       setNewProcessForm({
@@ -375,18 +371,17 @@ export function ProcessControl() {
       })
       alert("Processo cadastrado com sucesso!")
     } catch (error) {
-      console.error("[v0] Error creating process:", error)
+      console.error("Error creating process:", error)
       alert("Erro ao cadastrar processo")
     }
   }
 
   const handleStatusChange = async (processId: number, newStatus: string) => {
     try {
-      console.log("[v0] Changing process status:", processId, newStatus)
-      await DatabaseService.updateProcessStatus(processId, newStatus)
+      await DatabaseService.updateProcess(processId, { status: newStatus })
       await loadProcessesFromDatabase()
     } catch (error) {
-      console.error("[v0] Error updating process status:", error)
+      console.error("Error updating process status:", error)
       alert("Erro ao atualizar status do processo")
     }
   }
@@ -478,7 +473,7 @@ export function ProcessControl() {
                         <SelectItem key={client.id} value={client.id.toString()}>
                           {client["EXECUTADO(A)"]} - {client.CPF} ({client.CIDADE || "Sem cidade"})
                         </SelectItem>
-                      )}
+                      ))}
                       <SelectItem value="new">+ Cadastrar novo cliente</SelectItem>
                     </SelectContent>
                   </Select>
@@ -504,7 +499,7 @@ export function ProcessControl() {
                             <strong>Telefone:</strong> {selectedClient.TELEFONE || "Não informado"}
                           </div>
                           <div className="bg-white/60 p-2 rounded">
-                            <strong>Endereço:</strong> {selectedClient.ENDEREÇO || "Não informado"}
+                            <strong>Endereço:</strong> {selectedClient.ENDERECO || "Não informado"}
                           </div>
                           <div className="bg-white/60 p-2 rounded">
                             <strong>Cidade:</strong> {selectedClient.CIDADE || "Não informado"}
@@ -706,7 +701,7 @@ export function ProcessControl() {
                   {filteredProcesses.map((process, index) => (
                     <TableRow key={process.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/50 hover:bg-slate-100/50"}>
                       <TableCell className="font-mono text-sm text-slate-700 font-medium">
-                        {process.process_number}
+                        {process.number}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -718,17 +713,17 @@ export function ProcessControl() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-700">{process.title}</TableCell>
+                      <TableCell className="text-slate-700">{process.type}</TableCell>
                       <TableCell className="text-slate-700">{process.court}</TableCell>
                       <TableCell>{getStatusBadge(process.status)}</TableCell>
                       <TableCell>{getSourceBadge(process.source, process.client_id)}</TableCell>
                       <TableCell className="text-slate-600">{process.store || "-"}</TableCell>
-                      <TableCell className="text-slate-600">{formatDate(process.updated_at)}</TableCell>
+                      <TableCell className="text-slate-600">{formatDate(process.last_update)}</TableCell>
                       <TableCell>
-                        {process.end_date ? (
+                        {process.next_deadline ? (
                           <div className="flex items-center space-x-1">
                             <AlertTriangle className="h-4 w-4 text-orange-500" />
-                            <span className="text-orange-600 font-medium">{formatDate(process.end_date)}</span>
+                            <span className="text-orange-600 font-medium">{formatDate(process.next_deadline)}</span>
                           </div>
                         ) : (
                           <span className="text-slate-400">-</span>
@@ -743,114 +738,110 @@ export function ProcessControl() {
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="max-w-5xl bg-white border border-gray-200 shadow-2xl">
-                              <DialogHeader>
-                                <DialogTitle className="flex items-center space-x-2">
-                                  <Scale className="h-5 w-5" />
-                                  <span>Detalhes do Processo</span>
-                                </DialogTitle>
-                              </DialogHeader>
-                              {selectedProcess && (
-                                <div className="space-y-8">
-                                  <div className="grid grid-cols-2 gap-6">
-                                    <div className="space-y-3">
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Número do Processo</Label>
-                                        <p className="font-mono text-lg font-medium text-slate-900">{selectedProcess.process_number}</p>
-                                      </div>
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Tipo de Ação</Label>
-                                        <p className="text-slate-900">{selectedProcess.title}</p>
-                                      </div>
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Vara/Tribunal</Label>
-                                        <p className="text-slate-900">{selectedProcess.court}</p>
-                                      </div>
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Valor da Causa</Label>
-                                        <p className="text-slate-900">
-                                          {selectedProcess.value > 0
-                                            ? `R$ ${selectedProcess.value.toLocaleString()}`
-                                            : "Não informado"}
-                                        </p>
-                                      </div>
-                                    </div>
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center space-x-2">
+                                    <Scale className="h-5 w-5" />
+                                    <span>Detalhes do Processo</span>
+                                    </DialogTitle>
+                                </DialogHeader>
+                                {selectedProcess && (
+                                    <Tabs defaultValue="details" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-3">
+                                            <TabsTrigger value="details">Detalhes</TabsTrigger>
+                                            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                                            <TabsTrigger value="documents">Documentos</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="details" className="pt-4">
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <div className="space-y-3">
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Número do Processo</Label>
+                                                    <p className="font-mono text-lg font-medium text-slate-900">{selectedProcess.number}</p>
+                                                </div>
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Tipo de Ação</Label>
+                                                    <p className="text-slate-900">{selectedProcess.type}</p>
+                                                </div>
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Vara/Tribunal</Label>
+                                                    <p className="text-slate-900">{selectedProcess.court}</p>
+                                                </div>
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Valor da Causa</Label>
+                                                    <p className="text-slate-900">
+                                                    {selectedProcess.value > 0
+                                                        ? `R$ ${selectedProcess.value.toLocaleString()}`
+                                                        : "Não informado"}
+                                                    </p>
+                                                </div>
+                                                </div>
 
-                                    <div className="space-y-3">
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Cliente</Label>
-                                        <div className="flex items-center gap-2">
-                                          <p className="text-slate-900">{selectedProcess.client_name}</p>
-                                          {selectedProcess.client_id && (
-                                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                                              {selectedProcess.client_id}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Status</Label>
-                                        <div className="mt-2">{getStatusBadge(selectedProcess.status)}</div>
-                                      </div>
-                                      <div className="bg-gray-100 p-4 rounded-xl">
-                                        <Label className="font-semibold text-slate-700">Origem</Label>
-                                        <div className="mt-2">
-                                          {getSourceBadge(selectedProcess.source, selectedProcess.client_id)}
-                                        </div>
-                                      </div>
-                                      {selectedProcess.store && (
-                                        <div className="bg-gray-100 p-4 rounded-xl">
-                                          <Label className="font-semibold text-slate-700">Loja</Label>
-                                          <p className="text-slate-900">{selectedProcess.store}</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {selectedProcess.source === "client" && selectedProcess.client_id && (
-                                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 p-4 rounded-xl">
-                                      <Label className="font-semibold text-purple-800 flex items-center space-x-2">
-                                        <Users className="h-4 w-4" />
-                                        <span>Integração Automática</span>
-                                      </Label>
-                                      <p className="text-sm text-purple-700 mt-1">
-                                        Este processo foi automaticamente vinculado a partir do cadastro do cliente {selectedProcess.client_id}.
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  <div>
-                                    <Label className="font-semibold text-lg text-slate-900">Timeline do Processo</Label>
-                                    <div className="mt-6 space-y-4">
-                                      {selectedProcess.timeline && selectedProcess.timeline.length > 0 ? (
-                                        selectedProcess.timeline.map((event, index) => (
-                                          <div key={index} className="flex items-start space-x-4 p-4 bg-slate-50 rounded-xl">
-                                            <div className="flex-shrink-0">
-                                              <div className="w-4 h-4 bg-slate-600 rounded-full mt-2"></div>
+                                                <div className="space-y-3">
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Cliente</Label>
+                                                    <div className="flex items-center gap-2">
+                                                    <p className="text-slate-900">{selectedProcess.client_name}</p>
+                                                    {selectedProcess.client_id && (
+                                                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                                        {selectedProcess.client_id}
+                                                        </Badge>
+                                                    )}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Status</Label>
+                                                    <div className="mt-2">{getStatusBadge(selectedProcess.status)}</div>
+                                                </div>
+                                                <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Origem</Label>
+                                                    <div className="mt-2">
+                                                    {getSourceBadge(selectedProcess.source, selectedProcess.client_id)}
+                                                    </div>
+                                                </div>
+                                                {selectedProcess.store && (
+                                                    <div className="bg-gray-100 p-4 rounded-xl">
+                                                    <Label className="font-semibold text-slate-700">Loja</Label>
+                                                    <p className="text-slate-900">{selectedProcess.store}</p>
+                                                    </div>
+                                                )}
+                                                </div>
                                             </div>
-                                            <div className="flex-1">
-                                              <div className="flex items-center space-x-2 mb-2">
-                                                <span className="font-semibold text-slate-900">{event.event}</span>
-                                                <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700">
-                                                  {formatDate(event.date)}
-                                                </Badge>
-                                              </div>
-                                              <p className="text-sm text-slate-600">{event.description}</p>
+                                        </TabsContent>
+                                        <TabsContent value="timeline" className="pt-4">
+                                            <div className="mt-6 space-y-4">
+                                            {selectedProcess.timeline && selectedProcess.timeline.length > 0 ? (
+                                                selectedProcess.timeline.map((event, index) => (
+                                                <div key={index} className="flex items-start space-x-4 p-4 bg-slate-50 rounded-xl">
+                                                    <div className="flex-shrink-0">
+                                                    <div className="w-4 h-4 bg-slate-600 rounded-full mt-2"></div>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                    <div className="flex items-center space-x-2 mb-2">
+                                                        <span className="font-semibold text-slate-900">{event.event}</span>
+                                                        <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700">
+                                                        {formatDate(event.date)}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-sm text-slate-600">{event.description}</p>
+                                                    </div>
+                                                </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-12 text-slate-500">
+                                                <div className="w-16 h-16 bg-slate-100 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                                                    <Clock className="h-8 w-8 text-slate-400" />
+                                                </div>
+                                                <h3 className="text-lg font-semibold mb-2 text-slate-700">Nenhum evento registrado</h3>
+                                                <p className="text-slate-500">A timeline será atualizada conforme o processo avança.</p>
+                                                </div>
+                                            )}
                                             </div>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <div className="text-center py-12 text-slate-500">
-                                          <div className="w-16 h-16 bg-slate-100 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                                            <Clock className="h-8 w-8 text-slate-400" />
-                                          </div>
-                                          <h3 className="text-lg font-semibold mb-2 text-slate-700">Nenhum evento registrado</h3>
-                                          <p className="text-slate-500">A timeline será atualizada conforme o processo avança.</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
+                                        </TabsContent>
+                                        <TabsContent value="documents" className="pt-4">
+                                            <DocumentsModule caseId={selectedProcess.id} />
+                                        </TabsContent>
+                                    </Tabs>
+                                )}
                             </DialogContent>
                           </Dialog>
                           
@@ -921,10 +912,10 @@ export function ProcessControl() {
           </DialogHeader>
           <div className="py-4">
             <p className="text-slate-700 mb-4">
-              Tem certeza que deseja excluir o processo <span className="font-mono font-semibold">{deleteConfirmation.process?.process_number}</span>?
+              Tem certeza que deseja excluir o processo <span className="font-mono font-semibold">{deleteConfirmation.process?.number}</span>?
             </p>
             <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
-              <p className="text-sm text-red-700">Esta ação não pode be desfeita e todos os dados relacionados serão perdidos.</p>
+              <p className="text-sm text-red-700">Esta ação não pode ser desfeita e todos os dados relacionados serão perdidos.</p>
             </div>
           </div>
           <div className="flex justify-end space-x-3">
@@ -944,7 +935,7 @@ export function ProcessControl() {
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Edit className="h-5 w-5" />
-              <span>Editar Processo - {editingProcess?.process_number}</span>
+              <span>Editar Processo - {editingProcess?.number}</span>
             </DialogTitle>
           </DialogHeader>
           {editingProcess && (
@@ -952,11 +943,11 @@ export function ProcessControl() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Número do Processo</Label>
-                  <Input defaultValue={editingProcess.process_number} className="h-11 bg-white border-gray-300 text-gray-900" />
+                  <Input defaultValue={editingProcess.number} className="h-11 bg-white border-gray-300 text-gray-900" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Tipo de Ação</Label>
-                  <Select defaultValue={editingProcess.title}>
+                  <Select defaultValue={editingProcess.type}>
                     <SelectTrigger className="h-11 bg-white border-gray-300 text-gray-900">
                       <SelectValue />
                     </SelectTrigger>
@@ -992,7 +983,6 @@ export function ProcessControl() {
                 <Button
                   className="bg-slate-900 hover:bg-slate-800"
                   onClick={() => {
-                    console.log("[v0] Saving process changes")
                     alert("Processo atualizado com sucesso!")
                     setEditingProcess(null)
                   }}
