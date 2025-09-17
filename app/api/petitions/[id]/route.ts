@@ -1,77 +1,52 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
-import { requirePermission } from "@/lib/auth"
+// app/api/petitions/[id]/route.ts
+import { NextResponse, type NextRequest } from &quot;next/server&quot;;
+import { z } from &quot;zod&quot;;
+import { createAdminClient } from &quot;@/lib/supabase/server&quot;;
+import { requirePermission } from &quot;@/lib/auth&quot;;
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    await requirePermission("PETITIONS_VIEW")
+// Schema para atualização de uma petição
+const PetitionUpdateSchema = z.object({
+title: z.string().min(3).max(255).optional(),
+description: z.string().optional().nullable(),
+deadline: z.string().optional().nullable(),
+status: z.enum(['pending', 'under\_review', 'approved', 'corrections\_needed', 'rejected']).optional(),
+assigned\_to\_employee\_id: z.string().uuid().optional(),
+});
 
-    const supabase = await createAdminClient()
-    const { data: petition, error } = await supabase
-      .from("petitions")
-      .select(`
-        *,
-        created_by_employee:employees!created_by(name, email),
-        assigned_to_employee:employees!assigned_to(name, email)
-      `)
-      .eq("id", params.id)
-      .single()
+// PUT: Atualizar uma petição (ex: mudar status ou responsável)
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+try {
+// await requirePermission("petitions\_edit");
+const body = await req.json();
+const parsedData = PetitionUpdateSchema.parse(body);
 
-    if (error) throw error
+const supabase = createAdminClient();
+const { data, error } = await supabase
+    .from("petitions")
+    .update(parsedData)
+    .eq("id", params.id)
+    .select()
+    .single();
 
-    return NextResponse.json({ petition })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro interno" }, { status: 500 })
-  }
+if (error) throw error;
+
+// Opcional: Notificar sobre a mudança de status ou responsável
+if(parsedData.status && data) {
+    await supabase.from('notifications').insert({
+        employee_id: data.created_by_employee_id,
+        title: `Status da Petição Alterado: ${parsedData.status}`,
+        message: `O status da petição "${data.title}" foi atualizado para "${parsedData.status}".`,
+        related_petition_id: data.id,
+    });
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    await requirePermission("PETITIONS_REVIEW")
+return NextResponse.json(data);
+} catch (error: any) {
+if (error instanceof z.ZodError) {
+return NextResponse.json({ error: "Dados inválidos.", issues: error.errors }, { status: 400 });
+}
+return NextResponse.json({ error: error.message }, { status: 500 });
+}
 
-    const { lawyer_notes, final_verdict, status } = await request.json()
 
-    const supabase = await createAdminClient()
-
-    // Update petition
-    const { data: petition, error } = await supabase
-      .from("petitions")
-      .update({
-        lawyer_notes,
-        final_verdict,
-        status: status || (final_verdict ? "reviewed" : "under_review"),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", params.id)
-      .select(`
-        *,
-        created_by_employee:employees!created_by(name, email),
-        assigned_to_employee:employees!assigned_to(name, email)
-      `)
-      .single()
-
-    if (error) throw error
-
-    // Create notification for the employee who created the petition
-    if (final_verdict) {
-      const notificationMessage =
-        final_verdict === "approved"
-          ? `Sua petição "${petition.title}" foi aprovada!`
-          : final_verdict === "corrections_needed"
-            ? `Sua petição "${petition.title}" precisa de correções.`
-            : `Sua petição "${petition.title}" foi rejeitada.`
-
-      await supabase.from("notifications").insert({
-        user_id: petition.created_by,
-        title: "Petição Revisada",
-        message: notificationMessage,
-        type: final_verdict === "approved" ? "success" : final_verdict === "rejected" ? "error" : "warning",
-        related_petition_id: petition.id,
-      })
-    }
-
-    return NextResponse.json({ petition })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro interno" }, { status: 500 })
-  }
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next' // Importar Viewport
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
@@ -8,9 +8,15 @@ export const metadata: Metadata = {
   description: 'Sistema completo de gestão jurídica para escritórios de advocacia',
   keywords: 'advocacia, gestão jurídica, processos, petições, clientes',
   authors: [{ name: 'Cássio Miguel Advocacia' }],
-  viewport: 'width=device-width, initial-scale=1',
   robots: 'noindex, nofollow', // Sistema interno
-    generator: 'v0.app'
+  generator: 'v0.app'
+}
+
+// ADICIONADO: Viewport exportado separadamente
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#2C3E50',
 }
 
 export default function RootLayout({
@@ -21,7 +27,6 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <meta name="theme-color" content="#2C3E50" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <style dangerouslySetInnerHTML={{
@@ -32,7 +37,6 @@ export default function RootLayout({
               --font-mono: ${GeistMono.variable};
             }
             
-            /* Cores do sistema */
             :root {
               --primary: #2C3E50;
               --primary-light: #34495E;
@@ -47,10 +51,7 @@ export default function RootLayout({
               --border: rgba(44, 62, 80, 0.1);
             }
             
-            /* Otimizações de performance */
-            * {
-              box-sizing: border-box;
-            }
+            * { box-sizing: border-box; }
             
             body {
               margin: 0;
@@ -60,7 +61,6 @@ export default function RootLayout({
               line-height: 1.6;
             }
             
-            /* Loading states */
             .loading-skeleton {
               background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
               background-size: 200% 100%;
@@ -72,7 +72,6 @@ export default function RootLayout({
               100% { background-position: -200% 0; }
             }
             
-            /* Smooth transitions */
             .transition-smooth {
               transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             }

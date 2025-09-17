@@ -1,119 +1,74 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
-import { getCurrentUser } from "@/lib/auth"
+// app/api/cases/route.ts
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/auth";
 
-export async function GET(request: NextRequest) {
+// Schema de validação para a tabela 'cases'
+const CaseSchema = z.object({
+  case_number: z.string().max(100).optional().nullable(),
+  title: z.string().min(3, "O título deve ter pelo menos 3 caracteres.").max(255),
+  description: z.string().optional().nullable(),
+  status: z.enum(['active', 'archived', 'suspended', 'completed']).default('active'),
+  court: z.string().max(255).optional().nullable(),
+});
+
+// GET: Listar todos os casos
+export async function GET(req: NextRequest) {
   try {
-    // Verificar autenticação via JWT
-    const user = await getCurrentUser()
+    await requirePermission("cases_view");
+    const supabase = createAdminClient();
     
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      )
-    }
-
-    // Verificar permissão manualmente
-    if (!user.permissions.includes("CASES_VIEW") && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      )
-    }
-
-    const { searchParams } = new URL(request.url)
-    const isActive = searchParams.get("is_active")
-
-    const supabase = await createAdminClient()
-    let query = supabase
+    // Agora, vamos buscar os casos e também as partes associadas a ele
+    const { data, error } = await supabase
       .from("cases")
-      .select("*")
-      .order("created_at", { ascending: false })
+      .select(`
+        *,
+        case_parties (
+          role,
+          entities (
+            id,
+            name,
+            document
+          )
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-    if (isActive !== null) {
-      query = query.eq("is_active", isActive === "true")
-    }
+    if (error) throw error;
+    return NextResponse.json(data);
 
-    const { data: cases, error } = await query
-
-    if (error) throw error
-
-    return NextResponse.json({ cases })
-  } catch (error) {
-    console.error("[cases/GET] Error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal error" },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: error.message === "FORBIDDEN" ? 403 : 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST: Criar um novo caso
+export async function POST(req: NextRequest) {
   try {
-    // Verificar autenticação via JWT
-    const user = await getCurrentUser()
-    
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      )
-    }
+    await requirePermission("cases_create");
+    const body = await req.json();
+    const parsedData = CaseSchema.parse(body);
 
-    // Verificar permissão manualmente
-    if (!user.permissions.includes("CASES_CREATE") && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "Insufficient permissions" },
-        { status: 403 }
-      )
-    }
-
-    const body = await request.json()
-    const { name, description, color } = body
-
-    if (!name) {
-      return NextResponse.json(
-        { error: "Name is required" },
-        { status: 400 }
-      )
-    }
-
-    const supabase = await createAdminClient()
-
-    // Verifica se já existe um caso com este nome
-    const { data: existingCase } = await supabase
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
       .from("cases")
-      .select("id")
-      .eq("name", name)
-      .single()
-
-    if (existingCase) {
-      return NextResponse.json(
-        { error: "A case type with this name already exists" },
-        { status: 409 }
-      )
-    }
-
-    const { data: caseItem, error } = await supabase
-      .from("cases")
-      .insert({
-        name,
-        description: description || null,
-        color: color || "#2C3E50",
-        is_active: true,
-      })
+      .insert(parsedData)
       .select()
-      .single()
+      .single();
 
-    if (error) throw error
+    if (error) {
+        if (error.code === '23505') { // Código de violação de unicidade
+            return NextResponse.json({ error: "Já existe um caso com este número de processo." }, { status: 409 });
+        }
+        throw error;
+    }
+    return NextResponse.json(data, { status: 201 });
 
-    return NextResponse.json({ case: caseItem }, { status: 201 })
-  } catch (error) {
-    console.error("[cases/POST] Error:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal error" },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Dados inválidos.", issues: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: error.message }, { status: error.message === "FORBIDDEN" ? 403 : 500 });
   }
 }
