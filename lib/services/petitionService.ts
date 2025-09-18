@@ -1,16 +1,13 @@
-// lib/services/petitionService.ts - VERSÃO CORRIGIDA
+// lib/services/petitionService.ts - VERSÃO CORRIGIDA E COMPLETA
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { AuthUser } from "@/lib/auth";
 
-/**
- * Busca todas as petições com informações do cliente e do caso associado.
- */
 export async function getPetitions(user: AuthUser) {
   const supabase = createAdminClient();
 
-  // ✅ CORREÇÃO: A consulta agora especifica explicitamente as colunas da tabela 'cases',
-  // evitando o erro 'cases_1.title does not exist'.
+  // ✅ CORREÇÃO: A consulta agora busca 'entities' através da tabela 'cases', que é o caminho correto do relacionamento.
+  // Isso resolve o erro "Could not find a relationship between 'petitions' and 'entities'".
   const { data, error } = await supabase
     .from("petitions")
     .select(`
@@ -18,16 +15,16 @@ export async function getPetitions(user: AuthUser) {
       created_at,
       status,
       file_url,
-      case:cases (
+      cases (
         id,
         title,
-        case_number
+        case_number,
+        entities (
+          id,
+          name
+        )
       ),
-      client:entities (
-        id,
-        name
-      ),
-      author:employees (
+      employees (
         id,
         name
       )
@@ -42,18 +39,14 @@ export async function getPetitions(user: AuthUser) {
   return data;
 }
 
-/**
- * Busca uma petição específica pelo ID.
- */
 export async function getPetitionById(id: number, user: AuthUser) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("petitions")
     .select(`
       *,
-      case:cases(*),
-      client:entities(*),
-      author:employees(*)
+      cases(*, entities(*)),
+      employees(*)
     `)
     .eq('id', id)
     .single();
@@ -66,4 +59,4 @@ export async function getPetitionById(id: number, user: AuthUser) {
   return data;
 }
 
-// Adicione outras funções relacionadas a petições aqui (create, update, delete) se necessário.
+// Outras funções do serviço...

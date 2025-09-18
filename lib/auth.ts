@@ -1,8 +1,7 @@
-// lib/auth.ts - VERSÃO CORRIGIDA
+// lib/auth.ts - VERSÃO FINAL CORRIGIDA E COMPLETA
 
 import { createAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
-// Cache simples em memória para os dados do usuário para otimizar performance
 const userCache = new Map<string, { user: AuthUser, timestamp: number }>();
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos
 
@@ -37,17 +36,20 @@ export async function getSessionUser(): Promise<AuthUser | null> {
 
     const admin = createAdminClient();
     
-    // ✅ CORREÇÃO PRINCIPAL: Alterado de 'auth_id' para 'id'.
-    // A tabela 'employees' deve usar o UUID do 'auth.users' como sua chave primária ('id').
     const { data: employee, error: employeeError } = await admin
       .from("employees")
       .select("id, role_id")
-      .eq("id", authUser.id) // A busca agora é pelo 'id' do funcionário, que é o mesmo do usuário.
+      .eq("id", authUser.id)
       .single();
 
-    if (employeeError) {
-      console.warn(`[Auth] Funcionário não encontrado para o usuário ${authUser.email}. Verifique se existe um registro correspondente na tabela 'employees'.`, employeeError.message);
-      const basicUser: AuthUser = { id: authUser.id, email: authUser.email ?? "", role: 'user', permissions: [] };
+    if (employeeError || !employee) {
+      console.warn(`[Auth] Usuário ${authUser.email} autenticado, mas não encontrado na tabela 'employees'. Assumindo perfil básico sem permissões.`);
+      const basicUser: AuthUser = {
+        id: authUser.id,
+        email: authUser.email ?? "",
+        role: 'user',
+        permissions: [],
+      };
       userCache.set(authUser.id, { user: basicUser, timestamp: Date.now() });
       return basicUser;
     }
@@ -56,22 +58,25 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     let permissions: Permission[] = [];
 
     if (employee.role_id) {
+        // ✅ CORREÇÃO CRÍTICA: A sintaxe da consulta foi ajustada para buscar as permissões corretamente.
+        // A consulta agora junta 'roles' -> 'role_permissions' -> 'permissions' e pega a coluna 'code'.
       const { data: roleData, error: roleError } = await admin
         .from("roles")
         .select(`
           name,
           role_permissions (
-            permission
+            permissions ( code )
           )
         `)
         .eq("id", employee.role_id)
         .single();
 
       if (roleError) {
-        console.warn(`[Auth] Falha ao buscar detalhes da role_id ${employee.role_id}:`, roleError.message);
+        console.error(`[Auth] Falha crítica ao buscar permissões para role_id ${employee.role_id}:`, roleError.message);
       } else if (roleData) {
         roleName = roleData.name;
-        permissions = roleData.role_permissions.map((rp: any) => rp.permission as Permission);
+        // O mapeamento dos resultados também foi ajustado para a nova estrutura da consulta.
+        permissions = roleData.role_permissions.map((rp: any) => rp.permissions.code as Permission).filter(Boolean);
       }
     }
 
@@ -83,7 +88,6 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     };
 
     userCache.set(user.id, { user, timestamp: Date.now() });
-
     return user;
   } catch (error) {
     console.error("[Auth] Erro inesperado em getSessionUser:", error);
@@ -104,6 +108,7 @@ export async function requirePermission(permission: Permission): Promise<AuthUse
   if (user.role === "admin" || (user.permissions && user.permissions.includes(permission))) {
     return user;
   }
+  console.error(`[Auth] Acesso negado para o usuário ${user.email}. Permissão necessária: '${permission}'. Permissões do usuário: [${user.permissions?.join(', ')}]`);
   throw new Error("FORBIDDEN");
 }
 

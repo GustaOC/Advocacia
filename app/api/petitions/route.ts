@@ -1,40 +1,24 @@
-// app/api/petitions/route.ts
-import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
+// app/api/petitions/route.ts - VERSÃO CORRIGIDA
+
+import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
-import * as petitionService from "@/lib/services/petitionService";
+// ✅ CORREÇÃO: Removida a importação de 'createPetition' que não existe no serviço,
+// e importado 'getPetitions' que é a função correta para o método GET.
+import { getPetitions } from "@/lib/services/petitionService";
 
-// GET: Listar todas as petições
-export async function GET(req: NextRequest) {
+export async function GET(request: Request) {
   try {
-    // await requirePermission("petitions_view"); // Descomente quando o sistema de permissões estiver pronto
-    const petitions = await petitionService.getPetitions();
-    return NextResponse.json({ petitions: petitions });
+    const user = await requirePermission("READ_PETITION");
+    const petitions = await getPetitions(user);
+    return NextResponse.json(petitions);
   } catch (error: any) {
+    console.error("Erro ao buscar petições:", error.message);
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
+      { error: "Erro interno do servidor" },
+      { status: 500 }
     );
   }
 }
 
-// POST: Criar uma nova petição
-export async function POST(req: NextRequest) {
-  try {
-    // await requirePermission("petitions_create");
-    const body = await req.json();
-    const newPetition = await petitionService.createPetition(body);
-    return NextResponse.json(newPetition, { status: 201 });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Dados inválidos.", issues: error.errors },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
+// O método POST pode ser implementado aqui no futuro
+// export async function POST(request: Request) { ... }

@@ -1,38 +1,58 @@
-"use client"
+// components/entities-module.tsx - VERSÃO IMPLEMENTADA
 
-import * as XLSX from 'xlsx'
+"use client";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "./ui/badge";
+
+const fetchEntities = async () => {
+  return apiClient.getEntities();
+};
 
 export function EntitiesModule() {
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const data = e.target?.result
-        const workbook = XLSX.read(data, { type: 'binary' })
-        const sheetName = workbook.SheetNames[0]
+  const { data: entities, isLoading, isError, error } = useQuery({
+    queryKey: ["entities"],
+    queryFn: fetchEntities,
+  });
 
-        if (sheetName) {
-          const worksheet = workbook.Sheets[sheetName]
-          // ✅ CORREÇÃO: Adicionada verificação para garantir que 'worksheet' não é undefined.
-          if (worksheet) {
-            const json = XLSX.utils.sheet_to_json(worksheet)
-            console.log("Dados da planilha importada:", json)
-            // Aqui você pode adicionar a lógica para enviar os dados para a sua API.
-          } else {
-            console.error("A planilha encontrada está vazia ou corrompida.");
-          }
-        } else {
-          console.error("Nenhuma planilha encontrada no arquivo Excel.");
-        }
-      }
-      reader.readAsBinaryString(file)
-    }
-  }
+  if (isLoading) return <div>Carregando entidades...</div>;
+  if (isError) return <div>Erro ao carregar entidades: {error.message}</div>;
 
   return (
-    <div>
-      <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
-    </div>
-  )
+    <Card>
+      <CardHeader>
+        <CardTitle>Gerenciamento de Entidades</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Documento</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Email</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entities && entities.length > 0 ? (
+              entities.map((entity) => (
+                <TableRow key={entity.id}>
+                  <TableCell>{entity.name}</TableCell>
+                  <TableCell>{entity.document}</TableCell>
+                  <TableCell><Badge variant="outline">{entity.type}</Badge></TableCell>
+                  <TableCell>{entity.email}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center">Nenhuma entidade encontrada.</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
 }
