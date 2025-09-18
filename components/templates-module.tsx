@@ -112,8 +112,11 @@ export function TemplatesModule() {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-        <h2 className="text-3xl font-bold mb-2">Modelos de Documentos</h2>
-        <p className="text-slate-300 text-lg">Crie e gerencie templates para automatizar a geração de documentos.</p>
+        {/* A CORREÇÃO ESTÁ AQUI: Adicionamos um <div> para envolver o título e o parágrafo */}
+        <div>
+          <h2 className="text-3xl font-bold mb-2">Modelos de Documentos</h2>
+          <p className="text-slate-300 text-lg">Crie e gerencie templates para automatizar a geração de documentos.</p>
+        </div>
       </div>
 
       <Card className="border-0 shadow-lg">
@@ -150,7 +153,7 @@ export function TemplatesModule() {
         <DialogContent className="sm:max-w-3xl bg-card">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Modelo" : "Criar Novo Modelo de Documento"}</DialogTitle>
-            <CardDescription>Use variáveis como {{`{{cliente.nome}}`}}, {{`{{cliente.cpf}}`}}, {{`{{processo.numero}}`}} no conteúdo.</CardDescription>
+            <CardDescription>Use variáveis como {`{{cliente.nome}}`}, {`{{cliente.cpf}}`}, {`{{processo.numero}}`} no conteúdo.</CardDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
             <div className="grid grid-cols-2 gap-4">

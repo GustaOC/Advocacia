@@ -21,37 +21,58 @@ export async function getSessionUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Verifica o cache primeiro
     const cachedEntry = userCache.get(authUser.id);
     if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_DURATION_MS)) {
       return cachedEntry.user;
     }
 
     const admin = createAdminClient();
-    const { data: employeeData, error: employeeError } = await admin
+    
+    // ✅ CORREÇÃO: Etapa 1 - Buscar o funcionário e sua role_id
+    const { data: employee, error: employeeError } = await admin
       .from("employees")
-      .select(`
-        permissions,
-        roles ( name )
-      `)
+      .select("id, role_id")
       .eq("id", authUser.id)
       .single();
 
     if (employeeError) {
-      console.warn(`[Auth] Aviso ao buscar dados do funcionário para ${authUser.email}:`, employeeError.message);
+      console.warn(`[Auth] Falha ao buscar funcionário para ${authUser.email}:`, employeeError.message);
       const basicUser: AuthUser = { id: authUser.id, email: authUser.email ?? "", role: 'user', permissions: [] };
       userCache.set(authUser.id, { user: basicUser, timestamp: Date.now() });
       return basicUser;
     }
 
+    let roleName = 'user';
+    let permissions: string[] = [];
+
+    // ✅ CORREÇÃO: Etapa 2 - Se houver uma role_id, buscar os detalhes da função e suas permissões
+    if (employee.role_id) {
+      const { data: roleData, error: roleError } = await admin
+        .from("roles")
+        .select(`
+          name,
+          role_permissions (
+            permissions ( code )
+          )
+        `)
+        .eq("id", employee.role_id)
+        .single();
+
+      if (roleError) {
+        console.warn(`[Auth] Falha ao buscar detalhes da role_id ${employee.role_id}:`, roleError.message);
+      } else {
+        roleName = roleData.name;
+        permissions = roleData.role_permissions.map((rp: any) => rp.permissions.code);
+      }
+    }
+
     const user: AuthUser = {
       id: authUser.id,
       email: authUser.email ?? "",
-      role: employeeData?.roles?.name || 'user',
-      permissions: employeeData?.permissions || [],
+      role: roleName,
+      permissions: permissions,
     };
 
-    // Armazena no cache
     userCache.set(user.id, { user, timestamp: Date.now() });
 
     return user;
@@ -77,10 +98,6 @@ export async function requirePermission(permission: string): Promise<AuthUser> {
   throw new Error("FORBIDDEN");
 }
 
-/**
- * Limpa o cache de um usuário específico. Útil após logout ou atualização de permissões.
- * @param userId - O ID do usuário a ser removido do cache.
- */
 export function clearAuthCache(userId: string) {
   if (userCache.has(userId)) {
     userCache.delete(userId);

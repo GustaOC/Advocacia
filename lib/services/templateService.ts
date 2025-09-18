@@ -12,7 +12,7 @@ export const TemplateSchema = z.object({
   category: z.string().optional().nullable(),
 });
 
-// NOVO: Schema para a requisição de geração de documento
+// Schema para a requisição de geração de documento
 export const GenerateDocumentSchema = z.object({
   templateId: z.number().int().positive(),
   caseId: z.number().int().positive(),
@@ -117,7 +117,7 @@ export async function deleteTemplate(id: number) {
 }
 
 /**
- * NOVO: Gera um documento a partir de um template e um caso.
+ * Gera um documento a partir de um template e um caso.
  * @param templateId - O ID do modelo de documento.
  * @param caseId - O ID do caso para usar os dados.
  * @returns O conteúdo do documento com as variáveis preenchidas.
@@ -134,7 +134,6 @@ export async function generateDocument(templateId: number, caseId: number) {
 
   let content = template.content;
 
-  // Objeto de dados para substituição
   const data = {
     processo: {
       numero: caseData.case_number || 'N/A',
@@ -142,23 +141,23 @@ export async function generateDocument(templateId: number, caseId: number) {
       valor: caseData.value ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(caseData.value) : 'N/A',
       tribunal: caseData.court || 'N/A',
     },
-    cliente: caseData.case_parties.find(p => p.role === 'Cliente')?.entities || {},
-    parte_contraria: caseData.case_parties.find(p => p.role === 'Parte Contrária')?.entities || {},
+    cliente: caseData.case_parties.find((p: any) => p.role === 'Cliente')?.entities || {},
+    parte_contraria: caseData.case_parties.find((p: any) => p.role === 'Parte Contrária')?.entities || {},
     data_atual: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
-    cidade_escritorio: "Campo Grande/MS", // Pode vir das configurações do sistema no futuro
+    cidade_escritorio: "Campo Grande/MS",
   };
 
-  // Expressão regular para encontrar todas as variáveis como {{objeto.propriedade}}
   const regex = /{{\s*([\w.]+)\s*}}/g;
 
-  content = content.replace(regex, (match, key) => {
+  // ✅ CORREÇÃO: Adicionadas as tipagens para os parâmetros `match` e `key`.
+  content = content.replace(regex, (match: string, key: string) => {
     const keys = key.split('.');
     let value: any = data;
     for (const k of keys) {
       if (value && typeof value === 'object' && k in value) {
         value = value[k];
       } else {
-        return match; // Retorna a variável original se o caminho não for encontrado
+        return match; 
       }
     }
     return String(value);

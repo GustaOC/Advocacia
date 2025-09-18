@@ -5,7 +5,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { FileText, Users, DollarSign, Clock, AlertTriangle } from 'lucide-react';
+// ✅ CORREÇÃO: Adicionados os ícones Briefcase e AlertTriangle que estavam faltando
+import { FileText, Users, DollarSign, Clock, AlertTriangle, Briefcase } from 'lucide-react';
 
 // Tipos para os dados e props
 interface ChartData { name: string; value: number; }

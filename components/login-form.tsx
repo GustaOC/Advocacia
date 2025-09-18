@@ -41,7 +41,6 @@ export default function LoginForm() {
         throw new Error(data?.error || "Não foi possível entrar.")
       }
 
-      // ✅ CORREÇÃO: Define cookies que o auth-guard espera
       if (typeof window !== "undefined") {
         document.cookie = "sb-auth-token-client=authenticated; path=/; max-age=604800"
         document.cookie = `user-info=${JSON.stringify({ email, id: data.user?.id || 'temp' })}; path=/; max-age=604800`
@@ -51,7 +50,6 @@ export default function LoginForm() {
 
       console.log("[LoginForm] ✅ Login bem-sucedido, redirecionando...")
       
-      // ✅ CORREÇÃO: Tempo maior para garantir que cookies sejam salvos
       setTimeout(() => {
         router.push("/dashboard")
       }, 500)
@@ -69,7 +67,13 @@ export default function LoginForm() {
       <CardHeader className="space-y-1 text-center pb-8 pt-10">
         <div className="flex justify-center mb-4">
           <div className="relative w-48 h-16">
-            <Image src="/logo.png" alt="Logo" fill className="object-contain" priority />
+            <Image 
+              src="/logo.png" 
+              alt="Logo" 
+              fill 
+              className="object-contain" 
+              priority 
+            />
           </div>
         </div>
         <CardDescription className="text-slate-600 text-base">
@@ -135,5 +139,5 @@ export default function LoginForm() {
         </form>
       </CardContent>
     </Card>
-  )
+  );
 }
