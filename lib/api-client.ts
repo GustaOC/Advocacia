@@ -1,6 +1,19 @@
 // lib/api-client.ts - VERSÃO CORRIGIDA E COMPLETA
 // Este arquivo centraliza todas as chamadas de API do frontend para o backend.
 
+// Tipos para os dados dos funcionários, para garantir a consistência
+interface EmployeeData {
+  name: string;
+  email: string;
+  role_id: number;
+}
+
+interface UpdateEmployeeData {
+  name?: string;
+  email?: string;
+  role_id?: number;
+}
+
 export class ApiClient {
   /**
    * Método genérico para realizar requisições autenticadas.
@@ -17,7 +30,6 @@ export class ApiClient {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      // Essencial para enviar os cookies de autenticação para a API
       credentials: 'include',
     });
 
@@ -35,10 +47,16 @@ export class ApiClient {
       throw new Error(errorMessage);
     }
 
-    return response.json();
+    // Retorna um objeto vazio se a resposta não tiver corpo (ex: status 204)
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      return response.json();
+    } else {
+      return {} as T;
+    }
   }
 
-  // MÓDULO DE ENTIDADES
+  // MÓDULO DE ENTIDADES (CLIENTES)
   async getEntities() { return this.authenticatedRequest<any[]>('/api/entities'); }
   async getEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`); }
   async createEntity(entityData: any) { return this.authenticatedRequest('/api/entities', { method: 'POST', body: JSON.stringify(entityData) }); }
@@ -56,8 +74,16 @@ export class ApiClient {
   async getFinancialAgreements() { return this.authenticatedRequest('/api/financial-agreements'); }
   async createFinancialAgreement(agreementData: any) { return this.authenticatedRequest('/api/financial-agreements', { method: 'POST', body: JSON.stringify(agreementData) }); }
 
-  // MÓDULO DE FUNCIONÁRIOS E AUTENTICAÇÃO
+  // MÓDULO DE FUNCIONÁRIOS (EMPLOYEES)
   async getEmployees() { return this.authenticatedRequest<any[]>('/api/employees'); }
+  // ✅ ADICIONADO: Método para criar funcionário
+  async createEmployee(employeeData: EmployeeData) { return this.authenticatedRequest('/api/employees', { method: 'POST', body: JSON.stringify(employeeData) }); }
+  // ✅ ADICIONADO: Método para atualizar funcionário
+  async updateEmployee(id: number, employeeData: UpdateEmployeeData) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) }); }
+  // ✅ ADICIONADO: Método para deletar funcionário
+  async deleteEmployee(id: number) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'DELETE' }); }
+
+  // MÓDULO DE AUTENTICAÇÃO E PERFIS
   async getCurrentUser() { return this.authenticatedRequest<any>('/api/auth/me'); }
   async logout() {
     try {
@@ -70,6 +96,18 @@ export class ApiClient {
       }
     }
   }
+  // ✅ ADICIONADO: Método para definir/atualizar a senha do usuário
+  async setPassword(data: { code: string; password?: string; }) { return this.authenticatedRequest('/api/auth/set-password', { method: 'POST', body: JSON.stringify(data) }); }
+
+  // MÓDULO DE PETIÇÕES (PETITIONS)
+  // ✅ ADICIONADO: Método para buscar petições
+  async getPetitions() { return this.authenticatedRequest<any[]>('/api/petitions'); }
+
+  // MÓDULO DE CARGOS E PERMISSÕES (ROLES & PERMISSIONS)
+  // ✅ ADICIONADO: Método para buscar cargos
+  async getRoles() { return this.authenticatedRequest<any[]>('/api/roles'); }
+  // ✅ ADICIONADO: Método para buscar permissões
+  async getPermissions() { return this.authenticatedRequest<any[]>('/api/permissions'); }
 
   // MÓDULO DE TEMPLATES DE DOCUMENTOS
   async getTemplates() { return this.authenticatedRequest<any[]>('/api/document-templates'); }

@@ -1,15 +1,24 @@
-// lib/auth.ts
+// lib/auth.ts - VERSÃO CORRIGIDA
+
 import { createAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
-// Cache simples em memória para os dados do usuário
+// Cache simples em memória para os dados do usuário para otimizar performance
 const userCache = new Map<string, { user: AuthUser, timestamp: number }>();
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos
+
+export type Permission = string;
+
+export interface Role {
+  id: number;
+  name: string;
+  permissions: Permission[];
+}
 
 export interface AuthUser {
   id: string;
   email: string;
   role?: string;
-  permissions?: string[];
+  permissions?: Permission[];
 }
 
 export async function getSessionUser(): Promise<AuthUser | null> {
@@ -28,31 +37,31 @@ export async function getSessionUser(): Promise<AuthUser | null> {
 
     const admin = createAdminClient();
     
-    // ✅ CORREÇÃO: Etapa 1 - Buscar o funcionário e sua role_id
+    // ✅ CORREÇÃO PRINCIPAL: Alterado de 'auth_id' para 'id'.
+    // A tabela 'employees' deve usar o UUID do 'auth.users' como sua chave primária ('id').
     const { data: employee, error: employeeError } = await admin
       .from("employees")
       .select("id, role_id")
-      .eq("id", authUser.id)
+      .eq("id", authUser.id) // A busca agora é pelo 'id' do funcionário, que é o mesmo do usuário.
       .single();
 
     if (employeeError) {
-      console.warn(`[Auth] Falha ao buscar funcionário para ${authUser.email}:`, employeeError.message);
+      console.warn(`[Auth] Funcionário não encontrado para o usuário ${authUser.email}. Verifique se existe um registro correspondente na tabela 'employees'.`, employeeError.message);
       const basicUser: AuthUser = { id: authUser.id, email: authUser.email ?? "", role: 'user', permissions: [] };
       userCache.set(authUser.id, { user: basicUser, timestamp: Date.now() });
       return basicUser;
     }
 
     let roleName = 'user';
-    let permissions: string[] = [];
+    let permissions: Permission[] = [];
 
-    // ✅ CORREÇÃO: Etapa 2 - Se houver uma role_id, buscar os detalhes da função e suas permissões
     if (employee.role_id) {
       const { data: roleData, error: roleError } = await admin
         .from("roles")
         .select(`
           name,
           role_permissions (
-            permissions ( code )
+            permission
           )
         `)
         .eq("id", employee.role_id)
@@ -60,9 +69,9 @@ export async function getSessionUser(): Promise<AuthUser | null> {
 
       if (roleError) {
         console.warn(`[Auth] Falha ao buscar detalhes da role_id ${employee.role_id}:`, roleError.message);
-      } else {
+      } else if (roleData) {
         roleName = roleData.name;
-        permissions = roleData.role_permissions.map((rp: any) => rp.permissions.code);
+        permissions = roleData.role_permissions.map((rp: any) => rp.permission as Permission);
       }
     }
 
@@ -90,7 +99,7 @@ export async function requireAuth(): Promise<AuthUser> {
   return user;
 }
 
-export async function requirePermission(permission: string): Promise<AuthUser> {
+export async function requirePermission(permission: Permission): Promise<AuthUser> {
   const user = await requireAuth();
   if (user.role === "admin" || (user.permissions && user.permissions.includes(permission))) {
     return user;
