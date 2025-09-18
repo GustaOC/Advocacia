@@ -9,19 +9,18 @@ import {
   FileText,
   DollarSign,
   Calendar,
-  Bell,
   CheckSquare,
   BarChart2,
   Briefcase,
   LogOut,
   Settings,
-  Scale
+  Scale,
+  FileCode // Novo ícone para Templates
 } from "lucide-react"
-// A CORREÇÃO ESTÁ AQUI: Adicionado DropdownMenuSeparator
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api-client"
 
-// Importação dos MÓDULOS ATUALIZADOS
+// Importação dos Módulos
 import { EntitiesModule } from "@/components/entities-module"
 import { CasesModule } from "@/components/cases-module"
 import { FinancialModule } from "@/components/financial-module"
@@ -33,9 +32,17 @@ import { ReportsModule } from "@/components/reports-module"
 import { NotificationsDropdown } from "./notifications-dropdown"
 import { SystemSettingsModal } from './system-settings-modal'
 import { UserSettingsModal } from './user-settings-modal'
+import { TemplatesModule } from "./templates-module" // Importando o novo módulo
+
+interface GlobalFilters {
+  cases?: { status: string };
+  petitions?: { status: string };
+  financial?: { status: string };
+}
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [globalFilters, setGlobalFilters] = useState<GlobalFilters>({});
   const [isSystemSettingsOpen, setSystemSettingsOpen] = useState(false)
   const [isUserSettingsOpen, setUserSettingsOpen] = useState(false)
 
@@ -43,16 +50,25 @@ export function Dashboard() {
     await apiClient.logout()
   }, [])
 
+  const handleNavigate = (tab: string, filters: GlobalFilters = {}) => {
+    setActiveTab(tab);
+    setGlobalFilters(filters);
+  };
+
   const TABS = [
-    { value: "overview", label: "Dashboard", icon: BarChart2, component: <ReportsModule /> },
+    { value: "overview", label: "Dashboard", icon: BarChart2, component: <ReportsModule onNavigate={handleNavigate} /> },
     { value: "entities", label: "Entidades", icon: Users, component: <EntitiesModule /> },
-    { value: "cases", label: "Casos", icon: Briefcase, component: <CasesModule /> },
+    { value: "cases", label: "Casos", icon: Briefcase, component: <CasesModule initialFilters={globalFilters.cases} /> },
     { value: "petitions", label: "Petições", icon: FileText, component: <PetitionsModule /> },
+    { value: "templates", label: "Modelos", icon: FileCode, component: <TemplatesModule /> }, // Nova aba
     { value: "financial", label: "Financeiro", icon: DollarSign, component: <FinancialModule /> },
     { value: "calendar", label: "Agenda", icon: Calendar, component: <CalendarModule /> },
     { value: "tasks", label: "Tarefas", icon: CheckSquare, component: <TasksModule /> },
     { value: "employees", label: "Equipe", icon: Users, component: <EmployeeManagement /> },
   ]
+
+  // Ajusta o grid para o novo número de abas
+  const gridColsClass = `grid-cols-${TABS.length}`;
 
   return (
     <>
@@ -103,7 +119,10 @@ export function Dashboard() {
 
         <main className="max-w-screen-2xl mx-auto px-6 lg:px-8 py-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-8">
-            <TabsList className="grid w-full grid-cols-8 bg-white shadow-lg rounded-2xl p-2 h-auto">
+            {/* Tailwind JIT (Just-In-Time) não consegue gerar classes dinâmicas como `grid-cols-${TABS.length}`.
+                Adicionamos todas as classes possíveis para garantir que funcione. */}
+            <div className="hidden grid-cols-1 grid-cols-2 grid-cols-3 grid-cols-4 grid-cols-5 grid-cols-6 grid-cols-7 grid-cols-8 grid-cols-9 grid-cols-10 grid-cols-11 grid-cols-12"></div>
+            <TabsList className={`grid w-full ${gridColsClass} bg-white shadow-lg rounded-2xl p-2 h-auto`}>
               {TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
@@ -117,7 +136,7 @@ export function Dashboard() {
             </TabsList>
 
             {TABS.map((tab) => (
-              <TabsContent key={tab.value} value={tab.value}>
+              <TabsContent key={tab.value} value={tab.value} className="focus-visible:ring-0 focus-visible:ring-offset-0">
                 {tab.component}
               </TabsContent>
             ))}
@@ -125,7 +144,6 @@ export function Dashboard() {
         </main>
       </div>
 
-      {/* Modais de Configuração */}
       <SystemSettingsModal isOpen={isSystemSettingsOpen} onClose={() => setSystemSettingsOpen(false)} />
       <UserSettingsModal isOpen={isUserSettingsOpen} onClose={() => setUserSettingsOpen(false)} />
     </>

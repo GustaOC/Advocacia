@@ -145,6 +145,38 @@ export class ApiClient {
       }
     }
   }
+
+  // =================================================================
+  // MÓDULO DE TEMPLATES DE DOCUMENTOS
+  // =================================================================
+
+  async getTemplates() {
+    return this.authenticatedRequest<any[]>('/api/document-templates');
+  }
+
+  async getTemplate(id: number) {
+    return this.authenticatedRequest(`/api/document-templates/${id}`);
+  }
+
+  async createTemplate(templateData: any) {
+    return this.authenticatedRequest('/api/document-templates', {
+      method: 'POST',
+      body: JSON.stringify(templateData),
+    });
+  }
+
+  async updateTemplate(id: number, templateData: any) {
+    return this.authenticatedRequest(`/api/document-templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(templateData),
+    });
+  }
+
+  async deleteTemplate(id: number) {
+    return this.authenticatedRequest(`/api/document-templates/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Exporta uma instância única para ser usada em toda a aplicação

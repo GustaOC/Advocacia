@@ -1,6 +1,10 @@
 // lib/auth.ts
 import { createAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
+// Cache simples em memória para os dados do usuário
+const userCache = new Map<string, { user: AuthUser, timestamp: number }>();
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -11,13 +15,18 @@ export interface AuthUser {
 export async function getSessionUser(): Promise<AuthUser | null> {
   try {
     const supabase = createSupabaseServerClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-    if (error || !user) {
+    if (authError || !authUser) {
       return null;
     }
 
-    // Tenta buscar dados adicionais da tabela employees
+    // Verifica o cache primeiro
+    const cachedEntry = userCache.get(authUser.id);
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_DURATION_MS)) {
+      return cachedEntry.user;
+    }
+
     const admin = createAdminClient();
     const { data: employeeData, error: employeeError } = await admin
       .from("employees")
@@ -25,28 +34,33 @@ export async function getSessionUser(): Promise<AuthUser | null> {
         permissions,
         roles ( name )
       `)
-      .eq("id", user.id) // Busca pelo ID do usuário autenticado
+      .eq("id", authUser.id)
       .single();
 
     if (employeeError) {
-      console.warn("Aviso ao buscar dados do funcionário:", employeeError.message);
-      // Retorna usuário básico se não encontrar na tabela employees
-      return { id: user.id, email: user.email ?? "", role: 'user', permissions: [] };
+      console.warn(`[Auth] Aviso ao buscar dados do funcionário para ${authUser.email}:`, employeeError.message);
+      const basicUser: AuthUser = { id: authUser.id, email: authUser.email ?? "", role: 'user', permissions: [] };
+      userCache.set(authUser.id, { user: basicUser, timestamp: Date.now() });
+      return basicUser;
     }
 
-    return {
-      id: user.id,
-      email: user.email ?? "",
+    const user: AuthUser = {
+      id: authUser.id,
+      email: authUser.email ?? "",
       role: employeeData?.roles?.name || 'user',
       permissions: employeeData?.permissions || [],
     };
+
+    // Armazena no cache
+    userCache.set(user.id, { user, timestamp: Date.now() });
+
+    return user;
   } catch (error) {
-    console.error("Erro inesperado em getSessionUser:", error);
+    console.error("[Auth] Erro inesperado em getSessionUser:", error);
     return null;
   }
 }
 
-// Funções requireAuth e requirePermission continuam as mesmas
 export async function requireAuth(): Promise<AuthUser> {
   const user = await getSessionUser();
   if (!user) {
@@ -61,4 +75,15 @@ export async function requirePermission(permission: string): Promise<AuthUser> {
     return user;
   }
   throw new Error("FORBIDDEN");
+}
+
+/**
+ * Limpa o cache de um usuário específico. Útil após logout ou atualização de permissões.
+ * @param userId - O ID do usuário a ser removido do cache.
+ */
+export function clearAuthCache(userId: string) {
+  if (userCache.has(userId)) {
+    userCache.delete(userId);
+    console.log(`[Auth] Cache limpo para o usuário: ${userId}`);
+  }
 }

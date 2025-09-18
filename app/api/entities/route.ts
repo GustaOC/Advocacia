@@ -1,13 +1,13 @@
 // app/api/entities/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/lib/auth";
+import { requirePermission, requireAuth } from "@/lib/auth"; // Importar requireAuth
 import * as entityService from "@/lib/services/entityService";
 
 // GET: Listar todas as entidades
 export async function GET(req: NextRequest) {
   try {
-    // await requirePermission("entities_view");
+    await requirePermission("entities_view");
     const entities = await entityService.getEntities();
     return NextResponse.json(entities);
   } catch (error: any) {
@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
 // POST: Criar uma nova entidade
 export async function POST(req: NextRequest) {
   try {
-    // await requirePermission("entities_create");
+    const user = await requirePermission("entities_create"); // Pega o usuário
     const body = await req.json();
-    const newEntity = await entityService.createEntity(body);
+    const newEntity = await entityService.createEntity(body, user); // Passa o usuário para o serviço
     return NextResponse.json(newEntity, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

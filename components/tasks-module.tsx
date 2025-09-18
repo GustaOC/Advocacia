@@ -1,24 +1,21 @@
 // components/tasks-module.tsx
 "use client";
 
-// ✅ CORREÇÃO: Adicionado 'useMemo' à importação do React
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MoreHorizontal, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiClient } from "@/lib/api-client";
+import { useAuth } from '@/hooks/use-auth'; // Importando o nosso novo hook!
 
 // --- Tipos de Dados ---
 interface Task { id: number; title: string; status: 'todo' | 'in-progress' | 'done'; priority: 'high' | 'medium' | 'low'; assigneeId: string; }
 interface Employee { id: string; name: string; email: string; }
-interface CurrentUser { id: string; name: string; role: 'admin' | 'user'; }
 
 // --- Mocks para simulação ---
 const mockTasks: Task[] = [
@@ -50,20 +47,15 @@ const TaskCard = ({ task, employees }: { task: Task, employees: Employee[] }) =>
 
 export function TasksModule() {
   const { toast } = useToast();
+  const { user, can } = useAuth(); // Usando nosso hook!
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>(mockEmployees);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setModalOpen] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', assigneeId: '', priority: 'medium' as Task['priority'], description: '' });
-
-  // Simula o usuário logado e sua role
-  const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 'dr_cassio', name: 'Dr. Cássio Miguel', role: 'admin' });
+  const [newTask, setNewTask] = useState({ title: '', assigneeId: '', priority: 'medium' as Task['priority'] });
 
   useEffect(() => {
-    // Em um app real:
-    // const user = await apiClient.getCurrentUser(); setCurrentUser(user);
-    // const fetchedTasks = await apiClient.getTasks(); setTasks(fetchedTasks);
-    // const fetchedEmployees = await apiClient.getEmployees(); setEmployees(fetchedEmployees);
+    // Simulação de carregamento de dados
     setTasks(mockTasks);
     setIsLoading(false);
   }, []);
@@ -73,24 +65,28 @@ export function TasksModule() {
         toast({title: "Erro", description: "Título e responsável são obrigatórios.", variant: "destructive"});
         return;
     }
-    const taskToSave = { ...newTask, id: Math.random(), status: 'todo' as 'todo' };
+    const taskToSave: Task = { ...newTask, id: Date.now(), status: 'todo' };
     setTasks(prev => [...prev, taskToSave]);
     toast({title: "Sucesso!", description: "Tarefa criada e atribuída."});
     setModalOpen(false);
-    setNewTask({ title: '', assigneeId: '', priority: 'medium', description: '' });
+    setNewTask({ title: '', assigneeId: '', priority: 'medium' });
   };
   
-  // Filtra as tarefas para mostrar apenas as do usuário, a menos que seja admin
   const visibleTasks = useMemo(() => {
-    if (currentUser.role === 'admin') return tasks;
-    return tasks.filter(task => task.assigneeId === currentUser.id);
-  }, [tasks, currentUser]);
+    // A lógica de `can` já considera se o usuário é admin
+    if (can('tasks_view_all')) return tasks;
+    return tasks.filter(task => task.assigneeId === user?.id);
+  }, [tasks, user, can]);
 
   const columns = [
     { id: 'todo', title: 'A Fazer' },
     { id: 'in-progress', title: 'Em Andamento' },
     { id: 'done', title: 'Concluído' },
   ];
+
+  if (isLoading) {
+      return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin"/></div>
+  }
 
   return (
      <div className="space-y-6">
@@ -99,7 +95,8 @@ export function TasksModule() {
                 <h2 className="text-3xl font-bold mb-2">Gestão de Tarefas</h2>
                 <p className="text-slate-300 text-lg">Organize e acompanhe as atividades da sua equipe.</p>
             </div>
-            {currentUser.role === 'admin' && (
+            {/* Lógica de permissão centralizada e limpa! */}
+            {can('tasks_create') && (
                 <Button onClick={() => setModalOpen(true)} className="bg-white text-slate-900 hover:bg-slate-100">
                     <Plus className="mr-2 h-4 w-4" /> Nova Tarefa
                 </Button>

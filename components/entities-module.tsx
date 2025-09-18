@@ -1,7 +1,8 @@
 // components/entities-module.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,34 +29,54 @@ interface Entity {
 
 export function EntitiesModule() {
   const { toast } = useToast();
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentEntity, setCurrentEntity] = useState<Partial<Entity>>({});
   const [isImportModalOpen, setImportModalOpen] = useState(false);
 
-  const loadEntities = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.getEntities();
-      setEntities(data);
-    } catch (error: any) {
-      toast({
-        title: "Erro ao carregar entidades",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+  // 1. BUSCA DE DADOS COM useQuery
+  // Substitui useState, useEffect e useCallback para carregar os dados.
+  // 'entities' é a chave de cache.
+  const { data: entities = [], isLoading, isError } = useQuery<Entity[]>({
+    queryKey: ['entities'],
+    queryFn: apiClient.getEntities,
+  });
 
-  useEffect(() => {
-    loadEntities();
-  }, [loadEntities]);
+  // 2. MUTAÇÃO PARA CRIAR/ATUALIZAR
+  const saveEntityMutation = useMutation({
+    mutationFn: (entityData: Partial<Entity>) => {
+      if (isEditMode) {
+        return apiClient.updateEntity(String(entityData.id!), entityData);
+      }
+      return apiClient.createEntity(entityData);
+    },
+    onSuccess: () => {
+      toast({ title: "Sucesso!", description: `Entidade ${isEditMode ? 'atualizada' : 'criada'} com sucesso.` });
+      // Invalida o cache 'entities', o que faz o React Query buscar os dados mais recentes automaticamente.
+      queryClient.invalidateQueries({ queryKey: ['entities'] });
+      setModalOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    },
+  });
+  
+  // 3. MUTAÇÃO PARA DELETAR
+  const deleteEntityMutation = useMutation({
+    mutationFn: (entityId: number) => apiClient.deleteEntity(String(entityId)),
+    onSuccess: () => {
+      toast({ title: "Sucesso!", description: "Entidade excluída." });
+      queryClient.invalidateQueries({ queryKey: ['entities'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+    },
+  });
 
+  // Funções de UI que agora disparam as mutações
   const openModalForCreate = () => {
     setIsEditMode(false);
     setCurrentEntity({});
@@ -68,39 +89,18 @@ export function EntitiesModule() {
     setModalOpen(true);
   };
 
-  const handleSave = async () => {
-    try {
-        if (isEditMode) {
-            await apiClient.updateEntity(String(currentEntity.id!), currentEntity);
-            toast({ title: "Sucesso!", description: "Entidade atualizada." });
-        } else {
-            await apiClient.createEntity(currentEntity);
-            toast({ title: "Sucesso!", description: "Nova entidade criada." });
-        }
-        setModalOpen(false);
-        loadEntities();
-        } catch (error: any) {
-        toast({
-            title: "Erro ao salvar",
-            description: error.message,
-            variant: "destructive",
-        });
-        }
+  const handleSave = () => {
+    saveEntityMutation.mutate(currentEntity);
   };
-  
-  const handleDelete = async (id: number) => {
+
+  const handleDelete = (id: number) => {
     if (confirm("Tem certeza que deseja excluir esta entidade?")) {
-        try {
-        await apiClient.deleteEntity(String(id));
-        toast({ title: "Sucesso!", description: "Entidade excluída." });
-        loadEntities();
-        } catch (error: any) {
-        toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
-        }
+      deleteEntityMutation.mutate(id);
     }
   };
 
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Lógica de importação permanece a mesma, mas ao final invalida o cache
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -123,12 +123,11 @@ export function EntitiesModule() {
           state: row.estado,
         }));
 
-        for (const entity of newEntities) {
-          await apiClient.createEntity(entity);
-        }
+        // Usamos Promise.all para performance
+        await Promise.all(newEntities.map(entity => apiClient.createEntity(entity)));
 
         toast({ title: "Sucesso!", description: `${newEntities.length} entidades importadas.` });
-        loadEntities();
+        queryClient.invalidateQueries({ queryKey: ['entities'] });
         setImportModalOpen(false);
       } catch (error: any) {
         toast({ title: "Erro de Importação", description: error.message, variant: "destructive" });
@@ -136,8 +135,7 @@ export function EntitiesModule() {
     };
     reader.readAsArrayBuffer(file);
   };
-
-
+  
   const filteredEntities = useMemo(() =>
     entities.filter(e =>
       (e.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -151,6 +149,14 @@ export function EntitiesModule() {
     return (
       <div className="flex justify-center items-center h-96">
         <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="text-center py-10 text-red-500">
+        Ocorreu um erro ao carregar as entidades. Tente novamente mais tarde.
       </div>
     );
   }
@@ -185,7 +191,7 @@ export function EntitiesModule() {
                   <TableCell>{entity.phone || '-'}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => openModalForEdit(entity)}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(entity.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(entity.id)} disabled={deleteEntityMutation.isPending}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -194,9 +200,7 @@ export function EntitiesModule() {
         </CardContent>
       </Card>
 
-      {/* Modal de Criação/Edição */}
       <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
-        {/* ✅ CORREÇÃO APLICADA AQUI: Adicionada a classe bg-card */}
         <DialogContent className="sm:max-w-2xl bg-card">
           <DialogHeader><DialogTitle>{isEditMode ? "Editar Entidade" : "Criar Nova Entidade"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -212,14 +216,15 @@ export function EntitiesModule() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{isEditMode ? "Salvar Alterações" : "Criar Entidade"}</Button>
+            <Button onClick={handleSave} disabled={saveEntityMutation.isPending}>
+              {saveEntityMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEditMode ? "Salvar Alterações" : "Criar Entidade"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      {/* Modal de Importação */}
       <Dialog open={isImportModalOpen} onOpenChange={setImportModalOpen}>
-        {/* ✅ CORREÇÃO APLICADA AQUI: Adicionada a classe bg-card */}
         <DialogContent className="bg-card">
           <DialogHeader>
             <DialogTitle>Importar Entidades via Excel</DialogTitle>

@@ -3,171 +3,184 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Scale, Upload, Filter } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Upload, Filter, FileCog, Copy, Download } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
-import { DocumentsModule } from "./documents-module";
+import { useQuery } from "@tanstack/react-query";
 
-// Tipos de dados atualizados
+// Tipos
 interface Entity { id: number; name: string }
-interface CaseParty { role: string; entities: Entity }
 interface Case {
   id: number;
   case_number: string | null;
   title: string;
   status: string;
-  sub_status: string | null; // Para Acordo e Extinção
+  sub_status: string | null;
   value: number | null;
   court: string | null;
   created_at: string;
-  case_parties: CaseParty[];
-  description?: string | null;
-  // Adicionando campos para exequente e executada
   exequente?: Entity | null;
   executada?: Entity | null;
 }
+interface Template { id: number; title: string; }
+interface CasesModuleProps { initialFilters?: { status: string }; }
 
-export function CasesModule() {
+// Modal de Geração de Documento
+const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, isOpen: boolean, onClose: () => void }) => {
   const { toast } = useToast();
-  const [cases, setCases] = useState<Case[]>([]);
-  const [entities, setEntities] = useState<Entity[]>([]); // Para os selects no modal
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [isModalOpen, setModalOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [currentCase, setCurrentCase] = useState<Partial<Case>>({});
-  const [selectedCaseForDetails, setSelectedCaseForDetails] = useState<Case | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [casesData, entitiesData] = await Promise.all([
-        apiClient.getCases(),
-        apiClient.getEntities()
-      ]);
-      setCases(casesData);
-      setEntities(entitiesData);
-    } catch (error: any) {
-      toast({ title: "Erro", description: `Falha ao carregar dados: ${error.message}`, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
+  const { data: templates = [] } = useQuery<Template[]>({
+    queryKey: ['templates'],
+    queryFn: apiClient.getTemplates,
+    enabled: isOpen, // Só busca os templates quando o modal abre
+  });
+
+  const handleGenerate = async () => {
+    if (!selectedTemplateId) {
+      toast({ title: "Selecione um modelo", variant: "destructive" });
+      return;
     }
-  }, [toast]);
+    setIsGenerating(true);
+    try {
+      const result = await apiClient.generateDocument(Number(selectedTemplateId), caseItem.id);
+      setGeneratedContent(result.generatedContent);
+      setDocumentTitle(result.documentTitle);
+    } catch (error: any) {
+      toast({ title: "Erro ao gerar documento", description: error.message, variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(generatedContent);
+    toast({ title: "Copiado!", description: "O conteúdo do documento foi copiado para a área de transferência." });
+  };
+  
+  const handleDownloadTxt = () => {
+    const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${documentTitle}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Gerar Documento para: {caseItem.title}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+          <div className="space-y-4">
+            <Label>1. Selecione o Modelo</Label>
+            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+              <SelectTrigger><SelectValue placeholder="Escolha um modelo..." /></SelectTrigger>
+              <SelectContent>{templates.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button onClick={handleGenerate} disabled={!selectedTemplateId || isGenerating} className="w-full">
+              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCog className="mr-2 h-4 w-4" />}
+              Gerar Documento
+            </Button>
+            {generatedContent && (
+               <div className="flex gap-2">
+                 <Button variant="outline" onClick={handleCopyToClipboard} className="w-full"><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
+                 <Button variant="outline" onClick={handleDownloadTxt} className="w-full"><Download className="mr-2 h-4 w-4" /> Baixar .txt</Button>
+               </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>2. Documento Gerado</Label>
+            <Textarea 
+              readOnly 
+              value={generatedContent} 
+              className="min-h-[300px] bg-slate-50 font-mono text-sm"
+              placeholder="O conteúdo do documento aparecerá aqui após a geração."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+
+export function CasesModule({ initialFilters }: CasesModuleProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState(initialFilters?.status || "all");
+  const [selectedCaseForDetails, setSelectedCaseForDetails] = useState<Case | null>(null);
+  const [selectedCaseForDocs, setSelectedCaseForDocs] = useState<Case | null>(null); // State para modal de geração
+
+  const { data: cases = [], isLoading } = useQuery<Case[]>({
+    queryKey: ['cases'],
+    queryFn: apiClient.getCases,
+  });
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-  
-  const openModalForCreate = () => {
-    setIsEditMode(false);
-    setCurrentCase({
-      title: '',
-      case_number: '',
-      court: '',
-      description: '',
-      value: 0,
-      status: 'Em andamento' // Status padrão
-    });
-    setModalOpen(true);
-  };
+    if (initialFilters?.status) {
+      setFilterStatus(initialFilters.status);
+    }
+  }, [initialFilters]);
 
-  const handleSave = async () => {
-    // ... lógica de salvar
-  };
-  
   const filteredCases = useMemo(() => {
     return cases.filter(c => {
-      const searchMatch = 
-        (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.exequente?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.executada?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
-      
+      const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = filterStatus === "all" || c.status === filterStatus;
-      
       return searchMatch && statusMatch;
     });
   }, [cases, searchTerm, filterStatus]);
     
-  const getStatusBadge = (status: string, sub_status?: string | null) => {
-    const baseClasses = "font-semibold";
-    let statusLabel = status;
-    let colorClasses = "bg-gray-100 text-gray-800";
+  const getStatusBadge = (status: string) => <Badge>{status}</Badge>;
 
-    switch (status) {
-      case 'Em andamento': colorClasses = "bg-blue-100 text-blue-800"; break;
-      case 'Em acordo': 
-        colorClasses = "bg-purple-100 text-purple-800";
-        if(sub_status) statusLabel += ` (${sub_status})`;
-        break;
-      case 'Extinção': 
-        colorClasses = "bg-green-100 text-green-800";
-        if(sub_status) statusLabel += ` (${sub_status})`;
-        break;
-      case 'Pagamento': colorClasses = "bg-teal-100 text-teal-800"; break; // Caso especial de filtro
-    }
-    return <Badge className={`${baseClasses} ${colorClasses}`}>{statusLabel}</Badge>;
-  };
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
-  }
+  if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
+       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
         <h2 className="text-3xl font-bold mb-2">Gestão de Casos e Processos</h2>
         <p className="text-slate-300 text-lg">Administre todos os casos do escritório de forma centralizada.</p>
       </div>
-
       <Card className="border-0 shadow-lg">
         <CardContent className="p-6 flex flex-col md:flex-row gap-4 justify-between">
-          <Input placeholder="Buscar por título, número ou parte..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-xs" />
-          
+          <Input placeholder="Buscar por título, número..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-xs" />
           <div className="flex gap-2">
-            {/* ✅ MELHORIA: Filtros por status */}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[180px]">
-                <Filter className="h-4 w-4 mr-2"/>
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[180px]"><Filter className="h-4 w-4 mr-2"/><SelectValue placeholder="Filtrar por status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os Status</SelectItem>
                 <SelectItem value="Em andamento">Em Andamento</SelectItem>
                 <SelectItem value="Em acordo">Em Acordo</SelectItem>
                 <SelectItem value="Extinção">Extinção</SelectItem>
-                <SelectItem value="Pagamento">Extinto por Pagamento</SelectItem>
               </SelectContent>
             </Select>
-
             <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Importar</Button>
-            <Button onClick={openModalForCreate} className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
+            <Button className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
           </div>
         </CardContent>
       </Card>
-
       <Card className="border-0 shadow-lg">
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Processo / Título</TableHead>
-                <TableHead>Exequente</TableHead>
-                <TableHead>Executado</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Processo / Título</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {filteredCases.map(caseItem => (
                 <TableRow key={caseItem.id}>
@@ -175,12 +188,10 @@ export function CasesModule() {
                     <div className="font-medium">{caseItem.title}</div>
                     <div className="text-sm text-slate-500 font-mono">{caseItem.case_number || "-"}</div>
                   </TableCell>
-                  <TableCell>{caseItem.exequente?.name || '-'}</TableCell>
-                  <TableCell>{caseItem.executada?.name || '-'}</TableCell>
-                  <TableCell>{caseItem.value ? `R$ ${caseItem.value.toLocaleString('pt-BR')}` : '-'}</TableCell>
-                  <TableCell>{getStatusBadge(caseItem.status, caseItem.sub_status)}</TableCell>
+                  <TableCell>{getStatusBadge(caseItem.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => setSelectedCaseForDetails(caseItem)}><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedCaseForDocs(caseItem)}><FileCog className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -188,77 +199,15 @@ export function CasesModule() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* ✅ MELHORIA: Modal de Criação/Edição Aprimorado */}
-      <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{isEditMode ? "Editar Caso" : "Criar Novo Caso"}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2"><Label>Nº do Processo</Label><Input value={currentCase.case_number || ''} onChange={e => setCurrentCase({...currentCase, case_number: e.target.value})} /></div>
-            <div className="space-y-2"><Label>Entidade (Executada)</Label>
-              <Select onValueChange={id => setCurrentCase({...currentCase, executada: entities.find(e => e.id === Number(id))})}>
-                <SelectTrigger><SelectValue placeholder="Selecione a parte executada..." /></SelectTrigger>
-                <SelectContent>{entities.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2"><Label>Entidade (Exequente)</Label>
-              <Select onValueChange={id => setCurrentCase({...currentCase, exequente: entities.find(e => e.id === Number(id))})}>
-                <SelectTrigger><SelectValue placeholder="Selecione a parte exequente..." /></SelectTrigger>
-                <SelectContent>{entities.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2"><Label>Valor da Ação</Label><Input type="number" value={currentCase.value || ''} onChange={e => setCurrentCase({...currentCase, value: Number(e.target.value)})} /></div>
-            
-            <div className="space-y-2"><Label>Status</Label>
-              <Select value={currentCase.status} onValueChange={status => setCurrentCase({...currentCase, status, sub_status: null})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Em andamento">Em Andamento</SelectItem>
-                  <SelectItem value="Em acordo">Em Acordo</SelectItem>
-                  <SelectItem value="Extinção">Extinção</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Status Condicional: Acordo */}
-            {currentCase.status === 'Em acordo' && (
-              <div className="space-y-2 pl-4 border-l-2 border-purple-500">
-                <Label>Tipo de Acordo</Label>
-                <Select value={currentCase.sub_status || ''} onValueChange={sub => setCurrentCase({...currentCase, sub_status: sub})}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tipo de acordo..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Judicial">Judicial</SelectItem>
-                    <SelectItem value="Extrajudicial">Extrajudicial</SelectItem>
-                    <SelectItem value="Acordo em audiência">Acordo em audiência</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            {/* Status Condicional: Extinção */}
-            {currentCase.status === 'Extinção' && (
-              <div className="space-y-2 pl-4 border-l-2 border-green-500">
-                <Label>Motivo da Extinção</Label>
-                <Select value={currentCase.sub_status || ''} onValueChange={sub => setCurrentCase({...currentCase, sub_status: sub})}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o motivo..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pagamento">Pagamento</SelectItem>
-                    <SelectItem value="Grupo econômico">Grupo econômico</SelectItem>
-                    <SelectItem value="Citação negativa">Citação negativa</SelectItem>
-                    <SelectItem value="Penhora infrutífera">Penhora infrutífera</SelectItem>
-                    <SelectItem value="Morte">Morte</SelectItem>
-                    <SelectItem value="Desistência">Desistência</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{isEditMode ? "Salvar" : "Criar"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      
+      {/* Modal de Geração de Documento */}
+      {selectedCaseForDocs && (
+        <GenerateDocumentModal
+          caseItem={selectedCaseForDocs}
+          isOpen={!!selectedCaseForDocs}
+          onClose={() => setSelectedCaseForDocs(null)}
+        />
+      )}
     </div>
   );
 }

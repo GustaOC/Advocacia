@@ -32,9 +32,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 // PUT: Atualizar uma entidade
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
-    await requirePermission("entities_edit");
+    const user = await requirePermission("entities_edit"); // Pega o usuário
     const body = await req.json();
-    const updatedEntity = await entityService.updateEntity(params.id, body);
+    const updatedEntity = await entityService.updateEntity(params.id, body, user); // Passa o usuário
     return NextResponse.json(updatedEntity);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -53,8 +53,8 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
 // DELETE: Excluir uma entidade
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
-    await requirePermission("entities_delete");
-    const result = await entityService.deleteEntity(params.id);
+    const user = await requirePermission("entities_delete"); // Pega o usuário
+    const result = await entityService.deleteEntity(params.id, user); // Passa o usuário
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
