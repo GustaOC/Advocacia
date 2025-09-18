@@ -1,15 +1,24 @@
 // app/api/auth/me/route.ts
-import { NextResponse, type NextRequest } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 
-export async function GET(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createSupabaseServerClient(req, res)
+export async function GET() {
+  try {
+    const user = await getSessionUser();
 
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error || !user) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      permissions: user.permissions,
+    });
+    
+  } catch (error: any) {
+    console.error("[Me API] Erro:", error.message);
+    return NextResponse.json({ error: "Erro interno ao buscar usuário." }, { status: 500 });
   }
-
-  return NextResponse.json({ user })
 }

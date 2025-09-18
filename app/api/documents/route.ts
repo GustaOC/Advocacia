@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     const documents = await documentService.getDocumentsByCaseId(Number(caseId));
     return NextResponse.json(documents);
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

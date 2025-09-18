@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Download, Trash2, Loader2, X, AlertCircle } from "lucide-react";
+import { Upload, FileText, Download, Trash2, Loader2, X } from "lucide-react";
 import { createClient } from '@/lib/supabase/client';
 
 // Tipagem para os documentos que virão da API
