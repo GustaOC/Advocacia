@@ -1,7 +1,9 @@
+// components/dashboard.tsx
 "use client"
 
+import { useState } from "react" // Importando useState
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ClientsModule } from "./clients-module" // ALTERADO AQUI
+import { ClientsModule } from "./clients-module"
 import { CasesModule } from "./cases-module"
 import { DocumentsModule } from "./documents-module"
 import { TasksModule } from "./tasks-module"
@@ -18,9 +20,15 @@ import { useAuth } from "@/hooks/use-auth"
 import { Skeleton } from "./ui/skeleton"
 
 export function Dashboard() {
-  const { user, loading } = useAuth()
+  const { user, isLoading } = useAuth(); // Renomeado 'loading' para 'isLoading' para consistência
+  const [activeTab, setActiveTab] = useState("dashboard");
 
-  if (loading) {
+  const handleNavigate = (tab: string, filters?: any) => {
+    // Lógica de filtros pode ser implementada aqui no futuro
+    setActiveTab(tab);
+  };
+
+  if (isLoading) {
     return (
       <div className="flex flex-col h-screen">
         <header className="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800">
@@ -34,7 +42,7 @@ export function Dashboard() {
           <Skeleton className="h-full w-full" />
         </main>
       </div>
-    )
+    );
   }
 
   return (
@@ -49,7 +57,8 @@ export function Dashboard() {
         </div>
       </header>
       <main className="flex-1 overflow-auto p-4">
-        <Tabs defaultValue="dashboard" className="h-full">
+        {/* O valor do Tabs agora é controlado pelo estado */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="clients">Clientes</TabsTrigger>
@@ -64,16 +73,17 @@ export function Dashboard() {
           </TabsList>
 
           <TabsContent value="dashboard" className="h-full">
-            <ReportsModule />
+            {/* Passando a função de navegação para o ReportsModule */}
+            <ReportsModule onNavigate={handleNavigate} />
           </TabsContent>
           <TabsContent value="clients" className="h-full">
-            <ClientsModule /> 
+            <ClientsModule />
           </TabsContent>
           <TabsContent value="cases" className="h-full">
             <CasesModule />
           </TabsContent>
           <TabsContent value="documents" className="h-full">
-            <DocumentsModule />
+            <DocumentsModule caseId={0} />
           </TabsContent>
           <TabsContent value="tasks" className="h-full">
             <TasksModule />
@@ -96,5 +106,5 @@ export function Dashboard() {
         </Tabs>
       </main>
     </div>
-  )
+  );
 }

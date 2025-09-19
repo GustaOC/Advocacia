@@ -9,12 +9,13 @@ export async function getTasks(user: AuthUser) {
         .from('tasks')
         .select(`
             *,
-            assignee:profiles(name)
+            assignee:employees(name) 
         `)
         .order('created_at', { ascending: false });
 
-    // Se o usuário não for admin, filtre para mostrar apenas as tarefas atribuídas a ele
-    if (user.profile.role !== 'admin') {
+    // CORREÇÃO: Alterado de 'user.profile.role' para 'user.role' para corresponder à interface AuthUser.
+    // A consulta agora filtra corretamente as tarefas para usuários que não são administradores.
+    if (user.role !== 'admin') {
         query = query.eq('assigned_to', user.id);
     }
 
@@ -28,6 +29,7 @@ export async function getTasks(user: AuthUser) {
     // Mapeia o resultado para um formato mais amigável no frontend
     return data.map(task => ({
         ...task,
+        // Ajuste para o aninhamento correto da resposta da query
         assignee_name: task.assignee?.name || 'Desconhecido'
     }));
 }
@@ -51,14 +53,23 @@ export async function createTask(taskData: unknown, user: AuthUser) {
 
 export async function completeTask(taskId: string, user: AuthUser) {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    
+    // Garante que apenas o usuário atribuído ou um admin possa completar a tarefa.
+    let query = supabase
         .from('tasks')
         .update({ status: 'Concluída' })
-        .eq('id', taskId)
-        .select()
-        .single();
+        .eq('id', taskId);
+
+    if (user.role !== 'admin') {
+        query = query.eq('assigned_to', user.id);
+    }
+
+    const { data, error } = await query.select().single();
     
     if (error) {
+        if (error.code === 'PGRST116') { // Nenhum registro encontrado, pode ser erro de permissão.
+             throw new Error("Tarefa não encontrada ou você não tem permissão para completá-la.");
+        }
         console.error(`Erro ao completar tarefa ${taskId}:`, error.message);
         throw new Error("Não foi possível marcar a tarefa como concluída.");
     }

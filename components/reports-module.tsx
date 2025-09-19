@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-// ✅ CORREÇÃO: Adicionados os ícones Briefcase e AlertTriangle que estavam faltando
+// CORREÇÃO: Ícones Briefcase e AlertTriangle adicionados à importação.
 import { FileText, Users, DollarSign, Clock, AlertTriangle, Briefcase } from 'lucide-react';
 
 // Tipos para os dados e props
@@ -18,6 +18,7 @@ interface KpiCardProps {
   onClick: () => void;
   colorClass: string;
 }
+// CORREÇÃO: A prop onNavigate agora é esperada
 interface ReportsModuleProps {
   onNavigate: (tab: string, filters?: any) => void;
 }
@@ -32,9 +33,8 @@ const financialData: ChartData[] = [
   { name: 'Abr', value: 39080 }, { name: 'Mai', value: 48000 }, { name: 'Jun', value: 38000 },
 ];
 
-// Componente de Card de KPI reutilizável e clicável
 const KpiCard: React.FC<KpiCardProps> = ({ title, value, description, icon: Icon, onClick, colorClass }) => (
-  <Card 
+  <Card
     onClick={onClick}
     className="bg-white/80 backdrop-blur border border-slate-200 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
   >
@@ -54,7 +54,6 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, description, icon: Icon
 export function ReportsModule({ onNavigate }: ReportsModuleProps) {
   const [period, setPeriod] = useState<'month' | 'week' | 'year'>('month');
 
-  // A lógica de dados aqui seria dinâmica com base no filtro 'period'
   const kpiData = {
     clients: { value: '248', description: '+12% este mês' },
     activeCases: { value: '89', description: '+5 esta semana' },
@@ -64,7 +63,6 @@ export function ReportsModule({ onNavigate }: ReportsModuleProps) {
 
   return (
     <div className="space-y-8">
-      {/* Filtros de Período */}
       <div className="flex justify-end space-x-2">
         <Button variant={period === 'week' ? 'default' : 'outline'} onClick={() => setPeriod('week')}>Esta Semana</Button>
         <Button variant={period === 'month' ? 'default' : 'outline'} onClick={() => setPeriod('month')}>Este Mês</Button>
@@ -78,7 +76,8 @@ export function ReportsModule({ onNavigate }: ReportsModuleProps) {
           description={kpiData.clients.description}
           icon={Users}
           colorClass="text-slate-900"
-          onClick={() => onNavigate('entities')}
+          // CORREÇÃO: Chamando onNavigate com o nome da aba correta
+          onClick={() => onNavigate('clients')}
         />
         <KpiCard
           title="Processos em Andamento"
@@ -86,7 +85,7 @@ export function ReportsModule({ onNavigate }: ReportsModuleProps) {
           description={kpiData.activeCases.description}
           icon={Briefcase}
           colorClass="text-slate-900"
-          onClick={() => onNavigate('cases', { cases: { status: 'Em andamento' } })}
+          onClick={() => onNavigate('cases', { status: 'Em andamento' })}
         />
         <KpiCard
           title="Receita no Período"
@@ -102,10 +101,10 @@ export function ReportsModule({ onNavigate }: ReportsModuleProps) {
           description={kpiData.upcomingDeadlines.description}
           icon={AlertTriangle}
           colorClass="text-red-600"
-          onClick={() => onNavigate('petitions')} // Futuramente, filtrar por prazos
+          onClick={() => onNavigate('publications')} // Navega para publicações/prazos
         />
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="border-0 shadow-lg">
           <CardHeader>

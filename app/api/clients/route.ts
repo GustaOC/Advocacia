@@ -7,7 +7,7 @@ import * as clientService from "@/lib/services/clientService";
 // GET: Listar todos os clientes
 export async function GET(req: NextRequest) {
   try {
-    // Ajuste a permissão conforme necessário no seu sistema de roles
+    // Permissão ATIVADA
     await requirePermission("clients_view"); 
     const clients = await clientService.getClients();
     return NextResponse.json(clients);
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 // POST: Criar um novo cliente
 export async function POST(req: NextRequest) {
   try {
-    // Ajuste a permissão e pegue o usuário
+    // Permissão ATIVADA e usuário obtido para auditoria
     const user = await requirePermission("clients_create"); 
     const body = await req.json();
     const newClient = await clientService.createClient(body, user);

@@ -1,7 +1,6 @@
-// lib/api-client.ts - VERSÃO CORRIGIDA E COMPLETA
-// Este arquivo centraliza todas as chamadas de API do frontend para o backend.
+// lib/api-client.ts - VERSÃO PADRONIZADA E COMPLETA
+// Centraliza todas as chamadas de API do frontend para o backend.
 
-// Tipos para os dados dos funcionários, para garantir a consistência
 interface EmployeeData {
   name: string;
   email: string;
@@ -10,7 +9,6 @@ interface EmployeeData {
 
 interface UpdateEmployeeData {
   name?: string;
-  email?: string;
   role_id?: number;
 }
 
@@ -40,6 +38,7 @@ export class ApiClient {
 
       if (response.status === 401 || response.status === 403) {
         if (typeof window !== 'undefined') {
+          // Redireciona para o login se a sessão expirar
           window.location.href = '/login?error=session-expired';
         }
       }
@@ -47,43 +46,16 @@ export class ApiClient {
       throw new Error(errorMessage);
     }
 
-    // Retorna um objeto vazio se a resposta não tiver corpo (ex: status 204)
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.indexOf("application/json") !== -1) {
       return response.json();
     } else {
+      // Retorna um objeto vazio para respostas sem conteúdo (ex: DELETE com status 204)
       return {} as T;
     }
   }
 
-  // MÓDULO DE ENTIDADES (CLIENTES)
-  async getEntities() { return this.authenticatedRequest<any[]>('/api/entities'); }
-  async getEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`); }
-  async createEntity(entityData: any) { return this.authenticatedRequest('/api/entities', { method: 'POST', body: JSON.stringify(entityData) }); }
-  async updateEntity(id: string, entityData: any) { return this.authenticatedRequest(`/api/entities/${id}`, { method: 'PUT', body: JSON.stringify(entityData) }); }
-  async deleteEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`, { method: 'DELETE' }); }
-
-  // MÓDULO DE CASOS/PROCESSOS
-  async getCases() { return this.authenticatedRequest<any[]>('/api/cases'); }
-  async getCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`); }
-  async createCase(caseData: any) { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
-  async updateCase(id: string, caseData: any) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
-  async deleteCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'DELETE' }); }
-  
-  // MÓDULO FINANCEIRO
-  async getFinancialAgreements() { return this.authenticatedRequest('/api/financial-agreements'); }
-  async createFinancialAgreement(agreementData: any) { return this.authenticatedRequest('/api/financial-agreements', { method: 'POST', body: JSON.stringify(agreementData) }); }
-
-  // MÓDULO DE FUNCIONÁRIOS (EMPLOYEES)
-  async getEmployees() { return this.authenticatedRequest<any[]>('/api/employees'); }
-  // ✅ ADICIONADO: Método para criar funcionário
-  async createEmployee(employeeData: EmployeeData) { return this.authenticatedRequest('/api/employees', { method: 'POST', body: JSON.stringify(employeeData) }); }
-  // ✅ ADICIONADO: Método para atualizar funcionário
-  async updateEmployee(id: number, employeeData: UpdateEmployeeData) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) }); }
-  // ✅ ADICIONADO: Método para deletar funcionário
-  async deleteEmployee(id: number) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'DELETE' }); }
-
-  // MÓDULO DE AUTENTICAÇÃO E PERFIS
+  // === MÓDULO DE AUTENTICAÇÃO E PERFIL ===
   async getCurrentUser() { return this.authenticatedRequest<any>('/api/auth/me'); }
   async logout() {
     try {
@@ -96,29 +68,49 @@ export class ApiClient {
       }
     }
   }
-  // ✅ ADICIONADO: Método para definir/atualizar a senha do usuário
-  async setPassword(data: { code: string; password?: string; }) { return this.authenticatedRequest('/api/auth/set-password', { method: 'POST', body: JSON.stringify(data) }); }
 
-  // MÓDULO DE PETIÇÕES (PETITIONS)
-  // ✅ ADICIONADO: Método para buscar petições
-  async getPetitions() { return this.authenticatedRequest<any[]>('/api/petitions'); }
+  // === MÓDULO DE CLIENTES ===
+  async getClients() { return this.authenticatedRequest<any[]>('/api/clients'); }
+  async getClient(id: string) { return this.authenticatedRequest(`/api/clients/${id}`); }
+  async createClient(clientData: any) { return this.authenticatedRequest('/api/clients', { method: 'POST', body: JSON.stringify(clientData) }); }
+  async updateClient(id: string, clientData: any) { return this.authenticatedRequest(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(clientData) }); }
+  async deleteClient(id: string) { return this.authenticatedRequest(`/api/clients/${id}`, { method: 'DELETE' }); }
 
-  // MÓDULO DE CARGOS E PERMISSÕES (ROLES & PERMISSIONS)
-  // ✅ ADICIONADO: Método para buscar cargos
+  // === MÓDULO DE CASOS/PROCESSOS ===
+  async getCases() { return this.authenticatedRequest<any[]>('/api/cases'); }
+  async getCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`); }
+  async createCase(caseData: any) { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
+  async updateCase(id: string, caseData: any) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
+  
+  // === MÓDULO DE DOCUMENTOS ===
+  async getDocumentsByCaseId(caseId: number) { return this.authenticatedRequest<any[]>(`/api/documents?case_id=${caseId}`); }
+  async uploadDocument(formData: FormData) { return this.authenticatedRequest('/api/documents', { method: 'POST', body: formData, headers: {} }); } // Header é removido para que o browser defina o multipart/form-data
+  async deleteDocument(id: number) { return this.authenticatedRequest(`/api/documents/${id}`, { method: 'DELETE' }); }
+
+  // === MÓDULO DE TAREFAS ===
+  async getTasks() { return this.authenticatedRequest<any[]>('/api/tasks'); }
+  async createTask(taskData: any) { return this.authenticatedRequest('/api/tasks', { method: 'POST', body: JSON.stringify(taskData) }); }
+  async completeTask(taskId: string) { return this.authenticatedRequest(`/api/tasks/${taskId}/complete`, { method: 'PATCH' }); }
+
+  // === MÓDULO DE EVENTOS (AGENDA) ===
+  async getEvents() { return this.authenticatedRequest<any[]>('/api/events'); }
+  async createEvent(eventData: any) { return this.authenticatedRequest('/api/events', { method: 'POST', body: JSON.stringify(eventData) }); }
+  async updateEvent(id: string, eventData: any) { return this.authenticatedRequest(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify(eventData) }); }
+
+  // === MÓDULO DE FUNCIONÁRIOS E CARGOS ===
+  async getEmployees() { return this.authenticatedRequest<any[]>('/api/employees'); }
+  async updateEmployee(id: number, employeeData: UpdateEmployeeData) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) }); }
   async getRoles() { return this.authenticatedRequest<any[]>('/api/roles'); }
-  // ✅ ADICIONADO: Método para buscar permissões
-  async getPermissions() { return this.authenticatedRequest<any[]>('/api/permissions'); }
 
-  // MÓDULO DE TEMPLATES DE DOCUMENTOS
+  // === MÓDULO DE PETIÇÕES ===
+  async getPetitions() { return this.authenticatedRequest<any[]>('/api/petitions'); }
+  async updatePetition(id: string, petitionData: any) { return this.authenticatedRequest(`/api/petitions/${id}`, { method: 'PUT', body: JSON.stringify(petitionData) }); }
+  
+  // === MÓDULO DE TEMPLATES DE DOCUMENTOS ===
   async getTemplates() { return this.authenticatedRequest<any[]>('/api/document-templates'); }
-  async getTemplate(id: number) { return this.authenticatedRequest(`/api/document-templates/${id}`); }
   async createTemplate(templateData: any) { return this.authenticatedRequest('/api/document-templates', { method: 'POST', body: JSON.stringify(templateData) }); }
   async updateTemplate(id: number, templateData: any) { return this.authenticatedRequest(`/api/document-templates/${id}`, { method: 'PUT', body: JSON.stringify(templateData) }); }
   async deleteTemplate(id: number) { return this.authenticatedRequest(`/api/document-templates/${id}`, { method: 'DELETE' }); }
-  
-  /**
-   * Gera um documento a partir de um template e um caso.
-   */
   async generateDocument(templateId: number, caseId: number) {
     return this.authenticatedRequest<{ generatedContent: string, documentTitle: string }>('/api/document-templates/generate', {
       method: 'POST',

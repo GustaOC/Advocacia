@@ -1,4 +1,4 @@
-// components/login-form.tsx - VERSÃO CORRIGIDA
+// components/login-form.tsx
 "use client"
 
 import { useState } from "react"
@@ -30,33 +30,24 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ email, password }),
       })
       
-      const data = await res.json().catch(() => ({}))
-      console.log("[LoginForm] Resposta da API:", { status: res.status, data })
-
       if (!res.ok) {
-        throw new Error(data?.error || "Não foi possível entrar.")
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error || "Credenciais inválidas ou erro no servidor.")
       }
 
-      if (typeof window !== "undefined") {
-        document.cookie = "sb-auth-token-client=authenticated; path=/; max-age=604800"
-        document.cookie = `user-info=${JSON.stringify({ email, id: data.user?.id || 'temp' })}; path=/; max-age=604800`
-        sessionStorage.setItem("just-logged-in", "true")
-        console.log("[LoginForm] ✅ Cookies e sessionStorage definidos")
-      }
-
-      console.log("[LoginForm] ✅ Login bem-sucedido, redirecionando...")
+      console.log("[LoginForm] ✅ Login bem-sucedido, redirecionando para o dashboard...")
       
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 500)
+      // A biblioteca Supabase SSR já cuidou de definir os cookies de sessão na resposta.
+      // Apenas redirecionamos o usuário.
+      // O uso de `replace` em vez de `push` impede que o usuário volte para a página de login com o botão "voltar" do navegador.
+      router.replace("/dashboard")
       
     } catch (err: any) {
       console.error("[LoginForm] ❌ Erro no login:", err)
-      setError(err?.message || "Erro ao entrar")
+      setError(err?.message || "Erro ao tentar fazer login.")
     } finally {
       setLoading(false)
     }
@@ -83,8 +74,8 @@ export default function LoginForm() {
 
       <CardContent className="px-8 pb-10">
         {error && (
-          <Alert className="mb-4 bg-red-50 border-red-200">
-            <AlertDescription className="text-red-700 text-sm">{error}</AlertDescription>
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 

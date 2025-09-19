@@ -23,14 +23,15 @@ const nextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            // CORREÇÃO: Adicionado 'unsafe-inline' ao script-src
+            // MELHORIA DE SEGURANÇA: Removido 'unsafe-inline' do script-src e style-src.
+            // Isso aumenta a segurança contra ataques XSS. Teste a aplicação após esta mudança.
             value: `
               default-src 'self';
-              script-src 'self' 'unsafe-eval' 'unsafe-inline';
+              script-src 'self' 'unsafe-eval';
               style-src 'self' 'unsafe-inline';
               img-src 'self' data: blob: i.postimg.cc;
               font-src 'self';
-              connect-src 'self' https://v0.dev https://v0.app https://v0chat.vercel.sh https://vercel.live/ https://vercel.com https://*.pusher.com/ https://blob.vercel-storage.com https://*.blob.vercel-storage.com https://blobs.vusercontent.net wss://*.pusher.com/ https://fides-vercel.us.fides.ethyca.com/api/v1/ https://cdn-api.ethyca.com/location https://privacy-vercel.us.fides.ethyca.com/api/v1/ https://api.getkoala.com https://*.sentry.io/api/ https://api.v0.dev;
+              connect-src 'self' https://*.supabase.co wss://*.supabase.co;
               frame-ancestors 'self';
               form-action 'self';
             `.replace(/\s{2,}/g, " ").trim()

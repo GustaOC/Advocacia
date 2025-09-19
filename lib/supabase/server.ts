@@ -3,18 +3,20 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
+import { env } from "@/lib/env"; // Importando as variáveis de ambiente validadas
 
 /**
- * Client SSR que lê e escreve cookies (Set-Cookie) corretamente.
- * CORRIGIDO para usar o novo adapter com getAll, setAll e remove.
+ * Cria um cliente Supabase para uso em Server Components, Route Handlers, etc.,
+ * que lê e escreve cookies corretamente.
  */
 export function createSupabaseServerClient(req?: NextRequest, res?: NextResponse) {
   const cookieStore = cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) throw new Error("Missing Supabase envs: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
-  return createServerClient(url, anon, {
+  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    throw new Error("Variáveis de ambiente do Supabase não configuradas.");
+  }
+
+  return createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -38,11 +40,15 @@ export function createSupabaseServerClient(req?: NextRequest, res?: NextResponse
 }
 
 /**
- * Admin client – usar SOMENTE no servidor (Route Handlers / Server Actions).
+ * Cria um cliente Admin do Supabase com a Service Role Key.
+ * Usar SOMENTE no servidor (Route Handlers / Server Actions).
  */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) throw new Error("Missing Supabase envs: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
-  return createSupabaseAdmin(url, serviceKey, { auth: { persistSession: false } });
+  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Variáveis de ambiente do Supabase para admin não configuradas.");
+  }
+  
+  return createSupabaseAdmin(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { 
+    auth: { persistSession: false } 
+  });
 }

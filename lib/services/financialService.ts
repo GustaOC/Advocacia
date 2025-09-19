@@ -8,8 +8,9 @@ import { AgreementSchema, AgreementUpdateSchema } from "@/lib/schemas";
  */
 export async function getFinancialAgreements() {
   const supabase = createAdminClient();
+  // CORREÇÃO: Corrigido o nome da tabela de "financial_agagreements" para "financial_agreements"
   const { data, error } = await supabase
-    .from("financial_agagreements")
+    .from("financial_agreements")
     .select(`
       *,
       cases (

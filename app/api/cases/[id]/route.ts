@@ -1,48 +1,62 @@
+// app/api/cases/[id]/route.ts
 import { NextResponse } from 'next/server'
 import { getSessionUser, requirePermission } from '@/lib/auth'
-// ✅ CORREÇÃO: A função para buscar um único caso estava faltando no service. Adicionei-a e importei corretamente.
 import { getCaseById, updateCase } from '@/lib/services/caseService'
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const user = await getSessionUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Permissão para visualizar um caso específico
+    await requirePermission("cases_view");
 
-  // ✅ CORREÇÃO: Convertendo o ID de string para número antes de passar para a função do serviço.
-  const caseId = Number(params.id)
-  if (isNaN(caseId)) {
-    return NextResponse.json({ error: 'Invalid case ID' }, { status: 400 })
-  }
+    const caseId = Number(params.id);
+    if (isNaN(caseId)) {
+      return NextResponse.json({ error: 'ID do caso é inválido' }, { status: 400 });
+    }
 
-  const caseData = await getCaseById(caseId, user)
-  if (!caseData) {
-    return NextResponse.json({ error: 'Case not found' }, { status: 404 })
+    const caseData = await getCaseById(caseId, user);
+    if (!caseData) {
+      return NextResponse.json({ error: 'Caso não encontrado' }, { status: 404 });
+    }
+    return NextResponse.json(caseData);
+  } catch (error: any) {
+     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(caseData)
 }
 
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const user = await getSessionUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  await requirePermission('UPDATE_CASE')
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Permissão para editar um caso
+    await requirePermission('cases_edit');
 
-  // ✅ CORREÇÃO: Convertendo o ID de string para número.
-  const caseId = Number(params.id)
-  if (isNaN(caseId)) {
-    return NextResponse.json({ error: 'Invalid case ID' }, { status: 400 })
-  }
+    const caseId = Number(params.id);
+    if (isNaN(caseId)) {
+      return NextResponse.json({ error: 'ID do caso é inválido' }, { status: 400 });
+    }
 
-  const body = await request.json()
-  // A função updateCase provavelmente também espera um número.
-  const updatedCase = await updateCase(caseId, body, user)
-  return NextResponse.json(updatedCase)
+    const body = await request.json();
+    const updatedCase = await updateCase(caseId, body, user);
+    return NextResponse.json(updatedCase);
+  } catch (error: any) {
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

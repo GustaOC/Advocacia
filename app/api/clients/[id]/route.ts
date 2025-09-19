@@ -13,6 +13,7 @@ interface RouteParams {
 // GET: Obter um cliente específico
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
+    // Permissão ATIVADA
     await requirePermission("clients_view");
     const client = await clientService.getClientById(params.id);
 
@@ -22,16 +23,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(client);
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 // PUT: Atualizar um cliente
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
+    // Permissão ATIVADA e usuário obtido para auditoria
     const user = await requirePermission("clients_edit");
     const body = await req.json();
     const updatedClient = await clientService.updateClient(params.id, body, user);
@@ -43,23 +45,24 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 // DELETE: Excluir um cliente
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
+    // Permissão ATIVADA e usuário obtido para auditoria
     const user = await requirePermission("clients_delete");
     const result = await clientService.deleteClient(params.id, user);
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
