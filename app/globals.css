@@ -58,15 +58,9 @@
   }
 }
 
-/* ✅ CORREÇÃO GLOBAL PARA MODAIS TRANSPARENTES */
+/* CORREÇÃO GLOBAL PARA MODAIS TRANSPARENTES (REMOVIDA DUPLICAÇÃO) */
 @layer base {
   [role="dialog"] {
     background-color: hsl(var(--background));
   }
-  
-  @layer base {
-  [role="dialog"] {
-    background-color: hsl(var(--background));
-  }
-}
 }

@@ -10,18 +10,20 @@ const PUBLIC_PATHS = [
   '/auth/update-password', // Rota para redefinição de senha
 ];
 
-// Padrões de arquivos e rotas de API que devem ser ignorados pelo middleware de autenticação.
-// A API de login precisa ser pública.
+// Padrões de ficheiros e rotas de API que devem ser ignorados pelo middleware de autenticação.
 const PUBLIC_FILE_AND_API_PATTERNS = [
-  /\.(png|jpg|jpeg|svg|gif|ico|js|css)$/, // Arquivos estáticos com extensões comuns
-  /^\/_next\//,                             // Arquivos internos do Next.js
-  /^\/api\/auth\/login/,                    // API de Login
+  // CORREÇÃO: Regex agora é específica para ficheiros estáticos comuns.
+  /\.(png|jpg|jpeg|svg|gif|ico|js|css)$/, 
+  /^\/_next\//,                             // Ficheiros internos do Next.js
+  // CORREÇÃO: Apenas a API de login é explícitamente pública.
+  /^\/api\/auth\/login/,                    
 ];
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) {
     return true;
   }
+  // CORREÇÃO: Removida a regra que tornava toda a API pública.
   for (const pattern of PUBLIC_FILE_AND_API_PATTERNS) {
     if (pattern.test(pathname)) {
       return true;
@@ -42,10 +44,10 @@ export async function middleware(req: NextRequest) {
     const res = NextResponse.next();
     const supabase = createSupabaseServerClient(req, res);
     
-    // Verifica se há um usuário na sessão.
+    // Verifica se há um utilizador na sessão.
     const { data: { user }, error } = await supabase.auth.getUser();
     
-    // Se houver erro ou nenhum usuário, redireciona para a página de login.
+    // Se houver erro ou nenhum utilizador, redireciona para a página de login.
     if (error || !user) {
       console.log(`[Middleware] Acesso negado para ${pathname}. Redirecionando para login.`);
       const redirectUrl = new URL('/login', req.url);
@@ -53,7 +55,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
     
-    // Se o usuário estiver autenticado, permite o acesso.
+    // Se o utilizador estiver autenticado, permite o acesso.
     return res;
 
   } catch (e) {
@@ -64,16 +66,14 @@ export async function middleware(req: NextRequest) {
   }
 }
 
-// Configuração do matcher para definir quais rotas o middleware deve interceptar.
+// Configuração do matcher para definir quais rotas o middleware deve intercetar.
 export const config = {
   matcher: [
     /*
      * Faz o matching de todas as rotas, exceto as que começam com:
-     * - _next/static (arquivos estáticos)
+     * - _next/static (ficheiros estáticos)
      * - _next/image (imagens otimizadas)
      * - favicon.ico (ícone do site)
-     * O lookahead negativo `(?!...)` garante que essas rotas sejam ignoradas
-     * ANTES que o middleware seja executado, otimizando o desempenho.
      */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],

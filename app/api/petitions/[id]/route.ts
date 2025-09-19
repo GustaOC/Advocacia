@@ -13,7 +13,8 @@ interface RouteParams {
 // PUT: Atualizar uma petição (ex: mudar status ou responsável)
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
-    // await requirePermission("petitions_edit");
+    // Permissão ATIVADA: Apenas utilizadores com 'petitions_edit' podem editar.
+    await requirePermission("petitions_edit");
     const body = await req.json();
     const updatedPetition = await petitionService.updatePetition(params.id, body);
     return NextResponse.json(updatedPetition);
@@ -24,9 +25,12 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
+      { error: "Erro interno do servidor" },
+      { status: 500 }
     );
   }
 }

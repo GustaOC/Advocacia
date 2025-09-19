@@ -1,11 +1,11 @@
 // components/dashboard.tsx
 "use client"
 
-import { useState } from "react" // Importando useState
+import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ClientsModule } from "./clients-module"
 import { CasesModule } from "./cases-module"
-import { DocumentsModule } from "./documents-module"
+// Removido o import do DocumentsModule daqui para evitar prop drilling desnecessário
 import { TasksModule } from "./tasks-module"
 import { CalendarModule } from "./calendar-module"
 import { FinancialModule } from "./financial-module"
@@ -20,11 +20,11 @@ import { useAuth } from "@/hooks/use-auth"
 import { Skeleton } from "./ui/skeleton"
 
 export function Dashboard() {
-  const { user, isLoading } = useAuth(); // Renomeado 'loading' para 'isLoading' para consistência
+  const { user, isLoading } = useAuth(); // Corrigido para isLoading
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const handleNavigate = (tab: string, filters?: any) => {
-    // Lógica de filtros pode ser implementada aqui no futuro
+    // A lógica de filtros pode ser implementada aqui no futuro
     setActiveTab(tab);
   };
 
@@ -63,7 +63,7 @@ export function Dashboard() {
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="clients">Clientes</TabsTrigger>
             <TabsTrigger value="cases">Casos</TabsTrigger>
-            <TabsTrigger value="documents">Documentos</TabsTrigger>
+            {/* O módulo de Documentos será renderizado dentro do contexto de um caso, então removemos a aba */}
             <TabsTrigger value="tasks">Tarefas</TabsTrigger>
             <TabsTrigger value="calendar">Agenda</TabsTrigger>
             <TabsTrigger value="financial">Financeiro</TabsTrigger>
@@ -72,35 +72,32 @@ export function Dashboard() {
             <TabsTrigger value="templates">Modelos</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="h-full">
+          <TabsContent value="dashboard" className="h-full mt-4">
             {/* Passando a função de navegação para o ReportsModule */}
             <ReportsModule onNavigate={handleNavigate} />
           </TabsContent>
-          <TabsContent value="clients" className="h-full">
+          <TabsContent value="clients" className="h-full mt-4">
             <ClientsModule />
           </TabsContent>
-          <TabsContent value="cases" className="h-full">
+          <TabsContent value="cases" className="h-full mt-4">
             <CasesModule />
           </TabsContent>
-          <TabsContent value="documents" className="h-full">
-            <DocumentsModule caseId={0} />
-          </TabsContent>
-          <TabsContent value="tasks" className="h-full">
+          <TabsContent value="tasks" className="h-full mt-4">
             <TasksModule />
           </TabsContent>
-          <TabsContent value="calendar" className="h-full">
+          <TabsContent value="calendar" className="h-full mt-4">
             <CalendarModule />
           </TabsContent>
-          <TabsContent value="financial" className="h-full">
+          <TabsContent value="financial" className="h-full mt-4">
             <FinancialModule />
           </TabsContent>
-          <TabsContent value="petitions" className="h-full">
+          <TabsContent value="petitions" className="h-full mt-4">
             <PetitionsModule />
           </TabsContent>
-          <TabsContent value="publications" className="h-full">
+          <TabsContent value="publications" className="h-full mt-4">
             <PublicationsModule />
           </TabsContent>
-          <TabsContent value="templates" className="h-full">
+          <TabsContent value="templates" className="h-full mt-4">
             <TemplatesModule />
           </TabsContent>
         </Tabs>

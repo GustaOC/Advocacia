@@ -106,6 +106,9 @@ export class ApiClient {
   async getPetitions() { return this.authenticatedRequest<any[]>('/api/petitions'); }
   async updatePetition(id: string, petitionData: any) { return this.authenticatedRequest(`/api/petitions/${id}`, { method: 'PUT', body: JSON.stringify(petitionData) }); }
   
+  // === MÓDULO DE PUBLICAÇÕES ===
+  async getPublications() { return this.authenticatedRequest<any[]>('/api/publications'); }
+
   // === MÓDULO DE TEMPLATES DE DOCUMENTOS ===
   async getTemplates() { return this.authenticatedRequest<any[]>('/api/document-templates'); }
   async createTemplate(templateData: any) { return this.authenticatedRequest('/api/document-templates', { method: 'POST', body: JSON.stringify(templateData) }); }
