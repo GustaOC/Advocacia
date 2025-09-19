@@ -1,19 +1,22 @@
-// components/entities-module.tsx - VERSÃO FINAL COM CORREÇÃO DEFINITIVA
+// components/entities-module.tsx - VERSÃO COM IMPORTAÇÃO CORRIGIDA
 "use client";
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2 } from "lucide-react";
+// ...outras importações permanecem as mesmas
+import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
 import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
+import { apiClient } from "@/lib/api-client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+
+// Tipagem para os dados do cliente
 interface Client {
   id: string;
   name: string;
@@ -25,6 +28,82 @@ interface Client {
   city?: string;
 }
 
+// --- MELHORIA APLICADA AQUI ---
+// Modal de Importação agora é específico para PLANILHAS de cadastro em massa.
+const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; }) => {
+    const [file, setFile] = useState<File | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const { toast } = useToast();
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files[0]) {
+            setFile(event.target.files[0]);
+        }
+    };
+
+    const handleImport = async () => {
+        if (!file) {
+            toast({ title: "Nenhum arquivo selecionado", variant: "destructive" });
+            return;
+        }
+
+        setIsImporting(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Esta chamada agora está correta, pois a API espera uma planilha
+            const response = await fetch('/api/entities/import', { method: 'POST', body: formData });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Falha na importação.");
+            }
+
+            toast({
+                title: "Importação Concluída!",
+                description: `${result.successCount} clientes importados com sucesso. ${result.errorCount > 0 ? `${result.errorCount} linhas com erros.` : ''}`
+            });
+            onImportSuccess();
+            onClose();
+        } catch (error: any) {
+            toast({ title: "Erro na Importação", description: error.message, variant: "destructive" });
+        } finally {
+            setIsImporting(false);
+            setFile(null); // Limpa o arquivo após a tentativa
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Importar Clientes em Massa</DialogTitle>
+                    <DialogDescription>
+                        Envie uma planilha (.xlsx ou .csv) para cadastrar múltiplos clientes de uma vez.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <Label htmlFor="import-file">Arquivo de Planilha</Label>
+                    <Input id="import-file" type="file" onChange={handleFileChange} accept=".xlsx, .csv" />
+                    <a href="/modelo-importacao.xlsx" download className="text-sm text-blue-600 hover:underline">
+                        Baixar modelo de planilha (.xlsx)
+                    </a>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleImport} disabled={isImporting || !file}>
+                        {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileUp className="mr-2 h-4 w-4" />}
+                        {isImporting ? 'Importando...' : 'Iniciar Importação'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
+// O restante do componente EntitiesModule permanece o mesmo que o anterior...
 export function EntitiesModule() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -32,6 +111,7 @@ export function EntitiesModule() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setModalOpen] = useState(false);
+  const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentClient, setCurrentClient] = useState<Partial<Client>>({});
 
@@ -84,9 +164,6 @@ export function EntitiesModule() {
       return;
     }
     
-    // ✅ CORREÇÃO APLICADA AQUI:
-    // Garante que o campo 'type' seja definido como 'Cliente' para novos cadastros,
-    // que é um campo obrigatório (NOT NULL) no banco de dados.
     const dataToSave = {
       ...currentClient,
       type: currentClient.type || 'Cliente',
@@ -106,7 +183,15 @@ export function EntitiesModule() {
     (client.document || "").toLowerCase().includes(searchTerm.toLowerCase())
   ), [clients, searchTerm]);
 
-  if (isLoading) return <div>Carregando clientes...</div>;
+  if (isLoading) {
+    return (
+        <div className="flex justify-center items-center h-96">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+            <span className="ml-4 text-slate-600">Carregando clientes...</span>
+        </div>
+    );
+  }
+
   if (isError) return <div>Erro ao carregar clientes: {(error as Error).message}</div>;
 
   if (selectedClient) {
@@ -129,7 +214,7 @@ export function EntitiesModule() {
           <p className="text-slate-300 text-lg">Acesse a pasta virtual de cada cliente para ver processos e documentos.</p>
         </div>
         <Card className="border-0 shadow-lg">
-          <CardContent className="p-6 flex justify-between items-center">
+          <CardContent className="p-6 flex flex-col md:flex-row gap-4 justify-between items-center">
             <div className="relative flex-1 max-w-lg">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
               <Input
@@ -139,33 +224,49 @@ export function EntitiesModule() {
                 className="pl-10 h-11"
               />
             </div>
-            <Button onClick={() => handleOpenModal()} className="h-11 bg-slate-800 hover:bg-slate-900">
-              <Plus className="mr-2 h-4 w-4" /> Novo Cliente
-            </Button>
+             <div className="flex gap-2">
+                 <Button onClick={() => setImportModalOpen(true)} variant="outline" className="h-11">
+                    <Upload className="mr-2 h-4 w-4" /> Importar Clientes
+                </Button>
+                <Button onClick={() => handleOpenModal()} className="h-11 bg-slate-800 hover:bg-slate-900">
+                <Plus className="mr-2 h-4 w-4" /> Novo Cliente
+                </Button>
+            </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg">
-          <CardContent>
-            <Table>
-              <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Documento</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {filteredClients.map((client) => (
-                  <TableRow key={client.id} >
-                    <TableCell className="font-medium cursor-pointer" onClick={() => setSelectedClient(client)}>{client.name}</TableCell>
-                    <TableCell className="font-mono cursor-pointer" onClick={() => setSelectedClient(client)}>{client.document}</TableCell>
-                    <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.email}</TableCell>
-                    <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.phone || '-'}</TableCell>
-                    <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedClient(client)}><FolderOpen className="h-4 w-4"/></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenModal(client)}><Edit className="h-4 w-4"/></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(client.id)}><Trash2 className="h-4 w-4 text-red-500"/></Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        
+        {filteredClients.length > 0 ? (
+            <Card className="border-0 shadow-lg">
+            <CardContent>
+                <Table>
+                <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Documento</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                <TableBody>
+                    {filteredClients.map((client) => (
+                    <TableRow key={client.id} >
+                        <TableCell className="font-medium cursor-pointer hover:text-blue-600" onClick={() => setSelectedClient(client)}>{client.name}</TableCell>
+                        <TableCell className="font-mono cursor-pointer" onClick={() => setSelectedClient(client)}>{client.document}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.email}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.phone || '-'}</TableCell>
+                        <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedClient(client)}><FolderOpen className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenModal(client)}><Edit className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(client.id)}><Trash2 className="h-4 w-4 text-red-500"/></Button>
+                        </TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+            </CardContent>
+            </Card>
+        ) : (
+            <Card className="border-0 shadow-lg">
+                <CardContent className="text-center py-20 text-slate-500">
+                    <User className="h-12 w-12 mx-auto mb-4 text-slate-400"/>
+                    <h3 className="text-xl font-semibold text-slate-800">Nenhum cliente encontrado</h3>
+                    <p className="mt-2">Use a busca para refinar ou adicione um novo cliente.</p>
+                </CardContent>
+            </Card>
+        )}
       </div>
       
       <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
@@ -201,6 +302,12 @@ export function EntitiesModule() {
             </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <ImportClientsModal 
+        isOpen={isImportModalOpen} 
+        onClose={() => setImportModalOpen(false)} 
+        onImportSuccess={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
+      />
     </>
   );
 }
