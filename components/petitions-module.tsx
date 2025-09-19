@@ -1,59 +1,96 @@
-// components/petitions-module.tsx - VERSÃO IMPLEMENTADA
+"use client"
 
-"use client";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "./ui/badge";
-import { format } from "date-fns";
-
-const fetchPetitions = async () => {
-  return apiClient.getPetitions();
-};
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api-client"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { PlusCircle, FileText } from "lucide-react"
+import { Skeleton } from "./ui/skeleton"
+import { PetitionEditor } from "./petition-editor" // O novo componente de editor
 
 export function PetitionsModule() {
-  const { data: petitions, isLoading, isError, error } = useQuery({
-    queryKey: ["petitions"],
-    queryFn: fetchPetitions,
-  });
+  const [currentView, setCurrentView] = useState("list") // 'list' ou 'editor'
+  const [selectedPetition, setSelectedPetition] = useState<any>(null)
 
-  if (isLoading) return <div>Carregando petições...</div>;
-  if (isError) return <div>Erro ao carregar petições: {error.message}</div>;
+  const {
+    data: petitions,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["petitions"],
+    queryFn: async () => {
+      const response = await apiClient.get("/petitions")
+      return response.data
+    },
+  })
+
+  const handleCreateNew = () => {
+    setSelectedPetition(null)
+    setCurrentView("editor")
+  }
+
+  const handleEdit = (petition: any) => {
+    setSelectedPetition(petition)
+    setCurrentView("editor")
+  }
+
+  const handleBackToList = () => {
+    setCurrentView("list")
+    // Idealmente, invalidar o query para recarregar a lista
+  }
+
+  if (currentView === "editor") {
+    return (
+      <PetitionEditor
+        petition={selectedPetition}
+        onBack={handleBackToList}
+      />
+    )
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Gerenciamento de Petições</CardTitle>
+        <CardTitle>Módulo de Petições</CardTitle>
+        <CardDescription>
+          Crie, edite e gerencie as petições do escritório.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Caso Associado</TableHead>
-              <TableHead>Autor</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Data de Criação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {petitions && petitions.length > 0 ? (
-              petitions.map((petition) => (
-                <TableRow key={petition.id}>
-                  <TableCell>{petition.cases?.title || 'N/A'}</TableCell>
-                  <TableCell>{petition.employees?.name || 'N/A'}</TableCell>
-                  <TableCell><Badge>{petition.status}</Badge></TableCell>
-                  <TableCell>{format(new Date(petition.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center">Nenhuma petição encontrada.</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        <div className="flex justify-end mb-4">
+          <Button onClick={handleCreateNew}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Criar Nova Petição
+          </Button>
+        </div>
+
+        {isLoading && <Skeleton className="h-40 w-full" />}
+        {error && <p className="text-red-500">Não foi possível carregar as petições.</p>}
+        
+        <div className="space-y-3">
+          {petitions && petitions.map((p: any) => (
+            <div key={p.id} className="border p-4 rounded-lg flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold">{p.title}</h3>
+                <p className="text-sm text-muted-foreground">
+                  Associado ao caso: {p.case_id} - Status: {p.status}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => handleEdit(p)}>
+                <FileText className="mr-2 h-4 w-4" />
+                Abrir Petição
+              </Button>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
-  );
+  )
 }

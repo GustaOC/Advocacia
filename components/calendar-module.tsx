@@ -1,169 +1,179 @@
-// components/calendar-module.tsx
-"use client";
+"use client"
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar as BigCalendar, momentLocalizer } from 'react-big-calendar';
-import moment from 'moment';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, Clock, Loader2 } from "lucide-react";
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from "@/hooks/use-toast";
+import { useState } from "react"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { PlusCircle } from "lucide-react"
+import { Calendar as BigCalendar, momentLocalizer } from "react-big-calendar"
+import moment from "moment"
+import "react-big-calendar/lib/css/react-big-calendar.css"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/api-client"
+import { useAuth } from "@/hooks/use-auth"
+import { useToast } from "@/hooks/use-toast"
 
-const localizer = momentLocalizer(moment);
+// Modal para eventos
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton" // CAMINHO CORRIGIDO AQUI
 
-// Interface para os eventos da agenda
-interface CalendarEvent {
-  id: number;
-  title: string;
-  start: Date;
-  end: Date;
-  type: 'meeting' | 'hearing' | 'deadline';
-  description?: string;
-  userId: string; // Para vincular o evento a um usuário
-}
+const localizer = momentLocalizer(moment)
 
 export function CalendarModule() {
-  const { toast } = useToast();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setModalOpen] = useState(false);
-  const [isDetailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    type: 'meeting' as CalendarEvent['type'],
-    start: new Date(),
-    end: new Date(),
-    description: ''
-  });
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [eventTitle, setEventTitle] = useState("")
 
-  // Simula o ID do usuário logado. Em um app real, viria de um contexto de autenticação.
-  const currentUserId = "user_123"; 
+  const {
+    data: events,
+    isLoading,
+  } = useQuery({
+    queryKey: ["calendarEvents", user?.id],
+    queryFn: async () => {
+      // A API buscará apenas eventos do usuário logado
+      const response = await apiClient.get("/events") 
+      return response.data.map((event: any) => ({
+        ...event,
+        start: new Date(event.start_time),
+        end: new Date(event.end_time),
+      }))
+    },
+    enabled: !!user, // Só executa a query quando o usuário estiver carregado
+  })
 
-  const fetchEvents = useCallback(async () => {
-    setIsLoading(true);
-    // No futuro, isso seria: await apiClient.getCalendarEvents(currentUserId);
-    console.log(`Buscando eventos para o usuário: ${currentUserId}`);
-    // Usando dados mocados por enquanto
-    const mockEvents: CalendarEvent[] = [
-      { id: 1, title: 'Minha Audiência - Processo 001/2024', start: new Date(2025, 8, 20, 10, 0), end: new Date(2025, 8, 20, 11, 0), type: 'hearing', userId: 'user_123' },
-      { id: 2, title: 'Meu Prazo Final - Contestação ABC', start: new Date(2025, 8, 22, 23, 59), end: new Date(2025, 8, 22, 23, 59), type: 'deadline', userId: 'user_123' },
-      { id: 3, title: 'Reunião com Outro Advogado', start: new Date(2025, 8, 25, 15, 0), end: new Date(2025, 8, 25, 16, 0), type: 'meeting', userId: 'outro_user' },
-    ];
-    
-    setEvents(mockEvents.filter(event => event.userId === currentUserId));
-    setIsLoading(false);
-  }, [currentUserId]);
+  const eventMutation = useMutation({
+    mutationFn: (newEvent: any) => {
+      if (selectedEvent?.id) {
+        return apiClient.put(`/events/${selectedEvent.id}`, newEvent)
+      }
+      return apiClient.post("/events", newEvent)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendarEvents", user?.id] })
+      toast({ title: `Evento ${selectedEvent ? 'atualizado' : 'criado'} com sucesso!` })
+      setIsModalOpen(false)
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao salvar evento",
+        description: error.message,
+        variant: "destructive",
+      })
+    },
+  })
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
-
-  const handleSelectSlot = ({ start, end }: { start: Date, end: Date }) => {
-    setNewEvent({ ...newEvent, start, end, title: '', description: '', type: 'meeting' });
-    setModalOpen(true);
-  };
+  const handleSelectSlot = (slotInfo: { start: Date; end: Date }) => {
+    setSelectedEvent({ start: slotInfo.start, end: slotInfo.end })
+    setEventTitle("")
+    setIsModalOpen(true)
+  }
 
   const handleSelectEvent = (event: any) => {
-    setSelectedEvent(event);
-    setDetailsModalOpen(true);
-  };
+    setSelectedEvent(event)
+    setEventTitle(event.title)
+    setIsModalOpen(true)
+  }
 
-  const saveNewEvent = () => {
-    if (!newEvent.title) {
-        toast({ title: "Erro", description: "O título do evento é obrigatório.", variant: "destructive" });
+  const handleSaveEvent = () => {
+    if (!eventTitle) {
+        toast({ title: "O título é obrigatório", variant: "destructive" });
         return;
     }
-    // No futuro, isso seria: await apiClient.createCalendarEvent({ ...newEvent, userId: currentUserId });
-    const eventToSave: CalendarEvent = {
-        ...newEvent,
-        id: Math.random(),
-        userId: currentUserId,
-    };
-    setEvents([...events, eventToSave]);
-    toast({ title: "Sucesso!", description: "Evento adicionado à sua agenda." });
-    setModalOpen(false);
-  };
+    const payload = {
+      title: eventTitle,
+      start_time: selectedEvent.start.toISOString(),
+      end_time: selectedEvent.end.toISOString(),
+    }
+    eventMutation.mutate(payload)
+  }
 
-  const eventStyleGetter = (event: CalendarEvent) => {
-    const style = {
-      backgroundColor: '#3b82f6',
-      borderRadius: '5px',
-      opacity: 0.9,
-      color: 'white',
-      border: '0px',
-      display: 'block'
-    };
-    if (event.type === 'deadline') style.backgroundColor = '#ef4444';
-    if (event.type === 'hearing') style.backgroundColor = '#f97316';
-    if (event.type === 'meeting') style.backgroundColor = '#16a34a';
-    return { style };
-  };
+  if (isLoading) {
+    return <Skeleton className="h-full w-full" />
+  }
 
   return (
-    <div className="space-y-6">
-       <div className="bg-gradient-to-r from-slate-900 to-slate-900 rounded-3xl p-8 text-white flex justify-between items-center">
-        <div>
-            <h2 className="text-3xl font-bold mb-2">Minha Agenda</h2>
-            <p className="text-slate-300 text-lg">Visualize e gerencie seus compromissos individuais.</p>
-        </div>
-        <Button onClick={() => handleSelectSlot({ start: new Date(), end: new Date() })} className="bg-white text-slate-900 hover:bg-slate-100">
-            <Plus className="mr-2 h-4 w-4" /> Novo Evento
-        </Button>
-      </div>
-
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          {isLoading ? (
-            <div className="h-[600px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div>
-          ) : (
-            <BigCalendar
-              localizer={localizer}
-              events={events}
-              startAccessor="start"
-              endAccessor="end"
-              style={{ height: 600 }}
-              selectable
-              onSelectSlot={handleSelectSlot}
-              onSelectEvent={handleSelectEvent}
-              eventPropGetter={eventStyleGetter}
-              messages={{
-                  next: "Próximo",
-                  previous: "Anterior",
-                  today: "Hoje",
-                  month: "Mês",
-                  week: "Semana",
-                  day: "Dia",
-                  agenda: "Agenda",
-                  date: "Data",
-                  time: "Hora",
-                  event: "Evento",
-              }}
-            />
-          )}
+    <>
+      <Card className="h-full flex flex-col">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Agenda Pessoal</CardTitle>
+              <CardDescription>
+                Gerencie seus compromissos e rotinas.
+              </CardDescription>
+            </div>
+            <Button onClick={() => handleSelectSlot({start: new Date(), end: new Date()})}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Novo Evento
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex-grow">
+          <BigCalendar
+            localizer={localizer}
+            events={events || []}
+            startAccessor="start"
+            endAccessor="end"
+            style={{ height: "100%" }}
+            selectable
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            messages={{
+                next: "Próximo",
+                previous: "Anterior",
+                today: "Hoje",
+                month: "Mês",
+                week: "Semana",
+                day: "Dia",
+                agenda: "Agenda",
+                date: "Data",
+                time: "Hora",
+                event: "Evento",
+            }}
+          />
         </CardContent>
       </Card>
-
-      <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Adicionar Novo Evento</DialogTitle></DialogHeader>
-          {/* ... (conteúdo do modal de criação) ... */}
-        </DialogContent>
-      </Dialog>
       
-      <Dialog open={isDetailsModalOpen} onOpenChange={setDetailsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
-          {/* ... (conteúdo do modal de detalhes) ... */}
+          <DialogHeader>
+            <DialogTitle>{selectedEvent?.id ? "Editar Evento" : "Novo Evento"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="title" className="text-right">Título</Label>
+              <Input
+                id="title"
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveEvent} disabled={eventMutation.isPending}>
+                {eventMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
+    </>
+  )
 }
