@@ -1,111 +1,137 @@
 // components/tasks-module.tsx
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { apiClient } from "@/lib/api-client"
-import { useAuth } from "@/hooks/use-auth"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { PlusCircle, CheckCircle, ListTodo } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
-import { TaskModal } from "./task-modal"
-import { Badge } from "./ui/badge"
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/hooks/use-auth'; // Importando o nosso novo hook!
+
+// --- Tipos de Dados ---
+interface Task { id: number; title: string; status: 'todo' | 'in-progress' | 'done'; priority: 'high' | 'medium' | 'low'; assigneeId: string; }
+interface Employee { id: string; name: string; email: string; }
+
+// --- Mocks para simulação ---
+const mockTasks: Task[] = [
+  { id: 1, title: 'Elaborar contestação para o Processo 001/2024', status: 'todo', priority: 'high', assigneeId: 'dr_cassio' },
+  { id: 2, title: 'Ligar para o cliente João Silva', status: 'todo', priority: 'medium', assigneeId: 'secretaria' },
+  { id: 3, title: 'Revisar petição inicial do caso Maria Souza', status: 'in-progress', priority: 'high', assigneeId: 'dr_cassio' },
+  { id: 4, title: 'Agendar audiência de conciliação', status: 'in-progress', priority: 'medium', assigneeId: 'secretaria' },
+  { id: 5, title: 'Protocolar recurso de apelação', status: 'done', priority: 'high', assigneeId: 'dr_cassio' },
+];
+const mockEmployees: Employee[] = [
+    {id: 'dr_cassio', name: 'Dr. Cássio Miguel', email: 'cassio@adv.com'},
+    {id: 'secretaria', name: 'Secretária Ana', email: 'ana@adv.com'},
+];
+
+const TaskCard = ({ task, employees }: { task: Task, employees: Employee[] }) => (
+  <Card className="mb-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+    <CardContent className="p-4">
+      <p className="font-medium text-sm text-slate-800">{task.title}</p>
+      <div className="flex items-center justify-between mt-2">
+        <div>
+          {task.priority === 'high' && <Badge className="bg-red-100 text-red-800">Alta Prioridade</Badge>}
+          {task.priority === 'medium' && <Badge className="bg-yellow-100 text-yellow-800">Média Prioridade</Badge>}
+        </div>
+        <div className="text-xs text-slate-500">{employees.find(e => e.id === task.assigneeId)?.name || 'N/A'}</div>
+      </div>
+    </CardContent>
+  </Card>
+);
 
 export function TasksModule() {
-  // CORREÇÃO: Acessando 'user' diretamente, que contém a propriedade 'role'.
-  const { user } = useAuth(); 
-  const queryClient = useQueryClient()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  
-  // CORREÇÃO: A verificação de admin agora usa 'user.role'.
-  const isAdmin = user?.role === 'admin';
+  const { toast } = useToast();
+  const { user, can } = useAuth(); // Usando nosso hook!
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>(mockEmployees);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setModalOpen] = useState(false);
+  const [newTask, setNewTask] = useState({ title: '', assigneeId: '', priority: 'medium' as Task['priority'] });
 
-  const {
-    data: tasks,
-    isLoading,
-  } = useQuery({
-    // A queryKey agora depende de isAdmin para garantir que os dados sejam recarregados se o perfil do utilizador mudar.
-    queryKey: ["tasks", user?.id, isAdmin],
-    queryFn: async () => {
-      // A API irá retornar as tarefas corretas com base no perfil do utilizador.
-      const response = await apiClient.getTasks();
-      return response; // A API já retorna um array
-    },
-    enabled: !!user, // A query só é executada quando o utilizador está carregado.
-  })
+  useEffect(() => {
+    // Simulação de carregamento de dados
+    setTasks(mockTasks);
+    setIsLoading(false);
+  }, []);
 
-  const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) => apiClient.completeTask(taskId),
-    onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["tasks", user?.id, isAdmin] })
+  const handleCreateTask = () => {
+    if(!newTask.title || !newTask.assigneeId) {
+        toast({title: "Erro", description: "Título e responsável são obrigatórios.", variant: "destructive"});
+        return;
     }
-  })
+    const taskToSave: Task = { ...newTask, id: Date.now(), status: 'todo' };
+    setTasks(prev => [...prev, taskToSave]);
+    toast({title: "Sucesso!", description: "Tarefa criada e atribuída."});
+    setModalOpen(false);
+    setNewTask({ title: '', assigneeId: '', priority: 'medium' });
+  };
+  
+  const visibleTasks = useMemo(() => {
+    // A lógica de `can` já considera se o usuário é admin
+    if (can('tasks_view_all')) return tasks;
+    return tasks.filter(task => task.assigneeId === user?.id);
+  }, [tasks, user, can]);
+
+  const columns = [
+    { id: 'todo', title: 'A Fazer' },
+    { id: 'in-progress', title: 'Em Andamento' },
+    { id: 'done', title: 'Concluído' },
+  ];
+
+  if (isLoading) {
+      return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin"/></div>
+  }
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
+     <div className="space-y-6">
+       <div className="bg-gradient-to-r from-slate-900 to-slate-900 rounded-3xl p-8 text-white flex justify-between items-center">
             <div>
-              <CardTitle>Gestor de Tarefas</CardTitle>
-              <CardDescription>
-                {isAdmin ? "Crie e atribua tarefas à equipa." : "Visualize e complete as suas tarefas atribuídas."}
-              </CardDescription>
+                <h2 className="text-3xl font-bold mb-2">Gestão de Tarefas</h2>
+                <p className="text-slate-300 text-lg">Organize e acompanhe as atividades da sua equipe.</p>
             </div>
-            {/* Apenas administradores podem ver o botão para criar novas tarefas */}
-            {isAdmin && (
-              <Button onClick={() => setIsModalOpen(true)}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Nova Tarefa
-              </Button>
+            {/* Lógica de permissão centralizada e limpa! */}
+            {can('tasks_create') && (
+                <Button onClick={() => setModalOpen(true)} className="bg-white text-slate-900 hover:bg-slate-100">
+                    <Plus className="mr-2 h-4 w-4" /> Nova Tarefa
+                </Button>
             )}
-          </div>
-        </CardHeader>
-        <CardContent>
-            {isLoading ? <Skeleton className="h-40 w-full" /> : (
-                <div className="space-y-4">
-                    {tasks && tasks.map((task: any) => (
-                        <div key={task.id} className="flex items-center p-4 border rounded-lg">
-                            <div className="flex-grow">
-                                <p className="font-semibold">{task.title}</p>
-                                <p className="text-sm text-muted-foreground">{task.description}</p>
-                                <div className="flex items-center space-x-2 mt-2 text-xs">
-                                    <Badge variant={task.status === 'Concluída' ? 'default' : 'secondary'}>{task.status}</Badge>
-                                    <span>Para: <strong>{task.assignee_name || 'N/A'}</strong></span>
-                                    <span>Prazo: {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}</span>
-                                </div>
-                            </div>
-                            {task.status !== 'Concluída' && (
-                                <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => completeTaskMutation.mutate(task.id)}
-                                    disabled={completeTaskMutation.isPending}
-                                >
-                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                    Marcar como Concluída
-                                </Button>
-                            )}
-                        </div>
-                    ))}
-                    {(!tasks || tasks.length === 0) && (
-                        <div className="text-center py-12 text-muted-foreground">
-                            <ListTodo className="mx-auto h-12 w-12" />
-                            <p className="mt-4">Nenhuma tarefa encontrada.</p>
-                        </div>
-                    )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {columns.map(column => (
+            <div key={column.id} className="bg-slate-100 rounded-lg p-4">
+                <h3 className="font-semibold mb-4 text-slate-700">{column.title}</h3>
+                {visibleTasks
+                    .filter(task => task.status === column.id)
+                    .map(task => <TaskCard key={task.id} task={task} employees={employees} />)
+                }
+            </div>
+        ))}
+        </div>
+
+        <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
+            <DialogContent>
+                <DialogHeader><DialogTitle>Criar e Atribuir Nova Tarefa</DialogTitle></DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-2"><Label>Título da Tarefa *</Label><Input value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} /></div>
+                    <div className="space-y-2"><Label>Atribuir para *</Label>
+                        <Select value={newTask.assigneeId} onValueChange={id => setNewTask({...newTask, assigneeId: id})}>
+                            <SelectTrigger><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
+                            <SelectContent>{employees.map(emp => <SelectItem key={emp.id} value={emp.id}>{emp.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
                 </div>
-            )}
-        </CardContent>
-      </Card>
-      {isAdmin && <TaskModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} />}
-    </>
-  )
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleCreateTask}>Criar Tarefa</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+     </div>
+  );
 }

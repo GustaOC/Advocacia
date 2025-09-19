@@ -1,7 +1,6 @@
 // lib/auth.ts - VERSÃO FINAL CORRIGIDA E COMPLETA
 
 import { createAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { cache } from 'react'; // Importando o cache do React
 
 const userCache = new Map<string, { user: AuthUser, timestamp: number }>();
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos
@@ -17,13 +16,11 @@ export interface Role {
 export interface AuthUser {
   id: string;
   email: string;
-  name?: string; // Adicionado para consistência
   role?: string;
   permissions?: Permission[];
 }
 
-// MELHORIA: Usando o 'cache' do React para memoizar a função por requisição.
-export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
+export async function getSessionUser(): Promise<AuthUser | null> {
   try {
     const supabase = createSupabaseServerClient();
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
@@ -39,19 +36,17 @@ export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
 
     const admin = createAdminClient();
     
-    // Buscando nome do funcionário junto com o role_id
     const { data: employee, error: employeeError } = await admin
       .from("employees")
-      .select("id, name, role_id")
+      .select("id, role_id")
       .eq("id", authUser.id)
       .single();
 
     if (employeeError || !employee) {
-      console.warn(`[Auth] Usuário ${authUser.email} autenticado, mas não encontrado na tabela 'employees'.`);
+      console.warn(`[Auth] Usuário ${authUser.email} autenticado, mas não encontrado na tabela 'employees'. Assumindo perfil básico sem permissões.`);
       const basicUser: AuthUser = {
         id: authUser.id,
         email: authUser.email ?? "",
-        name: authUser.email, // Fallback para o email
         role: 'user',
         permissions: [],
       };
@@ -63,7 +58,8 @@ export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
     let permissions: Permission[] = [];
 
     if (employee.role_id) {
-      // CORREÇÃO CRÍTICA: A consulta foi reestruturada para buscar permissões corretamente.
+        // ✅ CORREÇÃO CRÍTICA: A sintaxe da consulta foi ajustada para buscar as permissões corretamente.
+        // A consulta agora junta 'roles' -> 'role_permissions' -> 'permissions' e pega a coluna 'code'.
       const { data: roleData, error: roleError } = await admin
         .from("roles")
         .select(`
@@ -76,10 +72,10 @@ export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
         .single();
 
       if (roleError) {
-        console.error(`[Auth] Falha ao buscar permissões para role_id ${employee.role_id}:`, roleError.message);
+        console.error(`[Auth] Falha crítica ao buscar permissões para role_id ${employee.role_id}:`, roleError.message);
       } else if (roleData) {
         roleName = roleData.name;
-        // O mapeamento foi ajustado para a estrutura correta da resposta.
+        // O mapeamento dos resultados também foi ajustado para a nova estrutura da consulta.
         permissions = roleData.role_permissions.map((rp: any) => rp.permissions.code as Permission).filter(Boolean);
       }
     }
@@ -87,7 +83,6 @@ export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
     const user: AuthUser = {
       id: authUser.id,
       email: authUser.email ?? "",
-      name: employee.name,
       role: roleName,
       permissions: permissions,
     };
@@ -98,7 +93,7 @@ export const getSessionUser = cache(async (): Promise<AuthUser | null> => {
     console.error("[Auth] Erro inesperado em getSessionUser:", error);
     return null;
   }
-});
+}
 
 export async function requireAuth(): Promise<AuthUser> {
   const user = await getSessionUser();

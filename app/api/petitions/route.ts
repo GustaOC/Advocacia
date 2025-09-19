@@ -1,21 +1,18 @@
-// app/api/petitions/route.ts - VERSÃO CORRIGIDA E SEGURA
+// app/api/petitions/route.ts - VERSÃO CORRIGIDA
 
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
+// ✅ CORREÇÃO: Removida a importação de 'createPetition' que não existe no serviço,
+// e importado 'getPetitions' que é a função correta para o método GET.
 import { getPetitions } from "@/lib/services/petitionService";
 
 export async function GET(request: Request) {
   try {
-    // CORREÇÃO: Padronizando o nome da permissão para 'petitions_view'
-    // e garantindo que a verificação de permissão esteja ativa.
-    const user = await requirePermission("petitions_view");
+    const user = await requirePermission("READ_PETITION");
     const petitions = await getPetitions(user);
     return NextResponse.json(petitions);
   } catch (error: any) {
     console.error("Erro ao buscar petições:", error.message);
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-    }
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 }

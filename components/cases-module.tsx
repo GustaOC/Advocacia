@@ -15,7 +15,6 @@ import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Upload, Filter, Fi
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth"; // Importando o hook de autenticação
 
 // Tipos
 interface Entity { id: number; name: string }
@@ -44,8 +43,8 @@ const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, 
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ['templates'],
-    queryFn: () => apiClient.getTemplates(), // Corrigido para chamar o método correto
-    enabled: isOpen,
+    queryFn: apiClient.getTemplates,
+    enabled: isOpen, // Só busca os templates quando o modal abre
   });
 
   const handleGenerate = async () => {
@@ -69,7 +68,7 @@ const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, 
     navigator.clipboard.writeText(generatedContent);
     toast({ title: "Copiado!", description: "O conteúdo do documento foi copiado para a área de transferência." });
   };
-
+  
   const handleDownloadTxt = () => {
     const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -108,9 +107,9 @@ const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, 
           </div>
           <div className="space-y-2">
             <Label>2. Documento Gerado</Label>
-            <Textarea
-              readOnly
-              value={generatedContent}
+            <Textarea 
+              readOnly 
+              value={generatedContent} 
               className="min-h-[300px] bg-slate-50 font-mono text-sm"
               placeholder="O conteúdo do documento aparecerá aqui após a geração."
             />
@@ -124,15 +123,16 @@ const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, 
   );
 };
 
+
 export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState(initialFilters?.status || "all");
-  const [selectedCaseForDocs, setSelectedCaseForDocs] = useState<Case | null>(null);
-  const { can } = useAuth(); // Hook para verificar permissões
+  const [selectedCaseForDetails, setSelectedCaseForDetails] = useState<Case | null>(null);
+  const [selectedCaseForDocs, setSelectedCaseForDocs] = useState<Case | null>(null); // State para modal de geração
 
   const { data: cases = [], isLoading } = useQuery<Case[]>({
     queryKey: ['cases'],
-    queryFn: () => apiClient.getCases(), // Corrigido para chamar o método correto
+    queryFn: apiClient.getCases,
   });
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       return searchMatch && statusMatch;
     });
   }, [cases, searchTerm, filterStatus]);
-
+    
   const getStatusBadge = (status: string) => <Badge>{status}</Badge>;
 
   if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
@@ -172,12 +172,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <SelectItem value="Extinção">Extinção</SelectItem>
               </SelectContent>
             </Select>
-            {can('cases_import') && (
-              <Button variant="outline" disabled><Upload className="mr-2 h-4 w-4" /> Importar</Button>
-            )}
-            {can('cases_create') && (
-              <Button className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
-            )}
+            <Button variant="outline"><Upload className="mr-2 h-4 w-4" /> Importar</Button>
+            <Button className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
           </div>
         </CardContent>
       </Card>
@@ -194,8 +190,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                   </TableCell>
                   <TableCell>{getStatusBadge(caseItem.status)}</TableCell>
                   <TableCell className="text-right">
-                    {can('cases_view') && <Button variant="ghost" size="icon" disabled><Eye className="h-4 w-4" /></Button>}
-                    {can('documents_generate') && <Button variant="ghost" size="icon" onClick={() => setSelectedCaseForDocs(caseItem)}><FileCog className="h-4 w-4" /></Button>}
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedCaseForDetails(caseItem)}><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setSelectedCaseForDocs(caseItem)}><FileCog className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -203,7 +199,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           </Table>
         </CardContent>
       </Card>
-
+      
       {/* Modal de Geração de Documento */}
       {selectedCaseForDocs && (
         <GenerateDocumentModal

@@ -1,16 +1,15 @@
-// app/api/clients/route.ts
+// app/api/entities/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/lib/auth";
-import * as clientService from "@/lib/services/clientService";
+import { requirePermission, requireAuth } from "@/lib/auth"; // Importar requireAuth
+import * as entityService from "@/lib/services/entityService";
 
-// GET: Listar todos os clientes
+// GET: Listar todas as entidades
 export async function GET(req: NextRequest) {
   try {
-    // Permissão ATIVADA
-    await requirePermission("clients_view"); 
-    const clients = await clientService.getClients();
-    return NextResponse.json(clients);
+    await requirePermission("entities_view");
+    const entities = await entityService.getEntities();
+    return NextResponse.json(entities);
   } catch (error: any) {
     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
@@ -19,14 +18,13 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Criar um novo cliente
+// POST: Criar uma nova entidade
 export async function POST(req: NextRequest) {
   try {
-    // Permissão ATIVADA e usuário obtido para auditoria
-    const user = await requirePermission("clients_create"); 
+    const user = await requirePermission("entities_create"); // Pega o usuário
     const body = await req.json();
-    const newClient = await clientService.createClient(body, user);
-    return NextResponse.json(newClient, { status: 201 });
+    const newEntity = await entityService.createEntity(body, user); // Passa o usuário para o serviço
+    return NextResponse.json(newEntity, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

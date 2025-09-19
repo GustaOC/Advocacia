@@ -2,56 +2,33 @@
 import { z } from "zod";
 
 // =================================
-// CLIENT SCHEMAS (MANTIDO)
+// ENTITY SCHEMAS
 // =================================
 
-export const ClientSchema = z.object({
+export const EntitySchema = z.object({
   name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres.").max(255),
-  document: z.string().max(20).optional().nullable(), // CPF/CNPJ
+  document: z.string().max(20).optional().nullable(),
   email: z.string().email("Email inválido.").optional().nullable(),
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
-  neighborhood: z.string().max(100).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
-  state: z.string().max(50).optional().nullable(),
-  zip_code: z.string().max(20).optional().nullable(),
 });
 
-export const ClientUpdateSchema = ClientSchema.partial();
-
+export const EntityUpdateSchema = EntitySchema.partial();
 
 // =================================
-// CASE SCHEMAS (MANTIDO)
+// CASE SCHEMAS
 // =================================
 
 export const CaseSchema = z.object({
-  title: z.string().min(3, "O título deve ter pelo menos 3 caracteres.").max(255),
   case_number: z.string().max(100).optional().nullable(),
+  title: z.string().min(3, "O título deve ter pelo menos 3 caracteres.").max(255),
   description: z.string().optional().nullable(),
-  status: z.enum(['Em Andamento', 'Em Acordo', 'Extinto']).default('Em Andamento'),
-  urgency: z.enum(['Baixa', 'Media', 'Alta']).default('Baixa'),
+  status: z.enum(['active', 'archived', 'suspended', 'completed']).default('active'),
   court: z.string().max(255).optional().nullable(),
-  agreement_type: z.enum(['Judicial', 'Extrajudicial', 'Acordo em Audiência']).optional().nullable(),
-  extinction_reason: z.enum(['Grupo Econômico', 'Citação Negativa', 'Penhora Infrutífera', 'Pagamento', 'Morte', 'Desistência']).optional().nullable(),
-}).refine(data => {
-  if (data.status === 'Em Acordo') return !!data.agreement_type;
-  return true;
-}, {
-  message: "O tipo de acordo é obrigatório quando o status é 'Em Acordo'.",
-  path: ['agreement_type'],
-}).refine(data => {
-  if (data.status === 'Extinto') return !!data.extinction_reason;
-  return true;
-}, {
-  message: "O motivo da extinção é obrigatório quando o status é 'Extinto'.",
-  path: ['extinction_reason'],
 });
 
 export const CaseUpdateSchema = CaseSchema.partial();
-
-// =================================
-// DEMAIS SCHEMAS (MANTIDOS)
-// =================================
 
 export const AgreementSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
@@ -66,10 +43,16 @@ export const AgreementSchema = z.object({
 
 export const AgreementUpdateSchema = AgreementSchema.partial();
 
+// =================================
+// PETITION SCHEMAS
+// =================================
+
 export const PetitionSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
   title: z.string().min(3, "O título é obrigatório.").max(255),
   description: z.string().optional().nullable(),
+  // Em uma implementação real, o upload de arquivo seria tratado separadamente
+  // e aqui teríamos o caminho do arquivo (file_path).
   file_path: z.string().min(1, "O caminho do arquivo é obrigatório."), 
   deadline: z.string().optional().nullable(),
   status: z.enum(['pending', 'under_review', 'approved', 'corrections_needed', 'rejected']).default('pending'),
@@ -84,6 +67,10 @@ export const PetitionUpdateSchema = z.object({
     status: z.enum(['pending', 'under_review', 'approved', 'corrections_needed', 'rejected']).optional(),
     assigned_to_employee_id: z.string().uuid().optional(),
 });
+
+// =================================
+// DOCUMENT SCHEMAS
+// =================================
 
 export const DocumentSchema = z.object({
   case_id: z.number().int().positive(),
@@ -103,22 +90,6 @@ export const DocumentUploadSchema = z.object({
   description: z.string().optional(),
 });
 
-// =================================
-// NOVOS SCHEMAS PARA TAREFAS E AGENDA
-// =================================
 
-export const TaskSchema = z.object({
-  title: z.string().min(3, "O título da tarefa é obrigatório."),
-  description: z.string().optional().nullable(),
-  assigned_to: z.string().uuid("É necessário atribuir a tarefa a um funcionário."),
-  due_date: z.string().optional().nullable(),
-});
 
-export const EventSchema = z.object({
-    title: z.string().min(2, "O título do evento é obrigatório."),
-    start_time: z.string().datetime("A data de início é obrigatória."),
-    end_time: z.string().datetime("A data de término é obrigatória."),
-    employee_id: z.string().uuid(),
-});
-
-export const EventUpdateSchema = EventSchema.partial().omit({ employee_id: true });
+// Adicione outros schemas aqui conforme formos refatorando outros módulos...

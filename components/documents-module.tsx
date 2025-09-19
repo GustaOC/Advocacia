@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, Download, Trash2, Loader2, X } from "lucide-react";
 import { createClient } from '@/lib/supabase/client';
-import { apiClient } from '@/lib/api-client'; // Importando o apiClient
 
 // Tipagem para os documentos que virão da API
 interface Document {
@@ -50,11 +49,11 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
   const supabase = createClient();
 
   const fetchDocuments = useCallback(async () => {
-    if (!caseId) return; // Não busca se o caseId não for válido
     setIsLoading(true);
     try {
-      // Usando o apiClient para consistência
-      const data = await apiClient.getDocumentsByCaseId(caseId);
+      const response = await fetch(`/api/documents?case_id=${caseId}`);
+      if (!response.ok) throw new Error("Falha ao carregar documentos.");
+      const data = await response.json();
       setDocuments(data);
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -93,13 +92,15 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
     formData.append("description", description);
 
     try {
-      // CORREÇÃO: Usando o apiClient.uploadDocument que foi padronizado
-      await apiClient.uploadDocument(formData);
-      
+      const response = await fetch("/api/documents", { method: "POST", body: formData });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Falha no upload.");
+      }
       toast({ title: "Sucesso!", description: "Documento enviado com sucesso." });
       setSelectedFile(null);
       setDescription("");
-      fetchDocuments(); // Recarrega a lista de documentos
+      fetchDocuments();
     } catch (error: any) {
       toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
     } finally {
@@ -110,9 +111,13 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
   const handleDelete = async (doc: Document) => {
     if (!confirm(`Tem certeza que deseja excluir o arquivo "${doc.file_name}"?`)) return;
     try {
-      await apiClient.deleteDocument(doc.id);
+      const response = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao excluir.');
+      }
       toast({ title: "Sucesso", description: "Documento excluído." });
-      fetchDocuments(); // Recarrega a lista de documentos
+      fetchDocuments();
     } catch (error: any) {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     }
@@ -133,22 +138,42 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Upload de Novo Documento</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Upload de Novo Documento</CardTitle>
+        </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors duration-200 ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`} onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop}>
+            <div
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors duration-200 ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
               <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} />
               <Label htmlFor="file-upload" className="cursor-pointer">
                 <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">{selectedFile ? selectedFile.name : "Arraste e solte ou clique para selecionar"}</p>
+                <p className="mt-2 text-sm text-gray-600">
+                  {selectedFile ? selectedFile.name : "Arraste e solte ou clique para selecionar"}
+                </p>
                 {selectedFile && <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>}
               </Label>
-              {selectedFile && <Button variant="ghost" size="sm" className="mt-2 text-red-500" onClick={() => setSelectedFile(null)}><X className="h-4 w-4 mr-1" /> Remover</Button>}
+               {selectedFile && (
+                <Button variant="ghost" size="sm" className="mt-2 text-red-500" onClick={() => setSelectedFile(null)}>
+                  <X className="h-4 w-4 mr-1" /> Remover
+                </Button>
+              )}
             </div>
+            
             <div>
               <Label htmlFor="description">Descrição (Opcional)</Label>
-              <Textarea id="description" placeholder="Ex: Procuração assinada pelo cliente..." value={description} onChange={(e) => setDescription(e.target.value)} />
+              <Textarea
+                id="description"
+                placeholder="Ex: Procuração assinada pelo cliente..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
+
             <div className="flex justify-end">
               <Button type="submit" disabled={isUploading || !selectedFile}>
                 {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -160,10 +185,15 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Documentos do Caso</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Documentos do Caso</CardTitle>
+        </CardHeader>
         <CardContent>
-          {isLoading ? (<div className="flex justify-center items-center py-8"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>) : 
-          documents.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : documents.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
               <FileText className="h-10 w-10 mx-auto mb-2 text-slate-400" />
               <p>Nenhum documento encontrado para este caso.</p>
@@ -177,7 +207,9 @@ export function DocumentsModule({ caseId }: DocumentsModuleProps) {
                     <div>
                       <p className="font-semibold text-slate-800">{doc.file_name}</p>
                       <p className="text-sm text-slate-600">{doc.description || "Sem descrição"}</p>
-                      <p className="text-xs text-slate-500">Enviado por {doc.employee?.name || 'Desconhecido'} em {new Date(doc.created_at).toLocaleDateString('pt-BR')} - {formatFileSize(doc.file_size)}</p>
+                      <p className="text-xs text-slate-500">
+                        Enviado por {doc.employee?.name || 'Desconhecido'} em {new Date(doc.created_at).toLocaleDateString('pt-BR')} - {formatFileSize(doc.file_size)}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">

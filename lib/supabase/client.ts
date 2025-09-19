@@ -1,15 +1,9 @@
 // lib/supabase/client.ts
 import { createBrowserClient } from "@supabase/ssr"
-import { env } from "@/lib/env"; // Importando as variáveis de ambiente validadas
 
 export function createClient() {
-  // Usando as variáveis validadas do objeto 'env'
-  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new Error("Variáveis de ambiente do Supabase não configuradas.");
-  }
-  
-  return createBrowserClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) throw new Error("Missing Supabase envs: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY")
+  return createBrowserClient(url, anon)
 }

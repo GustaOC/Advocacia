@@ -1,4 +1,3 @@
-// components/user-settings-modal.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -10,8 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { User, Lock, Save, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/hooks/use-auth" // Importando o hook de autenticação
-import { createClient } from "@/lib/supabase/client" // Importando o cliente Supabase
 
 interface UserSettingsModalProps {
   isOpen: boolean
@@ -20,7 +17,6 @@ interface UserSettingsModalProps {
 
 export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   const { toast } = useToast()
-  const { user, isLoading: isUserLoading } = useAuth(); // Usando o hook de autenticação
   const [loading, setLoading] = useState(false)
   const [userProfile, setUserProfile] = useState({
     name: "",
@@ -29,68 +25,131 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
   })
 
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   })
 
-  // Inicializa o cliente Supabase no componente
-  const supabase = createClient();
-
   useEffect(() => {
-    if (isOpen && user) {
-      setUserProfile({
-        name: user.name || "",
-        email: user.email || "",
-        role: user.role || "",
-      })
+    if (isOpen) {
+      loadUserProfile()
     }
-  }, [isOpen, user])
+  }, [isOpen])
 
+  const loadUserProfile = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/profile")
+      if (response.ok) {
+        const { user } = await response.json()
+        setUserProfile({
+          name: user.name || "",
+          email: user.email || "",
+          role: user.role?.name || "",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading user profile:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o perfil do usuário",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleProfileUpdate = async () => {
-    // A lógica para atualizar o nome e email (metadados do usuário) seria implementada aqui.
-    // Por enquanto, vamos manter o foco na senha.
-    toast({
-        title: "Funcionalidade em desenvolvimento",
-        description: "A atualização de nome e email será implementada em breve.",
-    });
+    try {
+      setLoading(true)
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: userProfile.name,
+          email: userProfile.email,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Sucesso",
+          description: "Perfil atualizado com sucesso",
+        })
+      } else {
+        const { error } = await response.json()
+        throw new Error(error)
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao atualizar perfil",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handlePasswordChange = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast({ title: "Erro", description: "As senhas não coincidem", variant: "destructive" });
-      return;
+      toast({
+        title: "Erro",
+        description: "As senhas não coincidem",
+        variant: "destructive",
+      })
+      return
     }
 
     if (passwordForm.newPassword.length < 6) {
-      toast({ title: "Erro", description: "A nova senha deve ter pelo menos 6 caracteres", variant: "destructive" });
-      return;
+      toast({
+        title: "Erro",
+        description: "A nova senha deve ter pelo menos 6 caracteres",
+        variant: "destructive",
+      })
+      return
     }
 
-    setLoading(true);
     try {
-      // CORREÇÃO DE SEGURANÇA: Usando o método seguro do Supabase para atualizar a senha.
-      const { error } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
-      });
+      setLoading(true)
+      const response = await fetch("/api/profile/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      })
 
-      if (error) {
-        throw new Error(error.message);
+      if (response.ok) {
+        toast({
+          title: "Sucesso",
+          description: "Senha alterada com sucesso",
+        })
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        })
+      } else {
+        const { error } = await response.json()
+        throw new Error(error)
       }
-
-      toast({ title: "Sucesso", description: "Senha alterada com sucesso." });
-      setPasswordForm({ newPassword: "", confirmPassword: "" });
-      onClose(); // Fecha o modal após o sucesso
-
     } catch (error) {
-      console.error("Error changing password:", error);
+      console.error("Error changing password:", error)
       toast({
-        title: "Erro ao alterar senha",
-        description: error instanceof Error ? error.message : "Ocorreu um erro inesperado.",
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao alterar senha",
         variant: "destructive",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -101,14 +160,15 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
           <DialogTitle>Configurações do Usuário</DialogTitle>
         </DialogHeader>
 
-        {(isUserLoading || loading) && (
+        {loading && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         )}
 
-        {!(isUserLoading || loading) && user && (
+        {!loading && (
           <div className="space-y-6">
+            {/* Perfil do Usuário */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -120,7 +180,11 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-16 w-16">
                     <AvatarFallback>
-                      {userProfile.name?.split(" ").map((n) => n[0]).join("").toUpperCase() || 'U'}
+                      {userProfile.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -128,14 +192,33 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
                     <p className="text-sm text-muted-foreground">{userProfile.role}</p>
                   </div>
                 </div>
-                <div><Label>Email</Label><Input type="email" value={userProfile.email} disabled /></div>
-                <Button onClick={handleProfileUpdate} disabled={true} className="bg-[#2C3E50] hover:bg-[#3D566E]">
-                  <Save className="h-4 w-4 mr-2" />
-                  Salvar Alterações (Em Breve)
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Label>Nome Completo</Label>
+                    <Input
+                      value={userProfile.name}
+                      onChange={(e) => setUserProfile((prev) => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={userProfile.email}
+                      onChange={(e) => setUserProfile((prev) => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleProfileUpdate} disabled={loading} className="bg-[#2C3E50] hover:bg-[#3D566E]">
+                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  Salvar Alterações
                 </Button>
               </CardContent>
             </Card>
 
+            {/* Alteração de Senha */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -144,8 +227,31 @@ export function UserSettingsModal({ isOpen, onClose }: UserSettingsModalProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div><Label>Nova Senha</Label><Input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))} /></div>
-                <div><Label>Confirmar Nova Senha</Label><Input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))} /></div>
+                <div>
+                  <Label>Senha Atual</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Nova Senha</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Confirmar Nova Senha</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                  />
+                </div>
+
                 <Button onClick={handlePasswordChange} disabled={loading} variant="outline">
                   {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Lock className="h-4 w-4 mr-2" />}
                   Alterar Senha
