@@ -57,7 +57,7 @@ export function Dashboard() {
 
   const TABS = [
     { value: "overview", label: "Dashboard", icon: BarChart2, component: <ReportsModule onNavigate={handleNavigate} /> },
-    { value: "entities", label: "Entidades", icon: Users, component: <EntitiesModule /> },
+    { value: "entities", label: "Clientes", icon: Users, component: <EntitiesModule /> },
     { value: "cases", label: "Casos", icon: Briefcase, component: <CasesModule initialFilters={globalFilters.cases} /> },
     { value: "petitions", label: "Petições", icon: FileText, component: <PetitionsModule /> },
     { value: "templates", label: "Modelos", icon: FileCode, component: <TemplatesModule /> }, // Nova aba
