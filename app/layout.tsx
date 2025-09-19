@@ -1,22 +1,45 @@
-import type { Metadata, Viewport } from 'next' // Importar Viewport
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
+import type { Metadata, Viewport } from 'next'
+// ✅ Importando a nova fonte 'Lora' e removendo a 'Dancing_Script'
+import { Lato, Poppins, Lora } from 'next/font/google'
 import './globals.css'
+import Header from '@/components/Header'
+import Footer from '@/components/Footer'
+import { Toaster } from "@/components/ui/toaster"
+
+const lato = Lato({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['700', '800'],
+  variable: '--font-heading',
+  display: 'swap',
+});
+
+// ✅ Configurando a nova fonte serifada para destaque
+const lora = Lora({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  variable: '--font-serif',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
-  title: 'Cássio Miguel Advocacia | Sistema de Gestão',
-  description: 'Sistema completo de gestão jurídica para escritórios de advocacia',
-  keywords: 'advocacia, gestão jurídica, processos, petições, clientes',
+  title: 'Cássio Miguel Advocacia | Assessoria Jurídica em Campo Grande/MS',
+  description: 'Assessoria jurídica especializada em direito civil e empresarial. Atendimento personalizado em Campo Grande — soluções práticas e seguras para pessoas e empresas.',
+  keywords: 'advocacia, advogado, campo grande, direito civil, direito empresarial',
   authors: [{ name: 'Cássio Miguel Advocacia' }],
-  robots: 'noindex, nofollow', // Sistema interno
-  generator: 'v0.app'
+  robots: 'index, follow',
 }
 
-// ADICIONADO: Viewport exportado separadamente
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#2C3E50',
+  themeColor: '#06213a',
 }
 
 export default function RootLayout({
@@ -25,62 +48,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <style dangerouslySetInnerHTML={{
-          __html: `
-            html {
-              font-family: ${GeistSans.style.fontFamily};
-              --font-sans: ${GeistSans.variable};
-              --font-mono: ${GeistMono.variable};
-            }
-            
-            :root {
-              --primary: #2C3E50;
-              --primary-light: #34495E;
-              --secondary: #3498DB;
-              --success: #2ECC71;
-              --warning: #F39C12;
-              --danger: #E74C3C;
-              --background: #F5F5F5;
-              --surface: #FFFFFF;
-              --text-primary: #2C3E50;
-              --text-secondary: #333333;
-              --border: rgba(44, 62, 80, 0.1);
-            }
-            
-            * { box-sizing: border-box; }
-            
-            body {
-              margin: 0;
-              padding: 0;
-              background-color: var(--background);
-              color: var(--text-primary);
-              line-height: 1.6;
-            }
-            
-            .loading-skeleton {
-              background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-              background-size: 200% 100%;
-              animation: loading 1.5s infinite;
-            }
-            
-            @keyframes loading {
-              0% { background-position: 200% 0; }
-              100% { background-position: -200% 0; }
-            }
-            
-            .transition-smooth {
-              transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            }
-          `
-        }} />
-      </head>
-      <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
-        <div id="portal-root" />
-        {children}
+    // ✅ Adicionando a variável da nova fonte ao HTML
+    <html lang="pt-BR" className={`${lato.variable} ${poppins.variable} ${lora.variable} scroll-smooth`}>
+      <body className="bg-background text-foreground">
+        <Header />
+        <main>{children}</main>
+        <Footer />
+        <Toaster />
       </body>
     </html>
   )
