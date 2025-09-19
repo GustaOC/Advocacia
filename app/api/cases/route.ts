@@ -1,4 +1,4 @@
-// app/api/cases/route.ts
+// app/api/cases/route.ts - VERSÃO DE PRODUÇÃO COM PERMISSÕES
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth";
@@ -7,7 +7,7 @@ import * as caseService from "@/lib/services/caseService";
 // GET: Listar todos os casos
 export async function GET(req: NextRequest) {
   try {
-    // await requirePermission("cases_view"); // Descomente para ativar permissão
+    await requirePermission("cases_view");
     const cases = await caseService.getCases();
     return NextResponse.json(cases);
   } catch (error: any) {
@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
 // POST: Criar um novo caso
 export async function POST(req: NextRequest) {
   try {
-    // await requirePermission("cases_create");
+    const user = await requirePermission("cases_create");
     const body = await req.json();
-    const newCase = await caseService.createCase(body);
+    const newCase = await caseService.createCase(body, user);
     return NextResponse.json(newCase, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

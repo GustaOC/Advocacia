@@ -1,4 +1,4 @@
-// app/api/entities/[id]/route.ts
+// app/api/entities/[id]/route.ts - VERSÃO DE PRODUÇÃO
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth";
@@ -22,19 +22,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(entity);
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 // PUT: Atualizar uma entidade
 export async function PUT(req: NextRequest, { params }: RouteParams) {
   try {
-    const user = await requirePermission("entities_edit"); // Pega o usuário
+    const user = await requirePermission("entities_edit");
     const body = await req.json();
-    const updatedEntity = await entityService.updateEntity(params.id, body, user); // Passa o usuário
+    const updatedEntity = await entityService.updateEntity(params.id, body, user);
     return NextResponse.json(updatedEntity);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -43,23 +43,23 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 // DELETE: Excluir uma entidade
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
-    const user = await requirePermission("entities_delete"); // Pega o usuário
-    const result = await entityService.deleteEntity(params.id, user); // Passa o usuário
+    const user = await requirePermission("entities_delete");
+    const result = await entityService.deleteEntity(params.id, user);
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

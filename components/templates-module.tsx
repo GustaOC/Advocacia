@@ -1,4 +1,4 @@
-// components/templates-module.tsx
+// components/templates-module.tsx - VERSÃO CORRIGIDA
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -34,13 +34,12 @@ export function TemplatesModule() {
   const [currentTemplate, setCurrentTemplate] = useState<Partial<Template>>({});
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Busca os templates usando React Query
   const { data: templates = [], isLoading } = useQuery<Template[]>({
     queryKey: ['templates'],
-    queryFn: apiClient.getTemplates,
+    // ✅ CORREÇÃO APLICADA AQUI
+    queryFn: () => apiClient.getTemplates(),
   });
 
-  // Mutação para criar ou atualizar um template
   const saveTemplateMutation = useMutation({
     mutationFn: (templateData: Partial<Template>) => {
       if (isEditMode) {
@@ -58,7 +57,6 @@ export function TemplatesModule() {
     },
   });
 
-  // Mutação para deletar um template
   const deleteTemplateMutation = useMutation({
     mutationFn: (templateId: number) => apiClient.deleteTemplate(templateId),
     onSuccess: () => {
@@ -112,7 +110,6 @@ export function TemplatesModule() {
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-        {/* A CORREÇÃO ESTÁ AQUI: Adicionamos um <div> para envolver o título e o parágrafo */}
         <div>
           <h2 className="text-3xl font-bold mb-2">Modelos de Documentos</h2>
           <p className="text-slate-300 text-lg">Crie e gerencie templates para automatizar a geração de documentos.</p>

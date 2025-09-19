@@ -1,4 +1,4 @@
-// components/cases-module.tsx
+// components/cases-module.tsx - VERSÃO CORRIGIDA
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -34,9 +34,94 @@ interface Case {
 interface Template { id: number; title: string; }
 interface CasesModuleProps { initialFilters?: { status: string }; }
 
-// Modal de Geração de Documento (permanece o mesmo)
+// Modal de Geração de Documento
 const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, isOpen: boolean, onClose: () => void }) => {
-    // ...código do modal inalterado...
+  const { toast } = useToast();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const { data: templates = [] } = useQuery<Template[]>({
+    queryKey: ['templates'],
+    queryFn: () => apiClient.getTemplates(),
+    enabled: isOpen,
+  });
+
+  const handleGenerate = async () => {
+    if (!selectedTemplateId) {
+      toast({ title: "Selecione um modelo", variant: "destructive" });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const result = await apiClient.generateDocument(Number(selectedTemplateId), caseItem.id);
+      setGeneratedContent(result.generatedContent);
+      setDocumentTitle(result.documentTitle);
+    } catch (error: any) {
+      toast({ title: "Erro ao gerar documento", description: error.message, variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(generatedContent);
+    toast({ title: "Copiado!", description: "O conteúdo do documento foi copiado para a área de transferência." });
+  };
+  
+  const handleDownloadTxt = () => {
+    const blob = new Blob([generatedContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${documentTitle}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Gerar Documento para: {caseItem.title}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+          <div className="space-y-4">
+            <Label>1. Selecione o Modelo</Label>
+            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+              <SelectTrigger><SelectValue placeholder="Escolha um modelo..." /></SelectTrigger>
+              <SelectContent>{templates.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button onClick={handleGenerate} disabled={!selectedTemplateId || isGenerating} className="w-full">
+              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCog className="mr-2 h-4 w-4" />}
+              Gerar Documento
+            </Button>
+            {generatedContent && (
+               <div className="flex gap-2">
+                 <Button variant="outline" onClick={handleCopyToClipboard} className="w-full"><Copy className="mr-2 h-4 w-4" /> Copiar</Button>
+                 <Button variant="outline" onClick={handleDownloadTxt} className="w-full"><Download className="mr-2 h-4 w-4" /> Baixar .txt</Button>
+               </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>2. Documento Gerado</Label>
+            <Textarea 
+              readOnly 
+              value={generatedContent} 
+              className="min-h-[300px] bg-slate-50 font-mono text-sm"
+              placeholder="O conteúdo do documento aparecerá aqui após a geração."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 
@@ -49,7 +134,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
 
   const { data: cases = [], isLoading } = useQuery<Case[]>({
     queryKey: ['cases'],
-    queryFn: apiClient.getCases,
+    // ✅ CORREÇÃO APLICADA AQUI
+    queryFn: () => apiClient.getCases(),
   });
 
   useEffect(() => {
@@ -75,7 +161,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       'Média': 'bg-yellow-100 text-yellow-800 border-yellow-200',
       'Baixa': 'bg-green-100 text-green-800 border-green-200',
     };
-    return <Badge className={colors[priority as keyof typeof colors] || 'bg-slate-100'}><AlertTriangle className="h-3 w-3 mr-1" />{priority}</Badge>;
+    const colorClass = colors[priority as keyof typeof colors] || 'bg-slate-100';
+    return <Badge className={colorClass}><AlertTriangle className="h-3 w-3 mr-1" />{priority}</Badge>;
   };
 
   if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
@@ -137,7 +224,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         </CardContent>
       </Card>
       
-      {/* Modal de Geração de Documento */}
       {selectedCaseForDocs && (
         <GenerateDocumentModal
           caseItem={selectedCaseForDocs}

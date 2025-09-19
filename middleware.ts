@@ -1,30 +1,32 @@
-// middleware.ts
+// middleware.ts - VERSÃO CORRIGIDA E SEGURA
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-// Lista de rotas públicas que não exigem autenticação
+// Lista de rotas que NÃO exigem autenticação
 const PUBLIC_PATHS = [
   '/', // Landing page
   '/login',
   '/auth/callback',
   '/auth/update-password',
-  '/api/auth/login',
-  '/api/auth/logout',
 ];
 
-// Padrões de arquivos estáticos e de API que devem ser ignorados pelo middleware
-const PUBLIC_FILE_PATTERNS = [
-  /\.(.*)$/, // Arquivos com extensão (png, jpg, svg, etc.)
-  /^\/_next\//, // Arquivos internos do Next.js
-  /^\/api\//,   // Todas as rotas de API são tratadas internamente
+// Padrões de rotas de API que podem ser acessadas publicamente
+const PUBLIC_API_PATTERNS = [
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/callback',
 ];
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) {
     return true;
   }
-  for (const pattern of PUBLIC_FILE_PATTERNS) {
-    if (pattern.test(pathname)) {
+  // Permite acesso a arquivos estáticos e de imagem
+  if (pathname.startsWith('/_next/') || pathname.includes('/favicon.ico') || pathname.endsWith('.png')) {
+    return true;
+  }
+  for (const pattern of PUBLIC_API_PATTERNS) {
+    if (pathname.startsWith(pattern)) {
       return true;
     }
   }
@@ -48,14 +50,13 @@ export async function middleware(req: NextRequest) {
     
     // Se houver erro ou nenhum usuário, redireciona para a página de login
     if (error || !user) {
-      console.log(`[Middleware] Acesso negado para ${pathname}. Redirecionando para login.`);
+      console.warn(`[Middleware] Acesso negado para rota protegida: ${pathname}. Redirecionando para login.`);
       const redirectUrl = new URL('/login', req.url);
       redirectUrl.searchParams.set('redirectedFrom', pathname);
       return NextResponse.redirect(redirectUrl);
     }
     
     // Se o usuário estiver autenticado, permite o acesso
-    console.log(`[Middleware] Acesso permitido para ${user.email} em ${pathname}.`);
     return res;
 
   } catch (e) {
