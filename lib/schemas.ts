@@ -1,4 +1,4 @@
-// lib/schemas.ts
+// lib/schemas.ts - VERSÃO CORRIGIDA
 import { z } from "zod";
 
 // =================================
@@ -12,6 +12,8 @@ export const EntitySchema = z.object({
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
+  // ✅ CORREÇÃO: Adicionado o campo 'type', que é obrigatório no banco de dados.
+  type: z.string().min(1, "O tipo é obrigatório."),
 });
 
 export const EntityUpdateSchema = EntitySchema.partial();
@@ -51,8 +53,6 @@ export const PetitionSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
   title: z.string().min(3, "O título é obrigatório.").max(255),
   description: z.string().optional().nullable(),
-  // Em uma implementação real, o upload de arquivo seria tratado separadamente
-  // e aqui teríamos o caminho do arquivo (file_path).
   file_path: z.string().min(1, "O caminho do arquivo é obrigatório."), 
   deadline: z.string().optional().nullable(),
   status: z.enum(['pending', 'under_review', 'approved', 'corrections_needed', 'rejected']).default('pending'),
@@ -89,7 +89,3 @@ export const DocumentUploadSchema = z.object({
   ),
   description: z.string().optional(),
 });
-
-
-
-// Adicione outros schemas aqui conforme formos refatorando outros módulos...

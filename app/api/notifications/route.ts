@@ -1,7 +1,7 @@
 // app/api/notifications/route.ts - VERSÃO DE PRODUÇÃO
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
-import { requireAuth } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,4 +48,41 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ... (O método POST permanece o mesmo, sem a parte do mock)
+export async function POST(request: NextRequest) {
+  try {
+    const user = await requireAuth();
+    const body = await request.json();
+    const { title, message, type = "info", target_user_id } = body;
+
+    if (!title || !message) {
+      return NextResponse.json(
+        { error: "Título e mensagem são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createAdminClient();
+    const { data: notification, error } = await supabase
+      .from("notifications")
+      .insert({
+        title,
+        message,
+        type,
+        user_id: target_user_id || user.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(notification);
+  } catch (error: any) {
+     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+    console.error("[API Notifications] Erro ao criar notificação:", error);
+    return NextResponse.json({ 
+      error: error.message || "Erro ao criar notificação", 
+    }, { status: 500 });
+  }
+}

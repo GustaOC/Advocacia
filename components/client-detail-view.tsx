@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DocumentsModule } from './documents-module';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Briefcase, FileCheck, FileWarning, CheckCircle, Loader2 } from 'lucide-react';
+// ✅ CORREÇÃO APLICADA AQUI: Adicionado 'FolderOpen' à lista de importações.
+import { User, Briefcase, FileCheck, FileWarning, CheckCircle, Loader2, FolderOpen } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -47,7 +48,7 @@ export function ClientDetailView({ client }: { client: Client }) {
   // Busca os casos (processos) associados a este cliente específico
   const { data: allCases = [], isLoading } = useQuery<Case[]>({
     queryKey: ['cases'],
-    queryFn: apiClient.getCases,
+    queryFn: () => apiClient.getCases(),
   });
 
   // Filtra os casos para exibir apenas os do cliente selecionado
