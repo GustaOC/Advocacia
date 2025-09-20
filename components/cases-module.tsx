@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO CORRIGIDA (COM IMPORTAÇÃO E MODAL DE CRIAÇÃO CORRETO)
+// components/cases-module.tsx - VERSÃO CORRIGIDA (COM IMPORTAÇÃO, MODAL DE CRIAÇÃO E TIMELINE)
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -11,10 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle, Clock } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // --- Tipagens ---
 interface Entity { id: number; name: string; }
@@ -22,7 +25,8 @@ interface Case {
   id: number;
   case_number: string | null;
   title: string; // Este campo é a "Observação"
-  status: string;
+  main_status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+  status_reason: string | null;
   value: number | null;
   court: string | null;
   created_at: string;
@@ -31,13 +35,23 @@ interface Case {
   case_parties: { role: string; entities: Entity }[];
   client_entity_id?: number;
   executed_entity_id?: number;
+  payment_date?: string | null;
+  final_value?: number | null;
+}
+// Nova tipagem para o evento do histórico
+interface CaseHistoryEvent {
+    id: number;
+    changed_at: string;
+    changed_by_user_email: string;
+    new_main_status: string;
+    new_status_reason: string | null;
+    notes: string | null;
 }
 interface Template { id: number; title: string; }
 interface CasesModuleProps { initialFilters?: { status: string }; }
 
 // --- Componentes de Modal ---
 
-// Modal para Importação de Casos
 const CaseImportModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -76,7 +90,7 @@ const CaseImportModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean
             setFile(null);
         }
     };
-    
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
@@ -103,7 +117,6 @@ const CaseImportModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean
     );
 };
 
-// Modal para Criar/Editar Caso (VERSÃO CORRIGIDA)
 const CaseEditModal = ({ isOpen, onClose, caseData, onSave }: { isOpen: boolean; onClose: () => void; caseData: Partial<Case> | null; onSave: (data: Partial<Case>) => void; }) => {
     const [formData, setFormData] = useState<Partial<Case>>({});
     const { toast } = useToast();
@@ -115,9 +128,9 @@ const CaseEditModal = ({ isOpen, onClose, caseData, onSave }: { isOpen: boolean;
 
     React.useEffect(() => {
         const isCreating = !caseData?.id;
-        const initialData = caseData || { 
-            priority: 'Média', 
-            status: 'active',
+        const initialData = caseData || {
+            priority: 'Média',
+            main_status: 'Em andamento',
             title: '',
             case_number: '',
         };
@@ -129,61 +142,108 @@ const CaseEditModal = ({ isOpen, onClose, caseData, onSave }: { isOpen: boolean;
     };
 
     const handleSave = () => {
-        if (!formData.client_entity_id || !formData.executed_entity_id || !formData.title) {
-            toast({ title: "Campos obrigatórios", description: "Cliente, Executado e Observação são obrigatórios.", variant: "destructive"});
+        if (!formData.title || (!formData.id && (!formData.client_entity_id || !formData.executed_entity_id))) {
+            toast({ title: "Campos obrigatórios", description: "Cliente, Executado e Observação são obrigatórios para novos casos.", variant: "destructive"});
             return;
         }
         onSave(formData);
     };
-
-    // Se estiver editando, mostramos um formulário diferente (simplificado por enquanto)
-    if (caseData?.id) {
-         // Lógica de edição futura pode ser mais complexa
-         return (
-             <Dialog open={isOpen} onOpenChange={onClose}>
-                 <DialogContent><DialogHeader><DialogTitle>Editar Caso</DialogTitle></DialogHeader><div>Edição de caso existente.</div></DialogContent>
-             </Dialog>
-         )
-    }
-
-    // Formulário de CRIAÇÃO
+    
+    // O modal agora lida tanto com criação quanto com edição de forma unificada
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                    <DialogTitle>Novo Caso</DialogTitle>
+                    <DialogTitle>{caseData?.id ? "Editar Caso" : "Novo Caso"}</DialogTitle>
                     <DialogDescription>Preencha os dados para criar um novo processo.</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-6 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="client_entity_id">1. Cliente *</Label>
-                        <Select value={String(formData.client_entity_id || '')} onValueChange={value => handleChange('client_entity_id', Number(value))}>
-                            <SelectTrigger disabled={isLoadingEntities}><SelectValue placeholder={isLoadingEntities ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger>
-                            <SelectContent>{entities.map(entity => (<SelectItem key={entity.id} value={String(entity.id)}>{entity.name}</SelectItem>))}</SelectContent>
-                        </Select>
-                    </div>
+                <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-4">
+                    {!caseData?.id && (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="client_entity_id">1. Cliente *</Label>
+                                <Select value={String(formData.client_entity_id || '')} onValueChange={value => handleChange('client_entity_id', Number(value))}>
+                                    <SelectTrigger disabled={isLoadingEntities}><SelectValue placeholder={isLoadingEntities ? "Carregando..." : "Selecione um cliente"} /></SelectTrigger>
+                                    <SelectContent>{entities.map(entity => (<SelectItem key={entity.id} value={String(entity.id)}>{entity.name}</SelectItem>))}</SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="executed_entity_id">3. Executado (Parte Contrária) *</Label>
+                                <Select value={String(formData.executed_entity_id || '')} onValueChange={value => handleChange('executed_entity_id', Number(value))}>
+                                    <SelectTrigger disabled={isLoadingEntities}><SelectValue placeholder={isLoadingEntities ? "Carregando..." : "Selecione o executado"} /></SelectTrigger>
+                                    <SelectContent>{entities.map(entity => (<SelectItem key={entity.id} value={String(entity.id)}>{entity.name}</SelectItem>))}</SelectContent>
+                                </Select>
+                            </div>
+                        </>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="case_number">2. Número do Processo</Label>
                         <Input id="case_number" value={formData.case_number || ''} onChange={e => handleChange('case_number', e.target.value)} placeholder="0000000-00.0000.0.00.0000" />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="executed_entity_id">3. Executado (Parte Contrária) *</Label>
-                        <Select value={String(formData.executed_entity_id || '')} onValueChange={value => handleChange('executed_entity_id', Number(value))}>
-                            <SelectTrigger disabled={isLoadingEntities}><SelectValue placeholder={isLoadingEntities ? "Carregando..." : "Selecione o executado"} /></SelectTrigger>
-                            <SelectContent>{entities.map(entity => (<SelectItem key={entity.id} value={String(entity.id)}>{entity.name}</SelectItem>))}</SelectContent>
-                        </Select>
-                        <p className="text-xs text-slate-500">Se a parte não estiver na lista, cadastre-a primeiro na aba 'Clientes'.</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="status">4. Status</Label>
-                            <Select value={formData.status || 'active'} onValueChange={value => handleChange('status', value)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="active">Ativo</SelectItem><SelectItem value="completed">Concluído</SelectItem><SelectItem value="archived">Arquivado</SelectItem><SelectItem value="suspended">Suspenso</SelectItem></SelectContent></Select>
+                            <Label htmlFor="main_status">4. Status Principal</Label>
+                            <Select value={formData.main_status || 'Em andamento'} onValueChange={value => handleChange('main_status', value)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Em andamento">Em andamento</SelectItem>
+                                    <SelectItem value="Acordo">Acordo</SelectItem>
+                                    <SelectItem value="Extinto">Extinto</SelectItem>
+                                    <SelectItem value="Pago">Pago</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="priority">5. Prioridade</Label>
-                            <Select value={formData.priority || 'Média'} onValueChange={value => handleChange('priority', value)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Alta">Alta</SelectItem><SelectItem value="Média">Média</SelectItem><SelectItem value="Baixa">Baixa</SelectItem></SelectContent></Select>
+                            <Select value={formData.priority || 'Média'} onValueChange={value => handleChange('priority', value)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Alta">Alta</SelectItem>
+                                    <SelectItem value="Média">Média</SelectItem>
+                                    <SelectItem value="Baixa">Baixa</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
+                    {formData.main_status === 'Extinto' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="status_reason">Motivo da Extinção</Label>
+                            <Select value={formData.status_reason || ''} onValueChange={value => handleChange('status_reason', value)}>
+                                <SelectTrigger><SelectValue placeholder="Selecione o motivo"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Falta de citação">Falta de citação</SelectItem>
+                                    <SelectItem value="Penhora infrutífera">Penhora infrutífera</SelectItem>
+                                    <SelectItem value="Abandono de causa">Abandono de causa</SelectItem>
+                                    <SelectItem value="Outro">Outro</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    {formData.main_status === 'Acordo' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="status_reason">Tipo de Acordo</Label>
+                            <Select value={formData.status_reason || ''} onValueChange={value => handleChange('status_reason', value)}>
+                                <SelectTrigger><SelectValue placeholder="Selecione o tipo de acordo"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Judicial">Judicial</SelectItem>
+                                    <SelectItem value="Extrajudicial">Extrajudicial</SelectItem>
+                                    <SelectItem value="Em Audiência">Em Audiência</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    {formData.main_status === 'Pago' && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="payment_date">Data do Pagamento</Label>
+                                <Input id="payment_date" type="date" value={formData.payment_date || ''} onChange={e => handleChange('payment_date', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="final_value">Valor Final</Label>
+                                <Input id="final_value" type="number" value={formData.final_value || ''} onChange={e => handleChange('final_value', Number(e.target.value))} />
+                            </div>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="title">6. Observação *</Label>
                         <Textarea id="title" value={formData.title || ''} onChange={e => handleChange('title', e.target.value)} placeholder="Descreva o objetivo ou uma observação principal sobre o caso."/>
@@ -198,32 +258,73 @@ const CaseEditModal = ({ isOpen, onClose, caseData, onSave }: { isOpen: boolean;
     );
 };
 
-// Modal para Gerar Documentos
-const GenerateDocumentModal = ({ caseItem, isOpen, onClose }: { caseItem: Case, isOpen: boolean, onClose: () => void }) => {
-    return (<Dialog open={isOpen} onOpenChange={onClose}><DialogContent>Gerar Documento</DialogContent></Dialog>);
+const CaseDetailModal = ({ caseItem, isOpen, onClose }: { caseItem: Case | null, isOpen: boolean, onClose: () => void }) => {
+    const { data: history = [], isLoading } = useQuery<CaseHistoryEvent[]>({
+        queryKey: ['caseHistory', caseItem?.id],
+        queryFn: async () => {
+             const response = await fetch(`/api/cases/${caseItem!.id}/history`);
+             if (!response.ok) {
+                 throw new Error('Failed to fetch history');
+             }
+             return response.json();
+        },
+        enabled: !!caseItem,
+    });
+
+    if (!caseItem) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl">
+                 <DialogHeader>
+                    <DialogTitle>{caseItem.title}</DialogTitle>
+                    <DialogDescription>{caseItem.case_number}</DialogDescription>
+                 </DialogHeader>
+                 <Tabs defaultValue="details" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="details">Detalhes</TabsTrigger><TabsTrigger value="timeline">Timeline</TabsTrigger></TabsList>
+                    <TabsContent value="details" className="pt-4"><pre className="mt-2 w-full rounded-md bg-slate-950 p-4 max-h-[60vh] overflow-auto"><code className="text-white">{JSON.stringify(caseItem, null, 2)}</code></pre></TabsContent>
+                    <TabsContent value="timeline" className="pt-4 max-h-[60vh] overflow-y-auto">
+                        {isLoading ? <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div> : (
+                            <div className="space-y-6 border-l-2 border-slate-200 ml-2 pl-6">
+                                {history.map(event => (
+                                    <div key={event.id} className="relative">
+                                        <div className="absolute -left-[35px] top-1 h-5 w-5 bg-blue-500 rounded-full border-4 border-white"></div>
+                                        <p className="font-medium text-slate-800">
+                                            Status alterado para <Badge variant="secondary">{event.new_main_status}</Badge>
+                                            {event.new_status_reason && ` (${event.new_status_reason})`}
+                                        </p>
+                                        <p className="text-sm text-slate-500">
+                                            {format(new Date(event.changed_at), "dd 'de' MMMM 'de' yyyy, 'às' HH:mm", { locale: ptBR })}
+                                        </p>
+                                        <p className="text-xs text-slate-400">por {event.changed_by_user_email}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </TabsContent>
+                 </Tabs>
+            </DialogContent>
+        </Dialog>
+    );
 };
 
 // --- Módulo Principal ---
 export function CasesModule({ initialFilters }: CasesModuleProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState(initialFilters?.status || "all");
   const [filterPriority, setFilterPriority] = useState("all");
-
   const [isDetailModalOpen, setDetailModalOpen] = useState(false);
   const [isEditModalOpen, setEditModalOpen] = useState(false);
-  const [isGenerateDocModalOpen, setGenerateDocModalOpen] = useState(false);
   const [isImportModalOpen, setImportModalOpen] = useState(false);
-
   const [selectedCase, setSelectedCase] = useState<Partial<Case> | null>(null);
 
   const { data: cases = [], isLoading } = useQuery<Case[]>({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
   });
-  
+
   const saveCaseMutation = useMutation({
       mutationFn: (caseData: Partial<Case>) => {
           return caseData.id
@@ -245,6 +346,11 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       setEditModalOpen(true);
   };
 
+  const handleOpenDetailModal = (caseItem: Case) => {
+    setSelectedCase(caseItem);
+    setDetailModalOpen(true);
+  };
+
   const handleSaveCase = (data: Partial<Case>) => {
       saveCaseMutation.mutate(data);
   };
@@ -252,21 +358,22 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const filteredCases = useMemo(() => {
     return cases.filter(c => {
       const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const statusMatch = filterStatus === "all" || c.status === filterStatus;
+      const statusMatch = filterStatus === "all" || c.main_status === filterStatus;
       const priorityMatch = filterPriority === "all" || c.priority === filterPriority;
       return searchMatch && statusMatch && priorityMatch;
     });
   }, [cases, searchTerm, filterStatus, filterPriority]);
-    
-  const getStatusBadge = (status: string) => {
+
+  const getStatusBadge = (status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago') => {
       const statusMap: { [key: string]: string } = {
-          'active': 'bg-blue-100 text-blue-800',
-          'completed': 'bg-green-100 text-green-800',
-          'archived': 'bg-gray-100 text-gray-800',
+          'Em andamento': 'bg-blue-100 text-blue-800',
+          'Acordo': 'bg-yellow-100 text-yellow-800',
+          'Extinto': 'bg-red-100 text-red-800',
+          'Pago': 'bg-green-100 text-green-800',
       };
       return <Badge className={statusMap[status] || 'bg-slate-100'}>{status}</Badge>;
   };
-  
+
   const getPriorityBadge = (priority: string) => {
     const colors = {
       'Alta': 'bg-red-100 text-red-800 border-red-200',
@@ -275,7 +382,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     };
     return <Badge className={colors[priority as keyof typeof colors] || 'bg-slate-100'}><AlertTriangle className="h-3 w-3 mr-1" />{priority}</Badge>;
   };
-
 
   if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
 
@@ -287,7 +393,21 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       </div>
       <Card className="border-0 shadow-lg">
         <CardContent className="p-6 flex flex-col md:flex-row gap-4 justify-between">
-          <Input placeholder="Buscar por título ou número..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-xs" />
+          <div className="flex gap-2">
+            <Input placeholder="Buscar por título ou número..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="max-w-xs" />
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Status Principal" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">Todos os Status</SelectItem>
+                    <SelectItem value="Em andamento">Em andamento</SelectItem>
+                    <SelectItem value="Acordo">Acordo</SelectItem>
+                    <SelectItem value="Extinto">Extinto</SelectItem>
+                    <SelectItem value="Pago">Pago</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
           <div className="flex gap-2">
             <Button onClick={() => setImportModalOpen(true)} variant="outline"><Upload className="mr-2 h-4 w-4" />Importar Casos</Button>
             <Button onClick={() => handleOpenEditModal(null)} className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
@@ -306,14 +426,18 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                     <div className="text-sm text-slate-500 font-mono">{caseItem.case_number || "-"}</div>
                   </TableCell>
                   <TableCell>{getPriorityBadge(caseItem.priority)}</TableCell>
-                  <TableCell>{getStatusBadge(caseItem.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start">
+                        {getStatusBadge(caseItem.main_status)}
+                        {caseItem.status_reason && <span className="text-xs text-slate-500 mt-1">{caseItem.status_reason}</span>}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {caseItem.case_parties.map(p => p.entities.name).join(', ')}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleOpenEditModal(caseItem)}><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setSelectedCase(caseItem); setDetailModalOpen(true); }}><Eye className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setSelectedCase(caseItem); setGenerateDocModalOpen(true); }}><FileCog className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDetailModal(caseItem)}><Eye className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -321,42 +445,24 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           </Table>
         </CardContent>
       </Card>
-      
+
       {/* --- Modais --- */}
-      <CaseEditModal 
+      <CaseEditModal
         isOpen={isEditModalOpen}
         onClose={() => setEditModalOpen(false)}
         caseData={selectedCase}
         onSave={handleSaveCase}
       />
-      
       <CaseImportModal
           isOpen={isImportModalOpen}
           onClose={() => setImportModalOpen(false)}
           onImportSuccess={() => queryClient.invalidateQueries({ queryKey: ['cases'] })}
       />
-
-      {selectedCase && (
-        <GenerateDocumentModal
-          caseItem={selectedCase as Case}
-          isOpen={isGenerateDocModalOpen}
-          onClose={() => setGenerateDocModalOpen(false)}
-        />
-      )}
-      
-       {selectedCase && (
-        <Dialog open={isDetailModalOpen} onOpenChange={setDetailModalOpen}>
-            <DialogContent className="max-w-4xl">
-                 <DialogHeader>
-                    <DialogTitle>{selectedCase.title}</DialogTitle>
-                    <DialogDescription>{selectedCase.case_number}</DialogDescription>
-                 </DialogHeader>
-                 <pre className="mt-2 w-full rounded-md bg-slate-950 p-4 max-h-[60vh] overflow-auto">
-                    <code className="text-white">{JSON.stringify(selectedCase, null, 2)}</code>
-                 </pre>
-            </DialogContent>
-        </Dialog>
-       )}
+       <CaseDetailModal 
+        isOpen={isDetailModalOpen} 
+        onClose={() => setDetailModalOpen(false)} 
+        caseItem={selectedCase as Case} 
+       />
     </div>
   );
 }

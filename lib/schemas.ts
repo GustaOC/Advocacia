@@ -32,19 +32,24 @@ export const CaseSchema = z.object({
   case_number: z.string().max(100).optional().nullable(),
   title: z.string().min(3, "O título (Observação) é obrigatório.").max(255),
   description: z.string().optional().nullable(),
-  status: z.enum(['active', 'archived', 'suspended', 'completed']).default('active'),
+  main_status: z.enum(['Em andamento', 'Acordo', 'Extinto', 'Pago']).default('Em andamento'),
+  status_reason: z.string().optional().nullable(),
   court: z.string().max(255).optional().nullable(),
   priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
   // Campos para o novo formulário de criação
   client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
   executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
+  payment_date: z.string().optional().nullable(),
+  final_value: z.number().optional().nullable(),
 });
 
+
 // Ao atualizar um caso, não permitimos a troca das partes principais pelo formulário simples
-export const CaseUpdateSchema = CaseSchema.partial().omit({ 
-  client_entity_id: true, 
-  executed_entity_id: true 
+export const CaseUpdateSchema = CaseSchema.partial().omit({
+  client_entity_id: true,
+  executed_entity_id: true
 });
+
 
 // ... (o resto do arquivo permanece sem alterações)
 // =================================
@@ -72,7 +77,7 @@ export const PetitionSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
   title: z.string().min(3, "O título é obrigatório.").max(255),
   description: z.string().optional().nullable(),
-  file_path: z.string().min(1, "O caminho do arquivo é obrigatório."), 
+  file_path: z.string().min(1, "O caminho do arquivo é obrigatório."),
   deadline: z.string().optional().nullable(),
   status: z.enum(['pending', 'under_review', 'approved', 'corrections_needed', 'rejected']).default('pending'),
   created_by_employee_id: z.string().uuid("ID do criador inválido."),
