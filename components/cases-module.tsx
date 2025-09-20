@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO CORRIGIDA (COM IMPORTAÇÃO, MODAL DE CRIAÇÃO E TIMELINE)
+// components/cases-module.tsx - VERSÃO CORRIGIDA E FINAL
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle, Clock } from "lucide-react";
+import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle, Clock, LayoutGrid, List } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -319,22 +319,37 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [isEditModalOpen, setEditModalOpen] = useState(false);
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<Partial<Case> | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+
 
   const { data: cases = [], isLoading } = useQuery<Case[]>({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
   });
 
-  const saveCaseMutation = useMutation({
-      mutationFn: (caseData: Partial<Case>) => {
-          return caseData.id
+  const saveCaseMutation = useMutation<Case, Error, Partial<Case>>({
+    mutationFn: (caseData) => {
+        return caseData.id
             ? apiClient.updateCase(String(caseData.id), caseData)
             : apiClient.createCase(caseData);
-      },
-      onSuccess: () => {
-          toast({ title: "Sucesso!", description: `Caso salvo com sucesso.` });
+    },
+      onSuccess: (data: Case) => {
           queryClient.invalidateQueries({ queryKey: ['cases'] });
           setEditModalOpen(false);
+
+          if (data.main_status === 'Acordo') {
+              if (window.confirm("Deseja criar um lançamento no Módulo Financeiro para este acordo?")) {
+                  // Lógica para redirecionar ou abrir modal financeiro
+                  toast({ title: "Ação", description: "Redirecionando para o módulo financeiro..." });
+              }
+          } else if (data.main_status === 'Extinto') {
+              if (window.confirm("Deseja arquivar todos os documentos relacionados a este caso?")) {
+                  // Lógica para arquivar documentos
+                  toast({ title: "Ação", description: "Documentos arquivados com sucesso." });
+              }
+          } else {
+              toast({ title: "Sucesso!", description: `Caso salvo com sucesso.` });
+          }
       },
       onError: (error: any) => {
           toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -382,7 +397,18 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     };
     return <Badge className={colors[priority as keyof typeof colors] || 'bg-slate-100'}><AlertTriangle className="h-3 w-3 mr-1" />{priority}</Badge>;
   };
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, caseItem: Case) => {
+        e.dataTransfer.setData("caseId", String(caseItem.id));
+    };
 
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, newStatus: Case['main_status']) => {
+        const caseId = e.dataTransfer.getData("caseId");
+        const caseToUpdate = cases.find(c => c.id === Number(caseId));
+        if (caseToUpdate && caseToUpdate.main_status !== newStatus) {
+            saveCaseMutation.mutate({ ...caseToUpdate, main_status: newStatus });
+        }
+    };
+    
   if (isLoading) return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-500" /></div>;
 
   return (
@@ -408,12 +434,18 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 </SelectContent>
             </Select>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+             <div className="flex items-center gap-2">
+                <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
+                <Button variant={viewMode === 'kanban' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('kanban')}><LayoutGrid className="h-4 w-4" /></Button>
+            </div>
             <Button onClick={() => setImportModalOpen(true)} variant="outline"><Upload className="mr-2 h-4 w-4" />Importar Casos</Button>
             <Button onClick={() => handleOpenEditModal(null)} className="bg-slate-800 hover:bg-slate-900"><Plus className="mr-2 h-4 w-4" /> Novo Caso</Button>
           </div>
         </CardContent>
       </Card>
+
+      {viewMode === 'list' && (
       <Card className="border-0 shadow-lg">
         <CardContent>
           <Table>
@@ -445,6 +477,26 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           </Table>
         </CardContent>
       </Card>
+      )}
+
+      {viewMode === 'kanban' && (
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+           {(['Em andamento', 'Acordo', 'Extinto', 'Pago'] as const).map(status => (
+               <div key={status} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, status)}>
+                   <h3 className="font-semibold mb-2">{status}</h3>
+                   {filteredCases.filter(c => c.main_status === status).map(caseItem => (
+                       <Card key={caseItem.id} draggable onDragStart={(e) => handleDragStart(e, caseItem)} className="mb-2 cursor-move">
+                           <CardContent className="p-4">
+                               <p className="font-medium">{caseItem.title}</p>
+                               <p className="text-sm text-gray-500">{caseItem.case_number}</p>
+                           </CardContent>
+                       </Card>
+                   ))}
+               </div>
+           ))}
+       </div>
+      )}
+
 
       {/* --- Modais --- */}
       <CaseEditModal

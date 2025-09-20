@@ -15,7 +15,9 @@ import {
   LogOut,
   Settings,
   Scale,
-  FileCode // Novo ícone para Templates
+  FileCode, // Novo ícone para Templates
+  LayoutGrid, // Ícone para a visão Kanban
+  List // Ícone para a visão de Lista
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api-client"

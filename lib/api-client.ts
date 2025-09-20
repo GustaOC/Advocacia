@@ -14,6 +14,26 @@ interface UpdateEmployeeData {
   role_id?: number;
 }
 
+// Adicionando a interface Case para tipagem correta
+interface Case {
+  id: number;
+  case_number: string | null;
+  title: string;
+  main_status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+  status_reason: string | null;
+  value: number | null;
+  court: string | null;
+  created_at: string;
+  priority: 'Alta' | 'Média' | 'Baixa';
+  description?: string | null;
+  case_parties: { role: string; entities: { id: number; name: string; } }[];
+  client_entity_id?: number;
+  executed_entity_id?: number;
+  payment_date?: string | null;
+  final_value?: number | null;
+}
+
+
 export class ApiClient {
   /**
    * Método genérico para realizar requisições autenticadas.
@@ -63,10 +83,10 @@ export class ApiClient {
   async deleteEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`, { method: 'DELETE' }); }
 
   // MÓDULO DE CASOS/PROCESSOS
-  async getCases() { return this.authenticatedRequest<any[]>('/api/cases'); }
-  async getCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`); }
-  async createCase(caseData: any) { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
-  async updateCase(id: string, caseData: any) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
+  async getCases() { return this.authenticatedRequest<Case[]>('/api/cases'); }
+  async getCase(id: string): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`); }
+  async createCase(caseData: any): Promise<Case> { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
+  async updateCase(id: string, caseData: any): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
   async deleteCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'DELETE' }); }
   
   // MÓDULO FINANCEIRO
