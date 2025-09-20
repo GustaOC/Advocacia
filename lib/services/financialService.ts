@@ -1,4 +1,4 @@
-// lib/services/financialService.ts
+// lib/services/financialService.ts - VERSÃO CORRIGIDA
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AgreementSchema, AgreementUpdateSchema } from "@/lib/schemas";
@@ -9,7 +9,7 @@ import { AgreementSchema, AgreementUpdateSchema } from "@/lib/schemas";
 export async function getFinancialAgreements() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from("financial_agagreements")
+    .from("financial_agreements") // CORREÇÃO: Nome da tabela ajustado de "financial_agagreements" para "financial_agreements"
     .select(`
       *,
       cases (
@@ -39,7 +39,7 @@ export async function getFinancialAgreements() {
 export async function getFinancialAgreementById(id: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from("financial_agreements")
+    .from("financial_agreements") // CORREÇÃO: Nome da tabela ajustado
     .select(`
       *,
       cases (*),
@@ -67,7 +67,7 @@ export async function createFinancialAgreement(agreementData: unknown) {
   const supabase = createAdminClient();
   
   const { data, error } = await supabase
-    .from("financial_agreements")
+    .from("financial_agreements") // CORREÇÃO: Nome da tabela ajustado
     .insert(parsedData)
     .select()
     .single();
@@ -89,7 +89,7 @@ export async function updateFinancialAgreement(id: string, agreementData: unknow
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
-    .from("financial_agreements")
+    .from("financial_agreements") // CORREÇÃO: Nome da tabela ajustado
     .update(parsedData)
     .eq("id", id)
     .select()

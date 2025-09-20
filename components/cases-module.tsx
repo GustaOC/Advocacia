@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO FINAL COM KANBAN E AUTOMAÇÃO INTEGRADA
+// components/cases-module.tsx - VERSÃO COM INTEGRAÇÃO DO MODAL FINANCEIRO
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { FinancialAgreementModal } from "./financial-agreement-modal"; // Importando o novo modal
 
 // --- Tipagens ---
 interface Entity { id: number; name: string; }
@@ -332,6 +333,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [isDetailModalOpen, setDetailModalOpen] = useState(false);
   const [isEditModalOpen, setEditModalOpen] = useState(false);
   const [isImportModalOpen, setImportModalOpen] = useState(false);
+  const [isFinancialModalOpen, setFinancialModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<Partial<Case> | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [automationAction, setAutomationAction] = useState<AutomationAction>(null);
@@ -397,13 +399,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   };
   
   const handleConfirmFinancialAction = () => {
-    toast({
-        title: "Ação Inteligente",
-        description: "Redirecionando para o Módulo Financeiro para criar o lançamento..."
-    });
-    // Lógica para navegar para o módulo financeiro com dados do caso
-    // Ex: router.push(`/dashboard/financial?caseId=${automationAction?.caseData.id}`);
-    setAutomationAction(null);
+    setAutomationAction(null); // Fecha o AlertDialog de confirmação
+    setFinancialModalOpen(true); // Abre o Modal de criação de acordo
   }
   
   const handleConfirmArchiveAction = () => {
@@ -576,6 +573,12 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         isOpen={isDetailModalOpen} 
         onClose={() => setDetailModalOpen(false)} 
         caseItem={selectedCase as Case} 
+       />
+
+       <FinancialAgreementModal
+        isOpen={isFinancialModalOpen}
+        onClose={() => setFinancialModalOpen(false)}
+        caseData={automationAction?.type === 'create-financial' ? automationAction.caseData : null}
        />
 
         {/* --- Automation Modals --- */}
