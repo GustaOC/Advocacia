@@ -1,4 +1,4 @@
-// components/entities-module.tsx - VERSÃO CORRIGIDA E FINAL
+// components/entities-module.tsx - VERSÃO COM CORREÇÃO DE IMPORTAÇÃO
 "use client";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+// --- CORREÇÃO APLICADA AQUI ---
+import { Badge } from "@/components/ui/badge";
+// --- FIM DA CORREÇÃO ---
 import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
@@ -26,11 +29,14 @@ interface Client {
   city?: string;
 }
 
-// Modal de Importação específico para PLANILHAS de cadastro em massa.
-const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; }) => {
+// Modal de Importação REUTILIZÁVEL.
+const ImportModal = ({ isOpen, onClose, onImportSuccess, importType }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; importType: 'Cliente' | 'Executado' }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const { toast } = useToast();
+
+    const title = `Importar ${importType}s em Massa`;
+    const description = `Envie uma planilha (.xlsx ou .csv) para cadastrar múltiplos ${importType.toLowerCase()}s de uma vez.`;
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -47,9 +53,9 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
         setIsImporting(true);
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('type', importType);
 
         try {
-            // Chamada para a API de importação que criamos
             const response = await fetch('/api/entities/import', { method: 'POST', body: formData });
             const result = await response.json();
 
@@ -59,7 +65,7 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
 
             toast({
                 title: "Importação Concluída!",
-                description: `${result.successCount} clientes importados. ${result.errorCount > 0 ? `${result.errorCount} linhas com erros.` : ''}`
+                description: `${result.successCount} ${importType.toLowerCase()}s importados. ${result.errorCount > 0 ? `${result.errorCount} linhas com erros.` : ''}`
             });
             onImportSuccess();
             onClose();
@@ -75,10 +81,8 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Importar Clientes em Massa</DialogTitle>
-                    <DialogDescription>
-                        Envie uma planilha (.xlsx ou .csv) para cadastrar múltiplos clientes de uma vez.
-                    </DialogDescription>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <Label htmlFor="import-file">Arquivo de Planilha</Label>
@@ -106,7 +110,7 @@ export function EntitiesModule() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setModalOpen] = useState(false);
-  const [isImportModalOpen, setImportModalOpen] = useState(false);
+  const [importModal, setImportModal] = useState<{isOpen: boolean; type: 'Cliente' | 'Executado'}>({isOpen: false, type: 'Cliente'});
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentClient, setCurrentClient] = useState<Partial<Client>>({});
 
@@ -200,7 +204,7 @@ export function EntitiesModule() {
     <>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-          <h2 className="text-3xl font-bold mb-2">Gestão de Clientes</h2>
+          <h2 className="text-3xl font-bold mb-2">Gestão de Clientes e Partes</h2>
           <p className="text-slate-300 text-lg">Acesse a pasta virtual de cada cliente para ver processos e documentos.</p>
         </div>
         <Card className="border-0 shadow-lg">
@@ -215,11 +219,14 @@ export function EntitiesModule() {
               />
             </div>
              <div className="flex gap-2">
-                 <Button onClick={() => setImportModalOpen(true)} variant="outline" className="h-11">
+                 <Button onClick={() => setImportModal({isOpen: true, type: 'Cliente'})} variant="outline" className="h-11">
                     <Upload className="mr-2 h-4 w-4" /> Importar Clientes
                 </Button>
+                <Button onClick={() => setImportModal({isOpen: true, type: 'Executado'})} variant="outline" className="h-11">
+                    <Upload className="mr-2 h-4 w-4" /> Importar Executados
+                </Button>
                 <Button onClick={() => handleOpenModal()} className="h-11 bg-slate-800 hover:bg-slate-900">
-                <Plus className="mr-2 h-4 w-4" /> Novo Cliente
+                <Plus className="mr-2 h-4 w-4" /> Novo
                 </Button>
             </div>
           </CardContent>
@@ -229,12 +236,13 @@ export function EntitiesModule() {
             <Card className="border-0 shadow-lg">
             <CardContent>
                 <Table>
-                <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Documento</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Documento</TableHead><TableHead>Tipo</TableHead><TableHead>Email</TableHead><TableHead>Telefone</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                     {filteredClients.map((client) => (
                     <TableRow key={client.id} >
                         <TableCell className="font-medium cursor-pointer hover:text-blue-600" onClick={() => setSelectedClient(client)}>{client.name}</TableCell>
                         <TableCell className="font-mono cursor-pointer" onClick={() => setSelectedClient(client)}>{client.document}</TableCell>
+                        <TableCell><Badge variant={client.type === 'Cliente' ? 'default' : 'secondary'}>{client.type}</Badge></TableCell>
                         <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.email}</TableCell>
                         <TableCell className="cursor-pointer" onClick={() => setSelectedClient(client)}>{client.phone || '-'}</TableCell>
                         <TableCell className="text-right">
@@ -252,8 +260,8 @@ export function EntitiesModule() {
             <Card className="border-0 shadow-lg">
                 <CardContent className="text-center py-20 text-slate-500">
                     <User className="h-12 w-12 mx-auto mb-4 text-slate-400"/>
-                    <h3 className="text-xl font-semibold text-slate-800">Nenhum cliente encontrado</h3>
-                    <p className="mt-2">Use a busca para refinar ou adicione um novo cliente.</p>
+                    <h3 className="text-xl font-semibold text-slate-800">Nenhuma entidade encontrada</h3>
+                    <p className="mt-2">Use a busca para refinar ou adicione uma nova entidade.</p>
                 </CardContent>
             </Card>
         )}
@@ -262,7 +270,7 @@ export function EntitiesModule() {
       <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="bg-card">
             <DialogHeader>
-                <DialogTitle>{isEditMode ? "Editar Cliente" : "Novo Cliente"}</DialogTitle>
+                <DialogTitle>{isEditMode ? "Editar Entidade" : "Nova Entidade"}</DialogTitle>
                 <DialogDescription>Preencha os dados abaixo.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -287,15 +295,16 @@ export function EntitiesModule() {
                   className="bg-slate-800 text-white hover:bg-slate-900"
                 >
                     {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Salvar Cliente
+                    Salvar
                 </Button>
             </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      <ImportClientsModal 
-        isOpen={isImportModalOpen} 
-        onClose={() => setImportModalOpen(false)} 
+      <ImportModal 
+        isOpen={importModal.isOpen} 
+        importType={importModal.type}
+        onClose={() => setImportModal({isOpen: false, type: 'Cliente'})} 
         onImportSuccess={() => queryClient.invalidateQueries({ queryKey: ['entities'] })}
       />
     </>

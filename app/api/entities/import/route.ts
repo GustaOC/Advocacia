@@ -1,4 +1,4 @@
-// app/api/entities/import/route.ts
+// app/api/entities/import/route.ts - VERSÃO APRIMORADA
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import * as entityService from "@/lib/services/entityService";
@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     const user = await requirePermission("entities_create");
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    // --- MELHORIA APLICADA AQUI ---
+    // Pega o tipo do formulário, com 'Cliente' como padrão
+    const entityType = (formData.get("type") as string) || 'Cliente'; 
 
     if (!file) {
       return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
@@ -27,7 +30,6 @@ export async function POST(req: NextRequest) {
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "buffer" });
-
     const sheetName = workbook.SheetNames[0];
 
     if (!sheetName) {
@@ -36,12 +38,9 @@ export async function POST(req: NextRequest) {
     
     const sheet = workbook.Sheets[sheetName];
 
-    // --- CORREÇÃO DEFINITIVA APLICADA AQUI ---
-    // Verifica se o objeto da planilha é válido antes de usá-lo.
     if (!sheet) {
         return NextResponse.json({ error: `A planilha chamada '${sheetName}' não foi encontrada no arquivo.` }, { status: 400 });
     }
-    // --- FIM DA CORREÇÃO ---
 
     const data = XLSX.utils.sheet_to_json(sheet);
 
@@ -60,7 +59,9 @@ export async function POST(req: NextRequest) {
           phone: validatedRow.Telefone,
           address: validatedRow.Endereco,
           city: validatedRow.Cidade,
-          type: 'Cliente',
+          // --- MELHORIA APLICADA AQUI ---
+          // Usa o tipo recebido no formulário
+          type: entityType, 
         };
 
         await entityService.createEntity(entityData, user);
