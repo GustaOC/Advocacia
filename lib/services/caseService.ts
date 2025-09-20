@@ -1,5 +1,4 @@
-// lib/services/caseService.ts - VERSÃO FINAL CORRIGIDA E COMPLETA
-
+// lib/services/caseService.ts - VERSÃO ATUALIZADA E COMPLETA
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
@@ -35,9 +34,6 @@ export async function getCases() {
 
 /**
  * Busca um caso específico pelo ID, incluindo as partes associadas.
- * ✅ CORREÇÃO: A função agora recebe o ID como 'number' e o objeto 'user' para verificação de permissão.
- * @param id - O ID numérico do caso.
- * @param user - O usuário autenticado da sessão.
  */
 export async function getCaseById(id: number, user: AuthUser) {
   const supabase = createAdminClient();
@@ -53,17 +49,10 @@ export async function getCaseById(id: number, user: AuthUser) {
     `)
     .eq("id", id);
 
-  // Lógica de permissão: se o usuário não for admin, ele só pode ver o caso
-  // se estiver associado a ele (ex: como responsável).
-  // Esta linha é um exemplo e pode ser ajustada para sua regra de negócio.
-  // if (user.role !== 'admin') {
-  //   query.eq('responsible_id', user.id);
-  // }
-
   const { data, error } = await query.single();
 
   if (error) {
-    if (error.code === 'PGRST116') { // Nenhum caso encontrado
+    if (error.code === 'PGRST116') {
       return null;
     }
     console.error(`Erro ao buscar caso ${id}:`, error.message);
@@ -73,40 +62,61 @@ export async function getCaseById(id: number, user: AuthUser) {
 }
 
 /**
- * Cria um novo caso.
- * @param caseData - Os dados do novo caso.
+ * Cria um novo caso e associa as partes (cliente e executado).
+ * @param caseData - Os dados do novo caso, incluindo os IDs das entidades.
  * @param user - O usuário autenticado que está realizando a ação.
  */
 export async function createCase(caseData: unknown, user: AuthUser) {
-  const parsedData = CaseSchema.parse(caseData);
+  const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseSchema.parse(caseData);
+  
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase
+  // 1. Insere os dados principais na tabela 'cases'
+  const { data: newCase, error: caseError } = await supabase
     .from("cases")
-    .insert(parsedData)
+    .insert(restOfCaseData)
     .select()
     .single();
 
-  if (error) {
-    if (error.code === '23505') { // Violação de unicidade
+  if (caseError) {
+    console.error("Erro ao criar caso:", caseError.message);
+    if (caseError.code === '23505') {
       throw new Error("Já existe um caso com este número de processo.");
     }
-    console.error("Erro ao criar caso:", error.message);
     throw new Error("Não foi possível criar o caso.");
   }
 
-  // Log de auditoria
-  await logAudit('CASE_CREATE', user, { caseId: data.id, title: data.title });
+  // 2. Associa as partes na tabela 'case_parties'
+  const partiesToInsert = [
+    { case_id: newCase.id, entity_id: client_entity_id, role: 'Cliente' },
+    { case_id: newCase.id, entity_id: executed_entity_id, role: 'Executado' } // ou 'Parte Contrária'
+  ];
 
-  return data;
+  const { error: partiesError } = await supabase
+    .from('case_parties')
+    .insert(partiesToInsert);
+
+  if (partiesError) {
+    console.error(`ERRO CRÍTICO: Caso ${newCase.id} criado, mas falha ao associar partes. Fazendo rollback.`, partiesError.message);
+    await supabase.from('cases').delete().eq('id', newCase.id);
+    throw new Error("Não foi possível associar as partes ao caso. A operação foi desfeita.");
+  }
+
+  // Log de auditoria
+  await logAudit('CASE_CREATE', user, { caseId: newCase.id, title: newCase.title });
+
+  // Retorna o caso completo com os dados das partes para fácil atualização no frontend
+  const { data: createdCaseWithParties } = await supabase
+    .from("cases")
+    .select(`*, case_parties(role, entities(id, name))`)
+    .eq('id', newCase.id)
+    .single();
+    
+  return createdCaseWithParties;
 }
 
 /**
  * Atualiza um caso existente.
- * ✅ CORREÇÃO: A função agora recebe o ID como 'number' para consistência com o banco de dados.
- * @param id - O ID numérico do caso a ser atualizado.
- * @param caseData - Os novos dados para o caso.
- * @param user - O usuário autenticado que está realizando a ação.
  */
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
   const parsedData = CaseUpdateSchema.parse(caseData);

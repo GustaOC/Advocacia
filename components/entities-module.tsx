@@ -1,20 +1,18 @@
-// components/entities-module.tsx - VERSÃO COM IMPORTAÇÃO CORRIGIDA
+// components/entities-module.tsx - VERSÃO CORRIGIDA E FINAL
 "use client";
 import { useState, useMemo } from "react";
-// ...outras importações permanecem as mesmas
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
 import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
-import { apiClient } from "@/lib/api-client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
 
 // Tipagem para os dados do cliente
 interface Client {
@@ -28,8 +26,7 @@ interface Client {
   city?: string;
 }
 
-// --- MELHORIA APLICADA AQUI ---
-// Modal de Importação agora é específico para PLANILHAS de cadastro em massa.
+// Modal de Importação específico para PLANILHAS de cadastro em massa.
 const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -52,7 +49,7 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
         formData.append('file', file);
 
         try {
-            // Esta chamada agora está correta, pois a API espera uma planilha
+            // Chamada para a API de importação que criamos
             const response = await fetch('/api/entities/import', { method: 'POST', body: formData });
             const result = await response.json();
 
@@ -62,7 +59,7 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
 
             toast({
                 title: "Importação Concluída!",
-                description: `${result.successCount} clientes importados com sucesso. ${result.errorCount > 0 ? `${result.errorCount} linhas com erros.` : ''}`
+                description: `${result.successCount} clientes importados. ${result.errorCount > 0 ? `${result.errorCount} linhas com erros.` : ''}`
             });
             onImportSuccess();
             onClose();
@@ -70,7 +67,7 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
             toast({ title: "Erro na Importação", description: error.message, variant: "destructive" });
         } finally {
             setIsImporting(false);
-            setFile(null); // Limpa o arquivo após a tentativa
+            setFile(null);
         }
     };
 
@@ -102,8 +99,6 @@ const ImportClientsModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: bool
     );
 };
 
-
-// O restante do componente EntitiesModule permanece o mesmo que o anterior...
 export function EntitiesModule() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -122,9 +117,10 @@ export function EntitiesModule() {
 
   const saveMutation = useMutation({
     mutationFn: (clientData: Partial<Client>) => {
-      return clientData.id
-        ? apiClient.updateEntity(clientData.id, clientData)
-        : apiClient.createEntity(clientData);
+      const dataToSave = { ...clientData, type: clientData.type || 'Cliente' };
+      return dataToSave.id
+        ? apiClient.updateEntity(dataToSave.id, dataToSave)
+        : apiClient.createEntity(dataToSave);
     },
     onSuccess: () => {
       toast({ title: "Sucesso!", description: `Cliente ${isEditMode ? 'atualizado' : 'salvo'} com sucesso.` });
@@ -163,13 +159,7 @@ export function EntitiesModule() {
       toast({ title: "Campos obrigatórios", description: "Nome e Documento são obrigatórios.", variant: "destructive"});
       return;
     }
-    
-    const dataToSave = {
-      ...currentClient,
-      type: currentClient.type || 'Cliente',
-    };
-
-    saveMutation.mutate(dataToSave);
+    saveMutation.mutate(currentClient);
   };
   
   const handleDelete = (clientId: string) => {

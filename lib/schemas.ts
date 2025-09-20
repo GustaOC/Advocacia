@@ -1,4 +1,4 @@
-// lib/schemas.ts - VERSÃO CORRIGIDA
+// lib/schemas.ts - VERSÃO ATUALIZADA
 import { z } from "zod";
 
 // =================================
@@ -12,7 +12,6 @@ export const EntitySchema = z.object({
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
-  // ✅ CORREÇÃO: Adicionado o campo 'type', que é obrigatório no banco de dados.
   type: z.string().min(1, "O tipo é obrigatório."),
 });
 
@@ -24,13 +23,25 @@ export const EntityUpdateSchema = EntitySchema.partial();
 
 export const CaseSchema = z.object({
   case_number: z.string().max(100).optional().nullable(),
-  title: z.string().min(3, "O título deve ter pelo menos 3 caracteres.").max(255),
+  title: z.string().min(3, "O título (Observação) é obrigatório.").max(255),
   description: z.string().optional().nullable(),
   status: z.enum(['active', 'archived', 'suspended', 'completed']).default('active'),
   court: z.string().max(255).optional().nullable(),
+  priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
+  // Campos para o novo formulário de criação
+  client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
+  executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
 });
 
-export const CaseUpdateSchema = CaseSchema.partial();
+// Ao atualizar um caso, não permitimos a troca das partes principais pelo formulário simples
+export const CaseUpdateSchema = CaseSchema.partial().omit({ 
+  client_entity_id: true, 
+  executed_entity_id: true 
+});
+
+// =================================
+// AGREEMENT SCHEMAS
+// =================================
 
 export const AgreementSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
@@ -89,3 +100,4 @@ export const DocumentUploadSchema = z.object({
   ),
   description: z.string().optional(),
 });
+
