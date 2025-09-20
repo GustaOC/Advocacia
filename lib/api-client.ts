@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO COM MÉTODO DE ARQUIVAMENTO
+// lib/api-client.ts - VERSÃO CORRIGIDA COM O TIPO DE RETORNO CORRETO PARA getCases
 // Este arquivo centraliza todas as chamadas de API do frontend para o backend.
 
 // Tipos para os dados dos funcionários, para garantir a consistência
@@ -83,7 +83,11 @@ export class ApiClient {
   async deleteEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`, { method: 'DELETE' }); }
 
   // MÓDULO DE CASOS/PROCESSOS
-  async getCases() { return this.authenticatedRequest<Case[]>('/api/cases'); }
+  // ==> CORREÇÃO APLICADA AQUI <==
+  async getCases(): Promise<{ cases: Case[]; total: number }> {
+    return this.authenticatedRequest<{ cases: Case[]; total: number }>('/api/cases');
+  }
+  // ==> FIM DA CORREÇÃO <==
   async getCase(id: string): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`); }
   async createCase(caseData: any): Promise<Case> { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
   async updateCase(id: string, caseData: any): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }

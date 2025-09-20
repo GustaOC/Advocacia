@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO CORRIGIDA PARA LIDAR COM A RESPOSTA DA API PAGINADA
+// components/cases-module.tsx - VERSÃO FINAL CORRIGIDA
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -57,7 +57,6 @@ interface CaseHistoryEvent {
     new_status_reason: string | null;
     notes: string | null;
 }
-interface Template { id: number; title: string; }
 interface CasesModuleProps { initialFilters?: { status: string }; }
 
 type AutomationAction = {
@@ -67,7 +66,6 @@ type AutomationAction = {
 
 
 // --- Componentes de Modal ---
-
 const CaseImportModal = ({ isOpen, onClose, onImportSuccess }: { isOpen: boolean; onClose: () => void; onImportSuccess: () => void; }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -277,11 +275,12 @@ const CaseDetailModal = ({ caseItem, isOpen, onClose }: { caseItem: Case | null,
     const { data: history = [], isLoading } = useQuery<CaseHistoryEvent[]>({
         queryKey: ['caseHistory', caseItem?.id],
         queryFn: async () => {
-             const response = await fetch(`/api/cases/${caseItem!.id}/history`);
-             if (!response.ok) {
-                 throw new Error('Failed to fetch history');
-             }
-             return response.json();
+            if (!caseItem) return [];
+            const response = await fetch(`/api/cases/${caseItem.id}/history`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch history');
+            }
+            return response.json();
         },
         enabled: !!caseItem,
     });
@@ -338,16 +337,13 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [automationAction, setAutomationAction] = useState<AutomationAction>(null);
 
-  // ==> CORREÇÃO APLICADA AQUI <==
-  // A API agora retorna um objeto { cases: [], total: number }
   const { data, isLoading } = useQuery({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
   });
-  // Usamos data?.cases para acessar o array e fornecemos um array vazio como fallback
-  const cases: Case[] = data?.cases || []; 
-  // ==> FIM DA CORREÇÃO <==
-
+  
+  const cases: Case[] = data?.cases ?? [];
+  
   const saveCaseMutation = useMutation<Case, Error, Partial<Case>>({
     mutationFn: (caseData) => {
         return caseData.id
@@ -359,7 +355,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         setEditModalOpen(false);
         toast({ title: "Sucesso!", description: `Caso salvo com sucesso.` });
 
-        // Gatilho para Automação de Tarefas
         if (data.main_status === 'Acordo') {
             setAutomationAction({ type: 'create-financial', caseData: data });
         } else if (data.main_status === 'Extinto') {
@@ -387,6 +382,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     }
   });
 
+
   const handleOpenEditModal = (caseItem: Partial<Case> | null) => {
       setSelectedCase(caseItem);
       setEditModalOpen(true);
@@ -402,8 +398,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   };
   
   const handleConfirmFinancialAction = () => {
-    setAutomationAction(null); // Fecha o AlertDialog de confirmação
-    setFinancialModalOpen(true); // Abre o Modal de criação de acordo
+    setAutomationAction(null);
+    setFinancialModalOpen(true);
   }
   
   const handleConfirmArchiveAction = () => {
@@ -413,6 +409,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   }
 
   const filteredCases = useMemo(() => {
+    if (!cases) return [];
     return cases.filter(c => {
       const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = filterStatus === "all" || c.main_status === filterStatus;
