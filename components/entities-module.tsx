@@ -1,4 +1,4 @@
-// components/entities-module.tsx - VERSÃO CORRETA E COM FORMULÁRIO DETALHADO
+// components/entities-module.tsx - VERSÃO COM A CORREÇÃO DA IMPORTAÇÃO DO SELECT
 "use client";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
+// ==> CORREÇÃO APLICADA AQUI <==
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// ==> FIM DA CORREÇÃO <==
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
 import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
@@ -157,14 +160,14 @@ export function EntitiesModule() {
       setCurrentClient(client);
     } else {
       setIsEditMode(false);
-      setCurrentClient({});
+      setCurrentClient({ type: 'Cliente' }); // Define um tipo padrão ao criar
     }
     setModalOpen(true);
   };
 
   const handleSave = () => {
     if (!currentClient.name || !currentClient.document) {
-      toast({ title: "Campos obrigatórios", description: "Nome Completo e Cpf são obrigatórios.", variant: "destructive"});
+      toast({ title: "Campos obrigatórios", description: "Nome Completo e CPF/CNPJ são obrigatórios.", variant: "destructive"});
       return;
     }
     saveMutation.mutate(currentClient);
@@ -245,7 +248,6 @@ export function EntitiesModule() {
         )}
       </div>
       
-      {/* --- MODAL COM FORMULÁRIO DETALHADO --- */}
       <Dialog open={isModalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-3xl bg-card">
             <DialogHeader>
@@ -255,7 +257,7 @@ export function EntitiesModule() {
             <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Nome Completo*</Label><Input value={currentClient.name || ''} onChange={e => setCurrentClient({...currentClient, name: e.target.value})} /></div>
-                    <div className="space-y-2"><Label>Cpf*</Label><Input value={currentClient.document || ''} onChange={e => setCurrentClient({...currentClient, document: maskCPFCNPJ(e.target.value)})} /></div>
+                    <div className="space-y-2"><Label>CPF/CNPJ*</Label><Input value={currentClient.document || ''} onChange={e => setCurrentClient({...currentClient, document: maskCPFCNPJ(e.target.value)})} /></div>
                 </div>
                 <div className="grid grid-cols-12 gap-4 items-end">
                     <div className="col-span-8 space-y-2"><Label>Endereço</Label><Input value={currentClient.address || ''} onChange={e => setCurrentClient({...currentClient, address: e.target.value})} /></div>
@@ -264,18 +266,30 @@ export function EntitiesModule() {
                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2"><Label>Bairro</Label><Input value={currentClient.neighborhood || ''} onChange={e => setCurrentClient({...currentClient, neighborhood: e.target.value})} /></div>
                     <div className="space-y-2"><Label>Cidade</Label><Input value={currentClient.city || ''} onChange={e => setCurrentClient({...currentClient, city: e.target.value})} /></div>
-                    <div className="space-y-2"><Label>Cep</Label><Input value={currentClient.zip_code || ''} onChange={e => setCurrentClient({...currentClient, zip_code: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>CEP</Label><Input value={currentClient.zip_code || ''} onChange={e => setCurrentClient({...currentClient, zip_code: e.target.value })} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Celular 1</Label><Input value={currentClient.phone || ''} onChange={e => setCurrentClient({...currentClient, phone: maskPhone(e.target.value)})} /></div>
                     <div className="space-y-2"><Label>Celular 2</Label><Input value={currentClient.phone2 || ''} onChange={e => setCurrentClient({...currentClient, phone2: maskPhone(e.target.value)})} /></div>
+                </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Email</Label><Input type="email" value={currentClient.email || ''} onChange={e => setCurrentClient({...currentClient, email: e.target.value})} /></div>
+                    <div className="space-y-2"><Label>Tipo de Cadastro</Label>
+                        <Select value={currentClient.type || 'Cliente'} onValueChange={(value: 'Cliente' | 'Executado') => setCurrentClient(prev => ({...prev, type: value}))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Cliente">Cliente</SelectItem>
+                                <SelectItem value="Executado">Executado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
                 <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-slate-800 text-white hover:bg-slate-900">
                     {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Salvar
+                    {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
                 </Button>
             </DialogFooter>
         </DialogContent>

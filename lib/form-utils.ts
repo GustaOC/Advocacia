@@ -1,205 +1,126 @@
 // lib/form-utils.ts
-// Utilitários para máscaras e validações de formulários
+// Central de utilitários para máscaras, validações e formatações de formulários.
 
 /**
  * Aplica máscara de CPF: 000.000.000-00
+ * @param value A string a ser formatada.
  */
 export function maskCPF(value: string): string {
-  const numbers = value.replace(/\D/g, "")
-  
-  if (numbers.length <= 3) {
-    return numbers
-  } else if (numbers.length <= 6) {
-    return numbers.replace(/(\d{3})(\d{0,3})/, "$1.$2")
-  } else if (numbers.length <= 9) {
-    return numbers.replace(/(\d{3})(\d{3})(\d{0,3})/, "$1.$2.$3")
-  } else {
-    return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, "$1.$2.$3-$4").slice(0, 14)
-  }
+  if (!value) return "";
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+    .substring(0, 14);
 }
 
 /**
  * Aplica máscara de CNPJ: 00.000.000/0000-00
+ * @param value A string a ser formatada.
  */
 export function maskCNPJ(value: string): string {
-  const numbers = value.replace(/\D/g, "")
-  
-  if (numbers.length <= 2) {
-    return numbers
-  } else if (numbers.length <= 5) {
-    return numbers.replace(/(\d{2})(\d{0,3})/, "$1.$2")
-  } else if (numbers.length <= 8) {
-    return numbers.replace(/(\d{2})(\d{3})(\d{0,3})/, "$1.$2.$3")
-  } else if (numbers.length <= 12) {
-    return numbers.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, "$1.$2.$3/$4")
-  } else {
-    return numbers.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, "$1.$2.$3/$4-$5").slice(0, 18)
-  }
+  if (!value) return "";
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d)/, "$1-$2")
+    .substring(0, 18);
 }
 
 /**
- * Aplica máscara de CPF ou CNPJ automaticamente
+ * Aplica máscara de CPF ou CNPJ dinamicamente com base no comprimento.
+ * @param value A string a ser formatada.
  */
 export function maskCPFCNPJ(value: string): string {
-  const numbers = value.replace(/\D/g, "")
-  
-  if (numbers.length <= 11) {
-    return maskCPF(value)
-  } else {
-    return maskCNPJ(value)
+  if (!value) return "";
+  const numbersOnly = value.replace(/\D/g, "");
+  if (numbersOnly.length <= 11) {
+    return maskCPF(numbersOnly);
   }
+  return maskCNPJ(numbersOnly);
 }
 
 /**
  * Aplica máscara de telefone: (00) 0000-0000 ou (00) 00000-0000
+ * @param value A string a ser formatada.
  */
 export function maskPhone(value: string): string {
-  const numbers = value.replace(/\D/g, "")
-  
-  if (numbers.length <= 2) {
-    return numbers.length > 0 ? `(${numbers}` : ""
-  } else if (numbers.length <= 6) {
-    return numbers.replace(/(\d{2})(\d{0,4})/, "($1) $2")
-  } else if (numbers.length <= 10) {
-    return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3")
-  } else {
-    // Celular com 9 dígitos
-    return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").slice(0, 15)
+  if (!value) return "";
+  const numbersOnly = value.replace(/\D/g, "");
+  if (numbersOnly.length <= 10) {
+    return numbersOnly
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
   }
+  return numbersOnly
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2")
+    .substring(0, 15);
 }
 
 /**
- * Valida CPF
- */
-export function isValidCPF(cpf: string): boolean {
-  const numbers = cpf.replace(/\D/g, "")
-  
-  if (numbers.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(numbers)) return false
-  
-  let sum = 0
-  for (let i = 0; i < 9; i++) {
-    sum += parseInt(numbers[i]) * (10 - i)
-  }
-  let digit = ((sum * 10) % 11) % 10
-  if (digit !== parseInt(numbers[9])) return false
-  
-  sum = 0
-  for (let i = 0; i < 10; i++) {
-    sum += parseInt(numbers[i]) * (11 - i)
-  }
-  digit = ((sum * 10) % 11) % 10
-  if (digit !== parseInt(numbers[10])) return false
-  
-  return true
-}
-
-/**
- * Valida CNPJ
- */
-export function isValidCNPJ(cnpj: string): boolean {
-  const numbers = cnpj.replace(/\D/g, "")
-  
-  if (numbers.length !== 14) return false
-  if (/^(\d)\1{13}$/.test(numbers)) return false
-  
-  const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-  const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-  
-  let sum = 0
-  for (let i = 0; i < 12; i++) {
-    sum += parseInt(numbers[i]) * weights1[i]
-  }
-  let digit = sum % 11 < 2 ? 0 : 11 - (sum % 11)
-  if (digit !== parseInt(numbers[12])) return false
-  
-  sum = 0
-  for (let i = 0; i < 13; i++) {
-    sum += parseInt(numbers[i]) * weights2[i]
-  }
-  digit = sum % 11 < 2 ? 0 : 11 - (sum % 11)
-  if (digit !== parseInt(numbers[13])) return false
-  
-  return true
-}
-
-/**
- * Valida CPF ou CNPJ
- */
-export function isValidCPFCNPJ(value: string): boolean {
-  const numbers = value.replace(/\D/g, "")
-  
-  if (numbers.length === 11) {
-    return isValidCPF(value)
-  } else if (numbers.length === 14) {
-    return isValidCNPJ(value)
-  }
-  
-  return false
-}
-
-/**
- * Valida telefone (10 ou 11 dígitos)
- */
-export function isValidPhone(phone: string): boolean {
-  const numbers = phone.replace(/\D/g, "")
-  return numbers.length === 10 || numbers.length === 11
-}
-
-/**
- * Valida email
- */
-export function isValidEmail(email: string): boolean {
-  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return regex.test(email)
-}
-
-/**
- * Remove máscara e retorna apenas números
+ * Remove qualquer formatação, retornando apenas os números de uma string.
+ * @param value A string a ser limpa.
  */
 export function unmask(value: string): string {
-  return value.replace(/\D/g, "")
+  if (!value) return "";
+  return value.replace(/\D/g, "");
 }
 
 /**
- * Formata nome próprio (primeira letra maiúscula)
+ * Valida um CPF.
+ * @param cpf O CPF a ser validado (com ou sem máscara).
+ */
+export function isValidCPF(cpf: string): boolean {
+  const numbers = unmask(cpf);
+  if (numbers.length !== 11 || /^(\d)\1{10}$/.test(numbers)) {
+    return false;
+  }
+  let sum = 0;
+  let remainder;
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(numbers.substring(i - 1, i)) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) {
+    remainder = 0;
+  }
+  if (remainder !== parseInt(numbers.substring(9, 10))) {
+    return false;
+  }
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(numbers.substring(i - 1, i)) * (12 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) {
+    remainder = 0;
+  }
+  if (remainder !== parseInt(numbers.substring(10, 11))) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Formata um nome para o formato "Title Case", tratando preposições comuns.
+ * Ex: "joão da silva" -> "João da Silva"
+ * @param name O nome completo a ser formatado.
  */
 export function formatName(name: string): string {
+  if (!name) return "";
+  const lowercaseWords = ['de', 'da', 'do', 'dos', 'das', 'e'];
   return name
     .toLowerCase()
     .split(' ')
     .map(word => {
-      // Palavras que devem ficar em minúsculo
-      const lowercaseWords = ['de', 'da', 'do', 'dos', 'das', 'e']
       if (lowercaseWords.includes(word)) {
-        return word
+        return word;
       }
-      return word.charAt(0).toUpperCase() + word.slice(1)
+      return word.charAt(0).toUpperCase() + word.slice(1);
     })
-    .join(' ')
-}
-
-/**
- * Hook React para usar máscaras em inputs
- */
-export function useMask(type: 'cpf' | 'cnpj' | 'cpfcnpj' | 'phone') {
-  const maskFunctions = {
-    cpf: maskCPF,
-    cnpj: maskCNPJ,
-    cpfcnpj: maskCPFCNPJ,
-    phone: maskPhone,
-  }
-
-  const validationFunctions = {
-    cpf: isValidCPF,
-    cnpj: isValidCNPJ,
-    cpfcnpj: isValidCPFCNPJ,
-    phone: isValidPhone,
-  }
-
-  return {
-    mask: maskFunctions[type],
-    validate: validationFunctions[type],
-    unmask,
-  }
+    .join(' ');
 }

@@ -1,4 +1,4 @@
-// components/login-form.tsx - VERSÃO CORRIGIDA
+// components/login-form.tsx - VERSÃO COM MELHORIA DE ACESSIBILIDADE
 "use client"
 
 import { useState } from "react"
@@ -116,6 +116,7 @@ export default function LoginForm() {
                 required
                 className="h-12 border-slate-300 focus-visible:ring-slate-500 rounded-xl bg-white/60 backdrop-blur-sm pr-12"
               />
+              {/* ==> PASSO 10: ADICIONADO ARIA-LABEL <== */}
               <Button
                 type="button"
                 variant="ghost"
@@ -126,6 +127,7 @@ export default function LoginForm() {
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </Button>
+              {/* ==> FIM DO PASSO 10 <== */}
             </div>
           </div>
 

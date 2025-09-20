@@ -1,3 +1,4 @@
+// components/Header.tsx - VERSÃO COM MELHORIA DE ACESSIBILIDADE
 'use client'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -28,10 +29,11 @@ export default function Header() {
           <Button asChild className="hidden sm:inline-flex bg-primary text-primary-foreground shadow hover:bg-primary/90 transition-transform hover:scale-[1.02]">
             <Link href="/login">Área do Cliente</Link>
           </Button>
-          {/* ✅ CORREÇÃO: Adicionado aria-label para acessibilidade */}
+          {/* ==> PASSO 10: ADICIONADO ARIA-LABEL <== */}
           <Button variant="ghost" className="md:hidden p-2" aria-label="Abrir menu de navegação">
             <Menu className="h-6 w-6"/>
           </Button>
+          {/* ==> FIM DO PASSO 10 <== */}
         </div>
       </div>
     </header>
