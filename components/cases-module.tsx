@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO COM INTEGRAÇÃO DO MODAL FINANCEIRO
+// components/cases-module.tsx - VERSÃO CORRIGIDA PARA LIDAR COM A RESPOSTA DA API PAGINADA
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FinancialAgreementModal } from "./financial-agreement-modal"; // Importando o novo modal
+import { FinancialAgreementModal } from "./financial-agreement-modal";
 
 // --- Tipagens ---
 interface Entity { id: number; name: string; }
@@ -338,11 +338,15 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [automationAction, setAutomationAction] = useState<AutomationAction>(null);
 
-
-  const { data: cases = [], isLoading } = useQuery<Case[]>({
+  // ==> CORREÇÃO APLICADA AQUI <==
+  // A API agora retorna um objeto { cases: [], total: number }
+  const { data, isLoading } = useQuery({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
   });
+  // Usamos data?.cases para acessar o array e fornecemos um array vazio como fallback
+  const cases: Case[] = data?.cases || []; 
+  // ==> FIM DA CORREÇÃO <==
 
   const saveCaseMutation = useMutation<Case, Error, Partial<Case>>({
     mutationFn: (caseData) => {
@@ -382,7 +386,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         setAutomationAction(null);
     }
   });
-
 
   const handleOpenEditModal = (caseItem: Partial<Case> | null) => {
       setSelectedCase(caseItem);

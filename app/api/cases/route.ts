@@ -1,20 +1,31 @@
-// app/api/cases/route.ts - VERSÃO DE PRODUÇÃO COM PERMISSÕES
+// app/api/cases/route.ts - VERSÃO COM PAGINAÇÃO
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth";
 import * as caseService from "@/lib/services/caseService";
+import { CaseSchema } from "@/lib/schemas";
+import { validateAndParseBody, apiError, apiSuccess } from "@/lib/api-helpers";
 
-// GET: Listar todos os casos
+// GET: Listar todos os casos com paginação
 export async function GET(req: NextRequest) {
   try {
     await requirePermission("cases_view");
-    const cases = await caseService.getCases();
-    return NextResponse.json(cases);
+    
+    // ==> PASSO 5: LENDO PARÂMETROS DE PAGINAÇÃO DA REQUISIÇÃO
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "10");
+    // ==> FIM DO PASSO 5
+
+    const { data, count } = await caseService.getCases(page, limit);
+    
+    // Retorna os dados e a contagem total para o frontend
+    return apiSuccess({ cases: data, total: count });
   } catch (error: any) {
     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      return apiError("Acesso negado.", 403);
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error.message || "Erro interno do servidor.");
   }
 }
 
@@ -22,22 +33,21 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requirePermission("cases_create");
-    const body = await req.json();
-    const newCase = await caseService.createCase(body, user);
-    return NextResponse.json(newCase, { status: 201 });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Dados inválidos.", issues: error.errors },
-        { status: 400 }
-      );
+    
+    const { data: body, error: validationError } = await validateAndParseBody(req, CaseSchema);
+    if (validationError) {
+      return validationError;
     }
+
+    const newCase = await caseService.createCase(body, user);
+    return apiSuccess(newCase, 201);
+  } catch (error: any) {
     if (error.message.includes("Já existe")) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return apiError(error.message, 409);
     }
     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      return apiError("Acesso negado.", 403);
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiError(error.message || "Erro interno do servidor.");
   }
 }

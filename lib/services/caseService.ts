@@ -1,4 +1,4 @@
-// lib/services/caseService.ts - VERSÃO ATUALIZADA E COMPLETA
+// lib/services/caseService.ts - VERSÃO COM PAGINAÇÃO
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
@@ -6,11 +6,17 @@ import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
 
 /**
- * Busca todos os casos, incluindo as partes (entidades) associadas.
+ * Busca casos com paginação, incluindo as partes (entidades) associadas.
+ * @param page - O número da página a ser buscada.
+ * @param limit - O número de itens por página.
  */
-export async function getCases() {
+export async function getCases(page: number = 1, limit: number = 10) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  // ==> PASSO 5: ADICIONANDO PAGINAÇÃO E CONTAGEM TOTAL
+  const { data, error, count } = await supabase
     .from("cases")
     .select(`
       *,
@@ -22,23 +28,24 @@ export async function getCases() {
           document
         )
       )
-    `)
-    .order("created_at", { ascending: false });
+    `, { count: "exact" }) // Solicita a contagem total de registros
+    .order("created_at", { ascending: false })
+    .range(from, to); // Aplica a paginação
+  // ==> FIM DO PASSO 5
 
   if (error) {
     console.error("Erro ao buscar casos:", error.message);
     throw new Error("Não foi possível buscar os casos.");
   }
-  return data;
+  return { data: data || [], count: count || 0 };
 }
 
 /**
  * Busca um caso específico pelo ID, incluindo as partes associadas.
  */
-export async function getCaseById(id: number) {
+export async function getCaseById(id: string) {
   const supabase = createAdminClient();
-
-  const query = supabase
+  const { data, error } = await supabase
     .from("cases")
     .select(`
       *,
@@ -47,9 +54,8 @@ export async function getCaseById(id: number) {
         entities (*)
       )
     `)
-    .eq("id", id);
-
-  const { data, error } = await query.single();
+    .eq("id", id)
+    .single();
 
   if (error) {
     if (error.code === 'PGRST116') {
@@ -65,71 +71,67 @@ export async function getCaseById(id: number) {
  * Cria um novo caso e associa as partes (cliente e executado).
  */
 export async function createCase(caseData: unknown, user: AuthUser) {
-  const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseSchema.parse(caseData);
+    // ... (restante da função permanece inalterado)
+    const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseSchema.parse(caseData);
 
-  const supabase = createAdminClient();
+    const supabase = createAdminClient();
 
-  // 1. Insere os dados principais na tabela 'cases'
-  const { data: newCase, error: caseError } = await supabase
-    .from("cases")
-    .insert(restOfCaseData)
-    .select()
-    .single();
-
-  if (caseError) {
-    console.error("Erro ao criar caso:", caseError.message);
-    if (caseError.code === '23505') {
-      throw new Error("Já existe um caso com este número de processo.");
+    const { data: newCase, error: caseError } = await supabase
+      .from("cases")
+      .insert(restOfCaseData)
+      .select()
+      .single();
+  
+    if (caseError) {
+      console.error("Erro ao criar caso:", caseError.message);
+      if (caseError.code === '23505') {
+        throw new Error("Já existe um caso com este número de processo.");
+      }
+      throw new Error("Não foi possível criar o caso.");
     }
-    throw new Error("Não foi possível criar o caso.");
-  }
 
-  // 2. Associa as partes na tabela 'case_parties'
-  const partiesToInsert = [
-    { case_id: newCase.id, entity_id: client_entity_id, role: 'Cliente' },
-    { case_id: newCase.id, entity_id: executed_entity_id, role: 'Executado' } // ou 'Parte Contrária'
-  ];
+    const partiesToInsert = [
+      { case_id: newCase.id, entity_id: client_entity_id, role: 'Cliente' },
+      { case_id: newCase.id, entity_id: executed_entity_id, role: 'Executado' }
+    ];
+  
+    const { error: partiesError } = await supabase
+      .from('case_parties')
+      .insert(partiesToInsert);
+  
+    if (partiesError) {
+      console.error(`ERRO CRÍTICO: Caso ${newCase.id} criado, mas falha ao associar partes. Fazendo rollback.`, partiesError.message);
+      await supabase.from('cases').delete().eq('id', newCase.id);
+      throw new Error("Não foi possível associar as partes ao caso. A operação foi desfeita.");
+    }
+  
+    await logAudit('CASE_CREATE', user, { caseId: newCase.id, title: newCase.title });
+    await supabase.from('case_status_history').insert({
+      case_id: newCase.id,
+      new_main_status: newCase.main_status,
+      new_status_reason: newCase.status_reason,
+      changed_by_user_id: user.id,
+      changed_by_user_email: user.email,
+      notes: 'Caso criado no sistema.'
+    });
 
-  const { error: partiesError } = await supabase
-    .from('case_parties')
-    .insert(partiesToInsert);
-
-  if (partiesError) {
-    console.error(`ERRO CRÍTICO: Caso ${newCase.id} criado, mas falha ao associar partes. Fazendo rollback.`, partiesError.message);
-    await supabase.from('cases').delete().eq('id', newCase.id);
-    throw new Error("Não foi possível associar as partes ao caso. A operação foi desfeita.");
-  }
-
-  // 3. Log de auditoria e histórico inicial
-  await logAudit('CASE_CREATE', user, { caseId: newCase.id, title: newCase.title });
-  await supabase.from('case_status_history').insert({
-    case_id: newCase.id,
-    new_main_status: newCase.main_status,
-    new_status_reason: newCase.status_reason,
-    changed_by_user_id: user.id,
-    changed_by_user_email: user.email,
-    notes: 'Caso criado no sistema.'
-  });
-
-
-  // Retorna o caso completo com os dados das partes para fácil atualização no frontend
-  const { data: createdCaseWithParties } = await supabase
-    .from("cases")
-    .select(`*, case_parties(role, entities(id, name))`)
-    .eq('id', newCase.id)
-    .single();
-
-  return createdCaseWithParties;
+    const { data: createdCaseWithParties } = await supabase
+      .from("cases")
+      .select(`*, case_parties(role, entities(id, name))`)
+      .eq('id', newCase.id)
+      .single();
+  
+    return createdCaseWithParties;
 }
 
 /**
- * Atualiza um caso existente e registra a mudança de status no histórico.
+ * Atualiza um caso existente.
  */
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
+    // ... (restante da função permanece inalterado)
     const parsedData = CaseUpdateSchema.parse(caseData);
     const supabase = createAdminClient();
 
-    // 1. Busca o estado atual do caso antes de atualizar
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
         .select("main_status, status_reason")
@@ -141,7 +143,6 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         throw new Error("Não foi possível encontrar o caso para atualização.");
     }
 
-    // 2. Atualiza o caso
     const { data: updatedCase, error: updateError } = await supabase
         .from("cases")
         .update(parsedData)
@@ -153,8 +154,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         console.error(`Erro ao atualizar caso ${id}:`, updateError.message);
         throw new Error("Não foi possível atualizar o caso.");
     }
-
-    // 3. Verifica se o status mudou e, se sim, registra no histórico
+    
     const statusChanged = currentCase.main_status !== updatedCase.main_status || currentCase.status_reason !== updatedCase.status_reason;
 
     if (statusChanged) {
@@ -169,7 +169,6 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         });
     }
 
-    // 4. Log de auditoria
     await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
 
     return updatedCase;
@@ -179,6 +178,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
  * Busca o histórico de status de um caso.
  */
 export async function getCaseHistory(caseId: number) {
+    // ... (restante da função permanece inalterado)
     const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("case_status_history")

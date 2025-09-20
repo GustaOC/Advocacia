@@ -1,0 +1,54 @@
+# .github/workflows/ci.yml - Workflow de Integração Contínua
+
+name: Node.js CI
+
+on:
+  # Dispara o workflow em pushes para o branch principal
+  push:
+    branches: [ "main" ]
+  # Dispara o workflow em pull requests direcionados ao branch principal
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # O tipo de máquina que o job irá rodar
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Faz o checkout do seu repositório para que o workflow possa acessá-lo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configura o ambiente pnpm para gerenciar as dependências
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8 # Certifique-se que esta é a versão do pnpm usada no seu projeto
+
+      # 3. Configura o ambiente Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18 # Use a versão do Node.js especificada no seu package.json
+          cache: 'pnpm'
+
+      # 4. Instala as dependências do projeto
+      - name: Install dependencies
+        run: pnpm install
+
+      # 5. Roda o linter para verificar a formatação e os padrões do código
+      - name: Run linter
+        run: pnpm lint
+
+      # 6. Roda o compilador do TypeScript para checar erros de tipo
+      - name: Run type check
+        run: pnpm typecheck
+
+      # 7. Roda o build do projeto para garantir que ele compila sem erros
+      - name: Build project
+        run: pnpm build
+      
+      # 8. Roda os testes (atualmente comentado, será ativado no Passo 6)
+      # - name: Run tests
+      #   run: pnpm test

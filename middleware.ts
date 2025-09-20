@@ -1,4 +1,4 @@
-// middleware.ts - VERSÃO CORRIGIDA E SEGURA
+// middleware.ts - VERSÃO COM HEADERS DE SEGURANÇA ROBUSTOS
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -35,14 +35,33 @@ function isPublic(pathname: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const res = NextResponse.next();
+
+  // ==> PASSO 1: IMPLEMENTAÇÃO DOS HEADERS DE SEGURANÇA
+  const cspHeader = `
+    default-src 'self';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob: i.postimg.cc;
+    font-src 'self';
+    connect-src 'self' https://*.supabase.co;
+    frame-ancestors 'none';
+    form-action 'self';
+  `.replace(/\s{2,}/g, " ").trim();
+
+  res.headers.set("Content-Security-Policy", cspHeader);
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  res.headers.set("Referrer-Policy", "origin-when-cross-origin");
+  // ==> FIM DO PASSO 1
 
   // Se a rota for pública, permite o acesso sem verificar a sessão
   if (isPublic(pathname)) {
-    return NextResponse.next();
+    return res;
   }
 
   try {
-    const res = NextResponse.next();
     const supabase = createSupabaseServerClient(req, res);
     
     // Verifica se há um usuário na sessão

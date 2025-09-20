@@ -28,7 +28,9 @@
       ]
     },
     "noImplicitAny": true,
+    // ==> PASSO 4: REGRA MAIS RÍGIDA ADICIONADA
     "noUncheckedIndexedAccess": true,
+    // ==> FIM DO PASSO 4
     "forceConsistentCasingInFileNames": true
   },
   "include": [
