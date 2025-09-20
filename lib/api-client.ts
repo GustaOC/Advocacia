@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO CORRIGIDA E COMPLETA
+// lib/api-client.ts - VERSÃO COM MÉTODO DE ARQUIVAMENTO
 // Este arquivo centraliza todas as chamadas de API do frontend para o backend.
 
 // Tipos para os dados dos funcionários, para garantir a consistência
@@ -88,7 +88,9 @@ export class ApiClient {
   async createCase(caseData: any): Promise<Case> { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
   async updateCase(id: string, caseData: any): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
   async deleteCase(id: string) { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'DELETE' }); }
-  
+  async archiveCaseDocuments(id: string) { return this.authenticatedRequest(`/api/cases/${id}/archive`, { method: 'PUT' }); }
+
+
   // MÓDULO FINANCEIRO
   async getFinancialAgreements() { return this.authenticatedRequest('/api/financial-agreements'); }
   async createFinancialAgreement(agreementData: any) { return this.authenticatedRequest('/api/financial-agreements', { method: 'POST', body: JSON.stringify(agreementData) }); }

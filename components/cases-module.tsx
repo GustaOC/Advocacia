@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO CORRIGIDA E FINAL
+// components/cases-module.tsx - VERSÃO FINAL COM KANBAN E AUTOMAÇÃO INTEGRADA
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -9,10 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle, Clock, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, FileCog, Upload, FileUp, AlertTriangle, Clock, LayoutGrid, List, DollarSign, Archive } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -24,7 +34,7 @@ interface Entity { id: number; name: string; }
 interface Case {
   id: number;
   case_number: string | null;
-  title: string; // Este campo é a "Observação"
+  title: string;
   main_status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
   status_reason: string | null;
   value: number | null;
@@ -38,7 +48,6 @@ interface Case {
   payment_date?: string | null;
   final_value?: number | null;
 }
-// Nova tipagem para o evento do histórico
 interface CaseHistoryEvent {
     id: number;
     changed_at: string;
@@ -49,6 +58,12 @@ interface CaseHistoryEvent {
 }
 interface Template { id: number; title: string; }
 interface CasesModuleProps { initialFilters?: { status: string }; }
+
+type AutomationAction = {
+    type: 'create-financial' | 'archive-documents';
+    caseData: Case;
+} | null;
+
 
 // --- Componentes de Modal ---
 
@@ -148,8 +163,7 @@ const CaseEditModal = ({ isOpen, onClose, caseData, onSave }: { isOpen: boolean;
         }
         onSave(formData);
     };
-    
-    // O modal agora lida tanto com criação quanto com edição de forma unificada
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[600px]">
@@ -320,6 +334,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<Partial<Case> | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [automationAction, setAutomationAction] = useState<AutomationAction>(null);
 
 
   const { data: cases = [], isLoading } = useQuery<Case[]>({
@@ -333,28 +348,39 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
             ? apiClient.updateCase(String(caseData.id), caseData)
             : apiClient.createCase(caseData);
     },
-      onSuccess: (data: Case) => {
-          queryClient.invalidateQueries({ queryKey: ['cases'] });
-          setEditModalOpen(false);
+    onSuccess: (data) => {
+        queryClient.invalidateQueries({ queryKey: ['cases'] });
+        setEditModalOpen(false);
+        toast({ title: "Sucesso!", description: `Caso salvo com sucesso.` });
 
-          if (data.main_status === 'Acordo') {
-              if (window.confirm("Deseja criar um lançamento no Módulo Financeiro para este acordo?")) {
-                  // Lógica para redirecionar ou abrir modal financeiro
-                  toast({ title: "Ação", description: "Redirecionando para o módulo financeiro..." });
-              }
-          } else if (data.main_status === 'Extinto') {
-              if (window.confirm("Deseja arquivar todos os documentos relacionados a este caso?")) {
-                  // Lógica para arquivar documentos
-                  toast({ title: "Ação", description: "Documentos arquivados com sucesso." });
-              }
-          } else {
-              toast({ title: "Sucesso!", description: `Caso salvo com sucesso.` });
-          }
-      },
-      onError: (error: any) => {
-          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-      }
+        // Gatilho para Automação de Tarefas
+        if (data.main_status === 'Acordo') {
+            setAutomationAction({ type: 'create-financial', caseData: data });
+        } else if (data.main_status === 'Extinto') {
+            setAutomationAction({ type: 'archive-documents', caseData: data });
+        }
+    },
+    onError: (error: any) => {
+        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    }
   });
+
+  const archiveMutation = useMutation({
+    mutationFn: (caseId: string) => apiClient.archiveCaseDocuments(caseId),
+    onSuccess: () => {
+        toast({
+            title: "Ação Concluída",
+            description: "Os documentos do caso foram arquivados com sucesso."
+        });
+    },
+    onError: (error: any) => {
+        toast({ title: "Erro ao arquivar", description: error.message, variant: "destructive" });
+    },
+    onSettled: () => {
+        setAutomationAction(null);
+    }
+  });
+
 
   const handleOpenEditModal = (caseItem: Partial<Case> | null) => {
       setSelectedCase(caseItem);
@@ -369,6 +395,22 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const handleSaveCase = (data: Partial<Case>) => {
       saveCaseMutation.mutate(data);
   };
+  
+  const handleConfirmFinancialAction = () => {
+    toast({
+        title: "Ação Inteligente",
+        description: "Redirecionando para o Módulo Financeiro para criar o lançamento..."
+    });
+    // Lógica para navegar para o módulo financeiro com dados do caso
+    // Ex: router.push(`/dashboard/financial?caseId=${automationAction?.caseData.id}`);
+    setAutomationAction(null);
+  }
+  
+  const handleConfirmArchiveAction = () => {
+      if (automationAction?.caseData.id) {
+          archiveMutation.mutate(String(automationAction.caseData.id));
+      }
+  }
 
   const filteredCases = useMemo(() => {
     return cases.filter(c => {
@@ -480,21 +522,41 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       )}
 
       {viewMode === 'kanban' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-           {(['Em andamento', 'Acordo', 'Extinto', 'Pago'] as const).map(status => (
-               <div key={status} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, status)}>
-                   <h3 className="font-semibold mb-2">{status}</h3>
-                   {filteredCases.filter(c => c.main_status === status).map(caseItem => (
-                       <Card key={caseItem.id} draggable onDragStart={(e) => handleDragStart(e, caseItem)} className="mb-2 cursor-move">
-                           <CardContent className="p-4">
-                               <p className="font-medium">{caseItem.title}</p>
-                               <p className="text-sm text-gray-500">{caseItem.case_number}</p>
-                           </CardContent>
-                       </Card>
-                   ))}
-               </div>
-           ))}
-       </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {(['Em andamento', 'Acordo', 'Extinto', 'Pago'] as const).map(status => (
+            <div
+              key={status}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, status)}
+              className="bg-slate-100 rounded-lg p-4 space-y-4 min-h-[400px]"
+            >
+              <h3 className="font-semibold text-slate-800 text-lg px-2">{status}</h3>
+              {filteredCases
+                .filter(c => c.main_status === status)
+                .map(caseItem => (
+                  <div
+                    key={caseItem.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, caseItem)}
+                    className="cursor-move"
+                  >
+                    <Card className="bg-white hover:shadow-lg transition-shadow">
+                      <CardContent className="p-4">
+                        <p className="font-semibold text-slate-900">{caseItem.title}</p>
+                        <p className="text-sm text-slate-500 font-mono mt-2">{caseItem.case_number}</p>
+                        <div className="mt-4 flex justify-between items-center">
+                          {getPriorityBadge(caseItem.priority)}
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenDetailModal(caseItem)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+            </div>
+          ))}
+        </div>
       )}
 
 
@@ -515,6 +577,43 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         onClose={() => setDetailModalOpen(false)} 
         caseItem={selectedCase as Case} 
        />
+
+        {/* --- Automation Modals --- */}
+        <AlertDialog open={automationAction?.type === 'create-financial'} onOpenChange={() => setAutomationAction(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-green-600" />Ação Sugerida: Lançamento Financeiro</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        O status do caso foi alterado para "Acordo". Deseja criar um novo lançamento no Módulo Financeiro para este acordo?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Depois</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleConfirmFinancialAction}>Sim, criar lançamento</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={automationAction?.type === 'archive-documents'} onOpenChange={() => setAutomationAction(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center"><Archive className="mr-2 h-5 w-5 text-gray-600" />Ação Sugerida: Arquivar Documentos</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        O status do caso foi alterado para "Extinto". Deseja arquivar todos os documentos digitais vinculados a este caso para liberar espaço e organizar o sistema?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Depois</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={handleConfirmArchiveAction}
+                        disabled={archiveMutation.isPending}
+                    >
+                        {archiveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Sim, arquivar tudo
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }
