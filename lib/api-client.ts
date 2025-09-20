@@ -47,7 +47,6 @@ export class ApiClient {
       throw new Error(errorMessage);
     }
 
-    // Retorna um objeto vazio se a resposta não tiver corpo (ex: status 204)
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.indexOf("application/json") !== -1) {
       return response.json();
@@ -76,11 +75,8 @@ export class ApiClient {
 
   // MÓDULO DE FUNCIONÁRIOS (EMPLOYEES)
   async getEmployees() { return this.authenticatedRequest<any[]>('/api/employees'); }
-  // ✅ ADICIONADO: Método para criar funcionário
   async createEmployee(employeeData: EmployeeData) { return this.authenticatedRequest('/api/employees', { method: 'POST', body: JSON.stringify(employeeData) }); }
-  // ✅ ADICIONADO: Método para atualizar funcionário
   async updateEmployee(id: number, employeeData: UpdateEmployeeData) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) }); }
-  // ✅ ADICIONADO: Método para deletar funcionário
   async deleteEmployee(id: number) { return this.authenticatedRequest(`/api/employees/${id}`, { method: 'DELETE' }); }
 
   // MÓDULO DE AUTENTICAÇÃO E PERFIS
@@ -96,17 +92,17 @@ export class ApiClient {
       }
     }
   }
-  // ✅ ADICIONADO: Método para definir/atualizar a senha do usuário
   async setPassword(data: { code: string; password?: string; }) { return this.authenticatedRequest('/api/auth/set-password', { method: 'POST', body: JSON.stringify(data) }); }
 
   // MÓDULO DE PETIÇÕES (PETITIONS)
-  // ✅ ADICIONADO: Método para buscar petições
   async getPetitions() { return this.authenticatedRequest<any[]>('/api/petitions'); }
 
+  // --- NOVO MÓDULO DE NOTIFICAÇÕES ---
+  async getNotifications(userId: string) { return this.authenticatedRequest<{ notifications: any[] }>(`/api/notifications?user_id=${userId}`); }
+  async getUnreadNotificationCount(userId: string) { return this.authenticatedRequest<{ count: number }>(`/api/notifications/count?user_id=${userId}`); }
+
   // MÓDULO DE CARGOS E PERMISSÕES (ROLES & PERMISSIONS)
-  // ✅ ADICIONADO: Método para buscar cargos
   async getRoles() { return this.authenticatedRequest<any[]>('/api/roles'); }
-  // ✅ ADICIONADO: Método para buscar permissões
   async getPermissions() { return this.authenticatedRequest<any[]>('/api/permissions'); }
 
   // MÓDULO DE TEMPLATES DE DOCUMENTOS
@@ -116,9 +112,6 @@ export class ApiClient {
   async updateTemplate(id: number, templateData: any) { return this.authenticatedRequest(`/api/document-templates/${id}`, { method: 'PUT', body: JSON.stringify(templateData) }); }
   async deleteTemplate(id: number) { return this.authenticatedRequest(`/api/document-templates/${id}`, { method: 'DELETE' }); }
   
-  /**
-   * Gera um documento a partir de um template e um caso.
-   */
   async generateDocument(templateId: number, caseId: number) {
     return this.authenticatedRequest<{ generatedContent: string, documentTitle: string }>('/api/document-templates/generate', {
       method: 'POST',
@@ -127,5 +120,4 @@ export class ApiClient {
   }
 }
 
-// Exporta uma instância única para ser usada em toda a aplicação
 export const apiClient = new ApiClient();

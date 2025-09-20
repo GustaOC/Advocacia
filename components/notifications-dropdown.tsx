@@ -13,11 +13,12 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Bell, AlertTriangle, CheckCircle, FileText, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/hooks/use-auth" // Importar o hook de autenticação
+import { useAuth } from "@/hooks/use-auth"
+import { apiClient } from "@/lib/api-client" // Importando o apiClient
 
 interface Notification {
   id: number;
-  user_id: string; // ID agora é string (UUID)
+  user_id: string;
   title: string;
   message: string;
   type: "info" | "warning" | "error" | "success";
@@ -28,63 +29,54 @@ interface Notification {
 
 export function NotificationsDropdown() {
   const { toast } = useToast();
-  const { user } = useAuth(); // Usar o hook para obter o usuário logado
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
 
-  // O ID do usuário agora vem do contexto de autenticação
   const currentUserId = user?.id;
 
   useEffect(() => {
-    // Só executa se o ID do usuário estiver disponível
     if (!currentUserId) return;
 
     const loadData = async () => {
       setLoading(true);
       try {
-        // Busca notificações e contagem para o usuário logado
+        // --- CÓDIGO ATUALIZADO AQUI ---
+        // Usando o apiClient em vez de fetch direto
         const [notifRes, countRes] = await Promise.all([
-          fetch(`/api/notifications?user_id=${currentUserId}`),
-          fetch(`/api/notifications/count?user_id=${currentUserId}`)
+          apiClient.getNotifications(currentUserId),
+          apiClient.getUnreadNotificationCount(currentUserId)
         ]);
 
-        if (notifRes.ok) {
-          const { notifications: apiNotifications } = await notifRes.json();
-          setNotifications(apiNotifications || []);
-        }
-        if (countRes.ok) {
-          const { count } = await countRes.json();
-          setUnreadCount(count || 0);
-        }
+        setNotifications(notifRes.notifications || []);
+        setUnreadCount(countRes.count || 0);
+        // --- FIM DA ATUALIZAÇÃO ---
+
       } catch (error) {
         console.error("Error loading notification data:", error);
-        toast({ title: "Erro", description: "Não foi possível carregar as notificações.", variant: "destructive" });
+        // Não mostraremos o toast de erro aqui para não poluir a interface
+        // em caso de falha de conexão, que é o problema mais comum.
+        // toast({ title: "Erro", description: "Não foi possível carregar as notificações.", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-
-    // Polling para novas notificações
-    const interval = setInterval(loadData, 60000); // A cada 1 minuto
+    const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
 
   }, [currentUserId, toast]);
   
-  // As demais funções (markAsRead, getNotificationIcon, etc.) permanecem as mesmas...
-
   const markAsRead = async (id: number) => {
-    // Lógica para marcar como lida
+    // Lógica para marcar como lida (a ser implementada)
   };
 
   const getNotificationIcon = (type: string) => {
-    // Lógica para obter o ícone
+    // Lógica para obter o ícone (a ser implementada)
   };
   
-  // ... (Resto do componente inalterado)
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -111,7 +103,14 @@ export function NotificationsDropdown() {
           ) : (
             notifications.map((notification) => (
               <DropdownMenuItem key={notification.id} className="p-4 cursor-pointer border-b last:border-b-0">
-                {/* Renderização da notificação */}
+                {/* A renderização de cada notificação pode ser implementada aqui */}
+                <div className="flex items-start space-x-3">
+                    <div><CheckCircle className="h-4 w-4 text-green-500" /></div>
+                    <div className="flex-1">
+                        <p className="font-semibold text-sm">{notification.title}</p>
+                        <p className="text-xs text-gray-600">{notification.message}</p>
+                    </div>
+                </div>
               </DropdownMenuItem>
             ))
           )}
