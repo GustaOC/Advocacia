@@ -1,4 +1,4 @@
-// lib/schemas.ts - VERSÃO ATUALIZADA
+// lib/schemas.ts - VERSÃO COM CAMPOS DE ENDEREÇO DETALHADOS
 import { z } from "zod";
 
 // =================================
@@ -7,11 +7,18 @@ import { z } from "zod";
 
 export const EntitySchema = z.object({
   name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres.").max(255),
-  document: z.string().max(20).optional().nullable(),
+  document: z.string().max(20).optional().nullable(), // Cpf
   email: z.string().email("Email inválido.").optional().nullable(),
-  phone: z.string().max(20).optional().nullable(),
+  // Endereço detalhado
   address: z.string().max(500).optional().nullable(),
+  address_number: z.string().max(20).optional().nullable(),
+  neighborhood: z.string().max(100).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
+  zip_code: z.string().max(20).optional().nullable(),
+  // Contato
+  phone: z.string().max(20).optional().nullable(), // Celular 1
+  phone2: z.string().max(20).optional().nullable(), // Celular 2
+  // Tipo
   type: z.string().min(1, "O tipo é obrigatório."),
 });
 
@@ -39,6 +46,7 @@ export const CaseUpdateSchema = CaseSchema.partial().omit({
   executed_entity_id: true 
 });
 
+// ... (o resto do arquivo permanece sem alterações)
 // =================================
 // AGREEMENT SCHEMAS
 // =================================
@@ -100,4 +108,3 @@ export const DocumentUploadSchema = z.object({
   ),
   description: z.string().optional(),
 });
-
