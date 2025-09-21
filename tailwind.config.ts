@@ -1,20 +1,35 @@
-import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss"
 
-const config: Config = {
+const config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
   ],
+  prefix: "",
   theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
     extend: {
-      // ✅ Adicionando a nova família de fontes 'serif' e removendo 'cursive'
       fontFamily: {
-        sans: ['var(--font-sans)'],
-        heading: ['var(--font-heading)'],
-        serif: ['var(--font-serif)'],
+        'display': ['var(--font-display)', 'system-ui', 'sans-serif'],
+        'body': ['var(--font-body)', 'system-ui', 'sans-serif'],
+        'mono': ['"JetBrains Mono"', 'monospace']
+      },
+      fontSize: {
+        'display-xl': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
+        'display-lg': ['2.25rem', { lineHeight: '1.2', letterSpacing: '-0.01em' }],
+        'title': ['1.5rem', { lineHeight: '1.3', fontWeight: '600' }],
+        'subtitle': ['1.125rem', { lineHeight: '1.4', fontWeight: '500' }],
+        'body': ['1rem', { lineHeight: '1.6' }],
+        'caption': ['0.875rem', { lineHeight: '1.5' }],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -22,11 +37,6 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        brand: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-          700: "hsl(var(--secondary))",
-        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -55,10 +65,26 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        gold: {
+          50: "hsl(var(--gold-50))",
+          100: "hsl(var(--gold-100))",
+          400: "hsl(var(--gold-400))",
+          500: "hsl(var(--gold-500))",
+          600: "hsl(var(--gold-600))",
+        },
+        slate: {
+          50: "hsl(var(--slate-50))",
+          100: "hsl(var(--slate-100))",
+          900: "hsl(var(--slate-900))",
+        },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        danger: "hsl(var(--danger))",
+        info: "hsl(var(--info))",
       },
       borderRadius: {
-        lg: "var(--radius-lg)",
-        md: "calc(var(--radius))",
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
@@ -77,11 +103,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [
-    require("tailwindcss-animate"),
-    require("@tailwindcss/forms"),
-    require("@tailwindcss/typography"),
-    require("@tailwindcss/aspect-ratio"),
-  ],
-};
-export default config;
+  plugins: [require("tailwindcss-animate")],
+} satisfies Config
+
+export default config

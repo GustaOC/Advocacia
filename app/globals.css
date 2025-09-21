@@ -16,7 +16,7 @@
     --secondary-foreground: 0 0% 100%;
     --muted: 220 9% 45%;
     --muted-foreground: 220 6% 80%;
-    --accent: 40 56% 51%;
+    --accent: 45 93% 58%;
     --accent-foreground: 210 78% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
@@ -25,13 +25,33 @@
     --ring: 210 78% 10%;
     --radius: 0.75rem;
     --radius-lg: 1rem;
+    
+    /* Cores personalizadas para advocacia */
+    --brand: 210 78% 10%;
+    --brand-700: 210 78% 8%;
+    --brand-foreground: 0 0% 100%;
   }
 
   .dark {
-    /* Implementação do Dark Mode (a ser ativada posteriormente) */
     --background: 215 16% 12%;
     --foreground: 0 0% 98%;
-    /* ...outras variáveis dark... */
+    --card: 215 16% 15%;
+    --card-foreground: 0 0% 98%;
+    --popover: 215 16% 15%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 210 78% 15%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 208 66% 20%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 9% 25%;
+    --muted-foreground: 220 6% 60%;
+    --accent: 45 93% 58%;
+    --accent-foreground: 210 78% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214.3 31.8% 20%;
+    --input: 214.3 31.8% 20%;
+    --ring: 210 78% 15%;
   }
 }
 
@@ -39,22 +59,244 @@
   * {
     @apply border-border;
   }
+  
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   
-  /* ✅ CORREÇÃO: Estilo de foco aprimorado para acessibilidade */
+  /* Smooth scrolling para links de âncora */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Estilo de foco aprimorado para acessibilidade */
   :focus-visible {
     outline: 2px solid hsl(var(--accent));
     outline-offset: 2px;
     border-radius: var(--radius);
   }
+  
+  /* Melhorias na tipografia */
+  h1, h2, h3, h4, h5, h6 {
+    font-feature-settings: "ss01", "ss02", "cv01", "cv03";
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Animações suaves */
+  * {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
 }
 
 @layer components {
-  /* Contêiner customizado para manter o layout centralizado */
+  /* Classes customizadas para a landing page */
   .container-custom {
-    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* Gradiente de texto personalizado */
+  .text-gradient {
+    @apply bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 bg-clip-text text-transparent;
+  }
+  
+  /* Botão com efeito hover especial */
+  .btn-primary-custom {
+    @apply bg-gradient-to-r from-accent to-yellow-400 text-slate-900 font-semibold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300;
+  }
+  
+  /* Card com efeito glassmorphism */
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl;
+  }
+  
+  /* Animação de entrada suave */
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+  
+  /* Hero section com overlay */
+  .hero-overlay {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.8) 100%);
+  }
+  
+  /* Pattern de fundo sutil */
+  .bg-pattern {
+    background-image: 
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
+  
+  /* Efeito de blur no scroll (opcional) */
+  .backdrop-blur-nav {
+    backdrop-filter: blur(16px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.8);
+  }
+  
+  /* Animação de loading personalizada */
+  .loading-dots {
+    display: inline-block;
+    position: relative;
+    width: 40px;
+    height: 10px;
+  }
+  
+  .loading-dots div {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: hsl(var(--accent));
+    animation-timing-function: cubic-bezier(0, 1, 1, 0);
+  }
+  
+  .loading-dots div:nth-child(1) {
+    left: 0;
+    animation: loading-dots1 0.6s infinite;
+  }
+  
+  .loading-dots div:nth-child(2) {
+    left: 0;
+    animation: loading-dots2 0.6s infinite;
+  }
+  
+  .loading-dots div:nth-child(3) {
+    left: 16px;
+    animation: loading-dots2 0.6s infinite;
+  }
+  
+  .loading-dots div:nth-child(4) {
+    left: 32px;
+    animation: loading-dots3 0.6s infinite;
+  }
+}
+
+@layer utilities {
+  /* Utilities customizados */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .font-feature-default {
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1;
+  }
+  
+  /* Shadows customizados */
+  .shadow-brand {
+    box-shadow: 0 10px 25px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+  }
+  
+  .shadow-brand-lg {
+    box-shadow: 0 20px 40px -8px rgba(15, 23, 42, 0.15), 0 8px 16px -4px rgba(15, 23, 42, 0.1);
+  }
+  
+  /* Backgrounds com gradientes */
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-700)) 100%);
+  }
+  
+  .bg-gradient-accent {
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, #f59e0b 100%);
+  }
+  
+  /* Efeitos de hover */
+  .hover-lift {
+    @apply transform transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+  }
+  
+  .hover-scale {
+    @apply transform transition-all duration-300 hover:scale-105;
+  }
+}
+
+/* Keyframes para animações */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loading-dots1 {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes loading-dots3 {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+@keyframes loading-dots2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(16px, 0);
+  }
+}
+
+/* Estilos para dispositivos móveis */
+@media (max-width: 768px) {
+  .container-custom {
+    @apply px-4;
+  }
+  
+  /* Ajustes de tipografia mobile */
+  h1 {
+    @apply text-3xl leading-tight;
+  }
+  
+  h2 {
+    @apply text-2xl leading-tight;
+  }
+  
+  /* Stack de botões em mobile */
+  .btn-stack-mobile {
+    @apply flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4;
+  }
+}
+
+/* Estilos para impressão */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    @apply text-black bg-white;
+  }
+}
+
+/* Melhorias de acessibilidade */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --accent: 45 100% 50%;
+    --foreground: 0 0% 0%;
+    --background: 0 0% 100%;
   }
 }

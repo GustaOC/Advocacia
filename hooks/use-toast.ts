@@ -2,11 +2,22 @@
 
 // Inspired by react-hot-toast library
 import * as React from "react"
+import type { VariantProps } from "class-variance-authority"
 
 import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+
+// Adicionamos a variante 'success' aqui
+const toastVariants = {
+  default: "default",
+  destructive: "destructive",
+  success: "success",
+} as const;
+
+type ToastVariant = VariantProps<typeof import("@/components/ui/toast").toastVariants>["variant"];
+
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -16,6 +27,7 @@ type ToasterToast = ToastProps & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  variant?: ToastVariant
 }
 
 const actionTypes = {
@@ -92,9 +104,6 @@ export const reducer = (state: State, action: Action): State => {
 
     case "DISMISS_TOAST": {
       const { toastId } = action
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-// ✅ Importando a nova fonte 'Lora' e removendo a 'Dancing_Script'
-import { Lato, Poppins, Lora } from 'next/font/google'
+import { Lato, Poppins } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -9,22 +8,14 @@ import { Toaster } from "@/components/ui/toaster"
 const lato = Lato({
   subsets: ['latin'],
   weight: ['400', '700'],
-  variable: '--font-sans',
+  variable: '--font-body',
   display: 'swap',
 });
 
 const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['700', '800'],
-  variable: '--font-heading',
-  display: 'swap',
-});
-
-// ✅ Configurando a nova fonte serifada para destaque
-const lora = Lora({
-  subsets: ['latin'],
-  style: ['normal', 'italic'],
-  variable: '--font-serif',
+  weight: ['600', '700'],
+  variable: '--font-display',
   display: 'swap',
 });
 
@@ -39,7 +30,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#06213a',
+  themeColor: '#0f1724',
 }
 
 export default function RootLayout({
@@ -48,8 +39,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // ✅ Adicionando a variável da nova fonte ao HTML
-    <html lang="pt-BR" className={`${lato.variable} ${poppins.variable} ${lora.variable} scroll-smooth`}>
+    <html lang="pt-BR" className={`${lato.variable} ${poppins.variable} scroll-smooth`}>
       <body className="bg-background text-foreground">
         <Header />
         <main>{children}</main>
