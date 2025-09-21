@@ -1,9 +1,9 @@
-// components/Header.tsx - VERSÃO MELHORADA
+// components/Header.tsx - VERSÃO CORRIGIDA
 'use client'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
-import { Menu, X, Phone, MessageCircle, ChevronDown } from 'lucide-react'
+import { Menu, X, Phone, MessageCircle } from 'lucide-react'
 import { Button } from './ui/button'
 
 export default function Header() {
@@ -37,27 +37,27 @@ export default function Header() {
 
   return (
     <>
-      <header 
+      <header
         className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-          isScrolled 
-            ? 'bg-white/95 backdrop-blur-xl border-b border-slate-200/50 shadow-lg' 
+          isScrolled
+            ? 'bg-white/95 backdrop-blur-xl border-b border-slate-200/50 shadow-lg'
             : 'bg-transparent'
         }`}
       >
         <div className="container-custom">
           <div className="flex h-20 items-center justify-between">
             {/* Logo */}
-            <Link 
-              href="/" 
-              className="flex items-center gap-3 group" 
+            <Link
+              href="/"
+              className="flex items-center gap-3 group"
               aria-label="Página Inicial Cássio Miguel Advocacia"
             >
               <div className="relative w-44 h-12 transition-transform group-hover:scale-105">
-                <Image 
-                  src="/logo.png" 
-                  alt="Cássio Miguel Advocacia Logo" 
-                  fill 
-                  className="object-contain" 
+                <Image
+                  src="/logo.png"
+                  alt="Cássio Miguel Advocacia Logo"
+                  fill
+                  className="object-contain"
                   priority
                 />
               </div>
@@ -66,9 +66,9 @@ export default function Header() {
             {/* Menu Desktop */}
             <nav className="hidden lg:flex items-center gap-8">
               {menuItems.map((item) => (
-                <Link 
+                <Link
                   key={item.href}
-                  href={item.href} 
+                  href={item.href}
                   className={`font-medium transition-colors hover:text-accent relative group ${
                     isScrolled ? 'text-slate-700' : 'text-white'
                   }`}
@@ -81,13 +81,13 @@ export default function Header() {
 
             {/* Botões de Ação Desktop */}
             <div className="hidden lg:flex items-center gap-3">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={handleCall}
                 className={`${
-                  isScrolled 
-                    ? 'text-slate-700 hover:text-accent hover:bg-accent/10' 
+                  isScrolled
+                    ? 'text-slate-700 hover:text-accent hover:bg-accent/10'
                     : 'text-white hover:text-accent hover:bg-white/10'
                 } transition-colors`}
               >
@@ -95,27 +95,20 @@ export default function Header() {
                 (67) 99644-9627
               </Button>
               
-              <Button 
-                onClick={handleWhatsApp}
-                className="bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                WhatsApp
-              </Button>
-              
-              <Button 
-                asChild 
-                className="bg-accent hover:bg-accent/90 text-slate-900 font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
+              <Button
+                asChild
+                className="font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
+                style={{ backgroundColor: '#1e293b', color: 'white' }}
               >
                 <Link href="/login">
-                  Área do Cliente
+                  Área administrativa
                 </Link>
               </Button>
             </div>
 
             {/* Botão Menu Mobile */}
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               className={`lg:hidden p-2 ${
                 isScrolled ? 'text-slate-700' : 'text-white'
               }`}
@@ -129,21 +122,21 @@ export default function Header() {
       </header>
 
       {/* Menu Mobile */}
-      <div 
+      <div
         className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ${
-          isMenuOpen 
-            ? 'opacity-100 pointer-events-auto' 
+          isMenuOpen
+            ? 'opacity-100 pointer-events-auto'
             : 'opacity-0 pointer-events-none'
         }`}
       >
         {/* Overlay */}
-        <div 
+        <div
           className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
           onClick={toggleMenu}
         ></div>
         
         {/* Menu Content */}
-        <div 
+        <div
           className={`absolute top-0 right-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl transform transition-transform duration-300 ${
             isMenuOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
@@ -152,11 +145,11 @@ export default function Header() {
             {/* Header do Menu */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div className="relative w-36 h-10">
-                <Image 
-                  src="/logo.png" 
-                  alt="Cássio Miguel Advocacia" 
-                  fill 
-                  className="object-contain" 
+                <Image
+                  src="/logo.png"
+                  alt="Cássio Miguel Advocacia"
+                  fill
+                  className="object-contain"
                 />
               </div>
               <Button variant="ghost" size="sm" onClick={toggleMenu}>
@@ -168,9 +161,9 @@ export default function Header() {
             <nav className="flex-1 px-6 py-8">
               <div className="space-y-6">
                 {menuItems.map((item) => (
-                  <Link 
+                  <Link
                     key={item.href}
-                    href={item.href} 
+                    href={item.href}
                     className="block text-lg font-medium text-slate-700 hover:text-accent transition-colors py-2"
                     onClick={toggleMenu}
                   >
@@ -184,7 +177,7 @@ export default function Header() {
                 <div className="space-y-4">
                   <h3 className="font-semibold text-slate-900">Contato Direto</h3>
                   
-                  <button 
+                  <button
                     onClick={() => {handleCall(); toggleMenu();}}
                     className="flex items-center w-full text-left text-slate-700 hover:text-accent transition-colors py-2"
                   >
@@ -195,7 +188,7 @@ export default function Header() {
                     </div>
                   </button>
                   
-                  <button 
+                  <button
                     onClick={() => {handleWhatsApp(); toggleMenu();}}
                     className="flex items-center w-full text-left text-green-600 hover:text-green-700 transition-colors py-2"
                   >
@@ -211,12 +204,13 @@ export default function Header() {
             
             {/* Footer do Menu */}
             <div className="p-6 border-t border-slate-200 space-y-3">
-              <Button 
-                asChild 
-                className="w-full bg-accent hover:bg-accent/90 text-slate-900 font-semibold"
+              <Button
+                asChild
+                className="w-full font-semibold"
+                style={{ backgroundColor: '#1e293b', color: 'white' }}
               >
                 <Link href="/login" onClick={toggleMenu}>
-                  Área do Cliente
+                  Área administrativa
                 </Link>
               </Button>
               

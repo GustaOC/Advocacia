@@ -1,8 +1,7 @@
+// app/layout.tsx
 import type { Metadata, Viewport } from 'next'
 import { Lato, Poppins } from 'next/font/google'
 import './globals.css'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
 import { Toaster } from "@/components/ui/toaster"
 
 const lato = Lato({
@@ -41,9 +40,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`${lato.variable} ${poppins.variable} scroll-smooth`}>
       <body className="bg-background text-foreground">
-        <Header />
         <main>{children}</main>
-        <Footer />
         <Toaster />
       </body>
     </html>

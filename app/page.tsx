@@ -1,8 +1,11 @@
+// app/page.tsx
 'use client'
 
 import Image from "next/image"
 import Link from "next/link"
 import { Briefcase, MessageCircle, Scale, ShieldCheck, Users, Star, Award, CheckCircle, Phone, Mail, MapPin, Clock, ArrowRight, Quote } from "lucide-react"
+import Header from "@/components/Header" // <-- Adicionado
+import Footer from "@/components/Footer" // <-- Adicionado
 import ContactForm from "@/components/ContactForm"
 import AnimatedSection from "@/components/AnimatedSection"
 import { Card, CardContent } from "@/components/ui/card"
@@ -19,8 +22,8 @@ function HeroModern() {
         <AnimatedSection delay={0.1}>
           <div className="space-y-8 text-center lg:text-left text-white">
             {/* Badge de Destaque */}
-            <div className="inline-flex items-center px-4 py-2 bg-accent/20 border border-accent/30 rounded-full text-sm font-medium" style={{color: '#1e293b'}}>
-              <Award className="w-4 h-4 mr-2" style={{color: '#1e293b'}} />
+            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium" style={{ backgroundColor: '#1e293b', color: 'white' }}>
+              <Award className="w-4 h-4 mr-2" style={{ color: 'white' }} />
               Mais de 15 anos de experiência
             </div>
             
@@ -442,11 +445,13 @@ function ContactSection() {
 export default function HomePage() {
   return (
     <>
+      <Header />
       <HeroModern />
       <AboutSection />
       <ServicesSection />
       <TestimonialsSection />
       <ContactSection />
+      <Footer />
     </>
   )
 }
