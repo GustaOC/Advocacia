@@ -1,4 +1,4 @@
-// components/dashboard.tsx - VERSÃO MODERNA E SOFISTICADA
+// components/dashboard.tsx - VERSÃO COM SIDEBAR RETRÁTIL
 "use client"
 
 import { useState, useCallback, ReactNode } from "react"
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import {
   Users, FileText, DollarSign, Calendar, CheckSquare, BarChart2,
   Briefcase, LogOut, Settings, Scale, FileCode, Bell, TrendingUp,
-  Activity, AlertCircle, Clock, Star
+  Activity, AlertCircle, Clock, Star, Menu, ChevronLeft, ChevronRight
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -130,24 +130,45 @@ function RecentActivity() {
 }
 
 function ModernLayout({ children, activeTab, setActiveTab, handleLogout, onUserSettings, onSystemSettings }: ModernLayoutProps) {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const activeItem = menuItems.find(item => item.value === activeTab);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">
-            {/* Sidebar Moderna */}
-            <aside className="fixed left-0 top-0 h-screen w-72 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white shadow-2xl z-50 flex flex-col">
+            {/* Sidebar Retrátil */}
+            <aside className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white shadow-2xl z-50 transition-all duration-300 ${
+                isCollapsed ? 'w-20' : 'w-72'
+            } ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+                
+                {/* Toggle Button - Desktop */}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="hidden lg:flex absolute -right-3 top-6 bg-white text-slate-900 hover:bg-slate-100 shadow-lg rounded-full h-6 w-6 border-2 border-slate-200 z-10"
+                >
+                    {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+                </Button>
+
                 {/* Logo Header */}
                 <div className="flex-shrink-0 p-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-700">
                     <div className="flex items-center justify-center">
-                        <div className="relative w-40 h-12">
-                           <Image 
-                             src="/logo.png" 
-                             alt="Cássio Miguel Advocacia" 
-                             fill 
-                             className="object-contain brightness-0 invert"
-                             priority 
-                           />
-                        </div>
+                        {!isCollapsed ? (
+                            <div className="relative w-40 h-12">
+                                <Image 
+                                    src="/logo.png" 
+                                    alt="Cássio Miguel Advocacia" 
+                                    fill 
+                                    className="object-contain brightness-0 invert"
+                                    priority 
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                                <Scale className="w-5 h-5 text-slate-900" />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -157,14 +178,18 @@ function ModernLayout({ children, activeTab, setActiveTab, handleLogout, onUserS
                         {menuItems.map(item => (
                             <button
                                 key={item.value}
-                                onClick={() => setActiveTab(item.value)}
-                                className={`w-full group relative overflow-hidden rounded-xl transition-all duration-300
-                                    ${activeTab === item.value
-                                        ? "bg-gradient-to-r from-slate-700 to-slate-600 text-white shadow-lg scale-105"
-                                        : "text-slate-300 hover:bg-slate-700/50 hover:text-white hover:scale-102"
-                                    }`}
+                                onClick={() => {
+                                    setActiveTab(item.value);
+                                    setIsMobileMenuOpen(false);
+                                }}
+                                className={`w-full group relative overflow-hidden rounded-xl transition-all duration-300 ${
+                                    activeTab === item.value
+                                        ? "bg-gradient-to-r from-slate-700 to-slate-600 text-white shadow-lg"
+                                        : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
+                                } ${isCollapsed ? 'p-3' : 'p-4'}`}
+                                title={isCollapsed ? item.label : undefined}
                             >
-                                <div className="flex items-start gap-4 p-4 relative z-10">
+                                <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-4'}`}>
                                     <div className={`p-2 rounded-lg transition-all duration-300 ${
                                         activeTab === item.value 
                                             ? "bg-white/20 text-white" 
@@ -172,16 +197,18 @@ function ModernLayout({ children, activeTab, setActiveTab, handleLogout, onUserS
                                     }`}>
                                         <item.icon className="w-5 h-5" />
                                     </div>
-                                    <div className="text-left flex-1">
-                                        <div className="font-semibold text-sm">{item.label}</div>
-                                        <div className={`text-xs mt-1 transition-colors ${
-                                            activeTab === item.value 
-                                                ? "text-slate-200" 
-                                                : "text-slate-400 group-hover:text-slate-300"
-                                        }`}>
-                                            {item.description}
+                                    {!isCollapsed && (
+                                        <div className="text-left flex-1">
+                                            <div className="font-semibold text-sm">{item.label}</div>
+                                            <div className={`text-xs mt-1 transition-colors ${
+                                                activeTab === item.value 
+                                                    ? "text-slate-200" 
+                                                    : "text-slate-400 group-hover:text-slate-300"
+                                            }`}>
+                                                {item.description}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                                 
                                 {/* Active indicator */}
@@ -194,29 +221,62 @@ function ModernLayout({ children, activeTab, setActiveTab, handleLogout, onUserS
                 </nav>
 
                 {/* User Profile Section */}
-                <div className="flex-shrink-0 p-4 border-t border-slate-700/50 bg-slate-800/50">
-                    <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-700/30">
-                        <Avatar className="ring-2 ring-slate-600">
-                            <AvatarFallback className="bg-slate-600 text-white font-bold">CM</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                            <div className="font-semibold text-sm">Dr. Cássio Miguel</div>
-                            <div className="text-xs text-slate-400">OAB/MS 12.345</div>
-                        </div>
-                        <div className="flex space-x-1">
-                            {[...Array(5)].map((_, i) => (
-                                <Star key={i} className="w-3 h-3 text-yellow-400 fill-current" />
-                            ))}
+                {!isCollapsed && (
+                    <div className="flex-shrink-0 p-4 border-t border-slate-700/50 bg-slate-800/50">
+                        <div className="flex items-center space-x-3 p-3 rounded-lg bg-slate-700/30">
+                            <Avatar className="ring-2 ring-slate-600 w-8 h-8">
+                                <AvatarFallback className="bg-slate-600 text-white font-bold text-xs">CM</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                                <div className="font-semibold text-sm">Dr. Cássio Miguel</div>
+                                <div className="text-xs text-slate-400">OAB/MS 12.345</div>
+                            </div>
+                            <div className="flex space-x-1">
+                                {[...Array(5)].map((_, i) => (
+                                    <Star key={i} className="w-3 h-3 text-yellow-400 fill-current" />
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {/* User compact quando collapsed */}
+                {isCollapsed && (
+                    <div className="flex-shrink-0 p-4 border-t border-slate-700/50 bg-slate-800/50">
+                        <div className="flex justify-center">
+                            <Avatar className="ring-2 ring-slate-600 w-8 h-8">
+                                <AvatarFallback className="bg-slate-600 text-white font-bold text-xs">CM</AvatarFallback>
+                            </Avatar>
+                        </div>
+                    </div>
+                )}
             </aside>
 
+            {/* Mobile Menu Button */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden fixed top-4 left-4 z-50 bg-white shadow-lg"
+            >
+                <Menu className="h-5 w-5" />
+            </Button>
+
+            {/* Mobile Overlay */}
+            {isMobileMenuOpen && (
+                <div 
+                    className="lg:hidden fixed inset-0 bg-black/50 z-40"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
             {/* Main Content */}
-            <main className="ml-72 min-h-screen flex flex-col">
+            <main className={`min-h-screen flex flex-col transition-all duration-300 ${
+                isCollapsed ? 'lg:ml-20' : 'lg:ml-72'
+            } ml-0`}>
                 {/* Header Moderno */}
-                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-slate-200/50 shadow-sm">
-                    <div className="px-8 py-6">
+                <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-lg border-b border-slate-200/50 shadow-sm">
+                    <div className={`px-8 py-6 transition-all duration-300 ${isCollapsed ? 'lg:pl-8' : 'lg:pl-8'} pl-16 lg:pl-8`}>
                         <div className="flex justify-between items-center">
                             <div className="space-y-1">
                                 <h1 className="font-bold text-3xl text-slate-900">{activeItem?.label || 'Dashboard'}</h1>

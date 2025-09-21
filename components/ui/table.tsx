@@ -1,12 +1,12 @@
+// components/ui/table.tsx - VERSÃO CORRIGIDA
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+  <div className="relative w-full overflow-auto rounded-xl border border-slate-200/50 bg-white/80 backdrop-blur-sm">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
@@ -20,7 +20,14 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("bg-slate-50/50 sticky top-0", className)} {...props} />
+  <thead 
+    ref={ref} 
+    className={cn(
+      "bg-gradient-to-r from-slate-50 to-slate-100 sticky top-0 border-b border-slate-200/50",
+      className
+    )} 
+    {...props} 
+  />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -58,7 +65,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-gold-50/30 data-[state=selected]:bg-muted",
+      "border-b border-slate-100 transition-all duration-200 hover:bg-gradient-to-r hover:from-slate-50/50 hover:to-transparent data-[state=selected]:bg-slate-100/50",
       className
     )}
     {...props}
@@ -73,7 +80,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-6 text-left align-middle font-semibold text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-14 px-6 text-left align-middle font-bold text-slate-700 text-sm uppercase tracking-wide [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
@@ -87,7 +94,10 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0 px-6", className)}
+    className={cn(
+      "p-4 align-middle [&:has([role=checkbox])]:pr-0 px-6 py-4 text-slate-600",
+      className
+    )}
     {...props}
   />
 ))
