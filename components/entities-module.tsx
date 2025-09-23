@@ -1,4 +1,4 @@
-// components/entities-module.tsx - VERSÃO COM A CORREÇÃO DA IMPORTAÇÃO DO SELECT
+// components/entities-module.tsx - VERSÃO COM A CORREÇÃO DA IMPORTAÇÃO E NAVEGAÇÃO
 "use client";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,10 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, User, FolderOpen, ArrowLeft, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
-// ==> CORREÇÃO APLICADA AQUI <==
+import { Plus, Search, User, FolderOpen, Edit, Trash2, Loader2, Upload, FileUp } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// ==> FIM DA CORREÇÃO <==
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
 import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
@@ -189,12 +187,13 @@ export function EntitiesModule() {
   }
   if (isError) return <div>Erro ao carregar dados: {(error as Error).message}</div>;
 
+  // ✅ CORREÇÃO: Lógica de renderização ajustada para passar a função onBack.
   if (selectedClient) {
     return (
-      <div>
-        <Button variant="outline" onClick={() => setSelectedClient(null)} className="mb-4"><ArrowLeft className="mr-2 h-4 w-4" />Voltar</Button>
-        <ClientDetailView client={selectedClient} />
-      </div>
+      <ClientDetailView 
+        client={selectedClient} 
+        onBack={() => setSelectedClient(null)} 
+      />
     );
   }
 

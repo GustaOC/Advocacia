@@ -14,8 +14,9 @@ interface UpdateEmployeeData {
   role_id?: number;
 }
 
-// Adicionando a interface Case para tipagem correta
-interface Case {
+// ✅ CORREÇÃO: Esta será a nossa definição central do tipo 'Case'.
+// Adicionamos 'action_type' como um campo opcional para resolver o erro.
+export interface Case {
   id: number;
   case_number: string | null;
   title: string;
@@ -31,6 +32,7 @@ interface Case {
   executed_entity_id?: number;
   payment_date?: string | null;
   final_value?: number | null;
+  action_type?: 'cobranca' | 'divorcio' | 'inventario' | 'outros'; // Campo adicionado
 }
 
 
@@ -83,11 +85,9 @@ export class ApiClient {
   async deleteEntity(id: string) { return this.authenticatedRequest(`/api/entities/${id}`, { method: 'DELETE' }); }
 
   // MÓDULO DE CASOS/PROCESSOS
-  // ==> CORREÇÃO APLICADA AQUI <==
   async getCases(): Promise<{ cases: Case[]; total: number }> {
     return this.authenticatedRequest<{ cases: Case[]; total: number }>('/api/cases');
   }
-  // ==> FIM DA CORREÇÃO <==
   async getCase(id: string): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`); }
   async createCase(caseData: any): Promise<Case> { return this.authenticatedRequest('/api/cases', { method: 'POST', body: JSON.stringify(caseData) }); }
   async updateCase(id: string, caseData: any): Promise<Case> { return this.authenticatedRequest(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(caseData) }); }
