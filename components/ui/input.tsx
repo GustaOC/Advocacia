@@ -1,4 +1,4 @@
-// components/ui/input.tsx - VERSÃO CORRIGIDA
+// components/ui/input.tsx 
 import * as React from "react"
 import { cn } from "@/lib/utils"
 

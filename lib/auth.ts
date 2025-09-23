@@ -1,4 +1,4 @@
-// lib/auth.ts - VERSÃO FINAL CORRIGIDA E COMPLETA
+// lib/auth.ts 
 
 import { createAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 

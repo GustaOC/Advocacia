@@ -1,4 +1,4 @@
-// components/client-detail-view.tsx - VERSÃO COM CORREÇÃO FINAL DE TIPAGEM
+// components/client-detail-view.tsx 
 "use client";
 
 import React, { useState, useMemo } from 'react';

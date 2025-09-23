@@ -1,4 +1,4 @@
-// app/api/petitions/route.ts - VERSÃO CORRIGIDA
+// app/api/petitions/route.ts 
 
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";

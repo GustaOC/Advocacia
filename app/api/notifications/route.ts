@@ -1,4 +1,4 @@
-// app/api/notifications/route.ts - VERSÃO DE PRODUÇÃO
+// app/api/notifications/route.ts 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";

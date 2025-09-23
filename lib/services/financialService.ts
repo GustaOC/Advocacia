@@ -1,4 +1,4 @@
-// lib/services/financialService.ts - VERSÃO CORRIGIDA
+// lib/services/financialService.ts 
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AgreementSchema, AgreementUpdateSchema } from "@/lib/schemas";
@@ -9,7 +9,7 @@ import { AgreementSchema, AgreementUpdateSchema } from "@/lib/schemas";
 export async function getFinancialAgreements() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from("financial_agreements") // CORREÇÃO: Nome da tabela ajustado de "financial_agagreements" para "financial_agreements"
+    .from("financial_agreements") 
     .select(`
       *,
       cases (

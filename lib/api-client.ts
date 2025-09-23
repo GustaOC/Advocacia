@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO CORRIGIDA COM O TIPO DE RETORNO CORRETO PARA getCases
+// lib/api-client.ts 
 // Este arquivo centraliza todas as chamadas de API do frontend para o backend.
 
 // Tipos para os dados dos funcionários, para garantir a consistência

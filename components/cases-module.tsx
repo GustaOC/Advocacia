@@ -1,4 +1,4 @@
-// components/cases-module.tsx - VERSÃO MODERNA E SOFISTICADA
+// components/cases-module.tsx
 "use client";
 
 import React, { useState, useMemo } from "react";

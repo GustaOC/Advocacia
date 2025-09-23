@@ -1,4 +1,4 @@
-// components/ui/card.tsx - VERSÃO CORRIGIDA
+// components/ui/card.tsx 
 import * as React from "react"
 import { cn } from "@/lib/utils"
 

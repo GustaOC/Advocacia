@@ -1,4 +1,4 @@
-// components/petitions-module.tsx - VERSÃO IMPLEMENTADA
+// components/petitions-module.tsx 
 
 "use client";
 import { useQuery } from "@tanstack/react-query";

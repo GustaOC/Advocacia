@@ -1,4 +1,4 @@
-// components/employee-management.tsx - VERSÃO IMPLEMENTADA
+// components/employee-management.tsx 
 
 "use client";
 import { useQuery } from "@tanstack/react-query";

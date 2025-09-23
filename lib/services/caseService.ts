@@ -1,4 +1,4 @@
-// lib/services/caseService.ts - VERSÃO COM PAGINAÇÃO
+// lib/services/caseService.ts 
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";

@@ -1,4 +1,4 @@
-// lib/services/petitionService.ts - VERSÃO CORRIGIDA E COMPLETA
+// lib/services/petitionService.ts 
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { AuthUser } from "@/lib/auth";

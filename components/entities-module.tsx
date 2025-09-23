@@ -1,4 +1,4 @@
-// components/entities-module.tsx - VERSÃO COM A CORREÇÃO DA IMPORTAÇÃO E NAVEGAÇÃO
+// components/entities-module.tsx 
 "use client";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";

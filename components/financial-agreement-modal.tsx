@@ -1,4 +1,4 @@
-// components/financial-agreement-modal.tsx - VERSÃO CORRIGIDA
+// components/financial-agreement-modal.tsx - 
 "use client";
 
 import React, { useState, useEffect } from "react";

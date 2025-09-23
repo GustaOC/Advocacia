@@ -1,4 +1,4 @@
-// components/templates-module.tsx - VERSÃO CORRIGIDA
+// components/templates-module.tsx 
 "use client";
 
 import React, { useState, useMemo } from 'react';

@@ -1,4 +1,4 @@
-// components/ui/table.tsx - VERSÃO CORRIGIDA
+// components/ui/table.tsx 
 import * as React from "react"
 import { cn } from "@/lib/utils"
 

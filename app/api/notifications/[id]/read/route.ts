@@ -1,4 +1,4 @@
-// app/api/notifications/[id]/read/route.ts - VERSÃO CORRIGIDA
+// app/api/notifications/[id]/read/route.ts 
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireAuth } from "@/lib/auth"

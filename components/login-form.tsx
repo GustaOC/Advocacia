@@ -1,4 +1,4 @@
-// components/login-form.tsx - VERSÃO COM MELHORIA DE ACESSIBILIDADE
+// components/login-form.tsx 
 "use client"
 
 import { useState } from "react"

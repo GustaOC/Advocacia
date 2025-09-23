@@ -1,4 +1,4 @@
-// components/dashboard.tsx - VERSÃO COM SIDEBAR RETRÁTIL
+// components/dashboard.tsx
 "use client"
 
 import { useState, useCallback, ReactNode } from "react"

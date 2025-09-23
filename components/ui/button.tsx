@@ -13,7 +13,8 @@ const buttonVariants = cva(
         destructive: "bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 shadow-lg",
         outline: "border-2 border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-md",
         secondary: "bg-gradient-to-r from-slate-100 to-slate-200 text-slate-900 hover:from-slate-200 hover:to-slate-300",
-        ghost: "hover:bg-slate-100 hover:text-slate-900 rounded-lg",
+        // ✅ CORREÇÃO: Adicionada cor de texto base para a variante ghost
+        ghost: "text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg",
         link: "text-slate-700 underline-offset-4 hover:underline hover:text-slate-900",
         premium: "bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white hover:from-blue-700 hover:via-purple-700 hover:to-blue-900 shadow-xl",
       },

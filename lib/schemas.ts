@@ -1,4 +1,4 @@
-// lib/schemas.ts - VERSÃO COM CAMPOS DE ENDEREÇO DETALHADOS
+// lib/schemas.ts 
 import { z } from "zod";
 
 // =================================

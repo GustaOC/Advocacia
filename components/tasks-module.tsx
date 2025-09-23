@@ -1,4 +1,4 @@
-// components/tasks-module.tsx - VERSÃO CORRIGIDA
+// components/tasks-module.tsx 
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
