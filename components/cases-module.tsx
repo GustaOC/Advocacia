@@ -11,13 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, Upload, FileUp, AlertTriangle, Clock, LayoutGrid, List, DollarSign, Archive, Star, TrendingUp } from "lucide-react";
+import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, Upload, AlertTriangle, Clock, LayoutGrid, List, Star, TrendingUp } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-// [Manter todas as interfaces e lógica existente...]
-interface Entity { id: number; name: string; }
+// Interfaces
+interface Entity { 
+  id: number; 
+  name: string; 
+}
+
 interface Case {
   id: number;
   case_number: string | null;
@@ -36,9 +40,11 @@ interface Case {
   final_value?: number | null;
 }
 
-interface CasesModuleProps { initialFilters?: { status: string }; }
+interface CasesModuleProps { 
+  initialFilters?: { status: string }; 
+}
 
-// Componente de estatísticas moderno
+// Componente de estatísticas
 function CasesStats({ cases }: { cases: Case[] }) {
   const stats = [
     { 
@@ -79,7 +85,6 @@ function CasesStats({ cases }: { cases: Case[] }) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {stats.map((stat, index) => (
         <Card key={index} className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
-          {/* Background decorativo */}
           <div className={`absolute top-0 right-0 w-20 h-20 ${stat.bg} rounded-full transform translate-x-8 -translate-y-8 opacity-20 group-hover:opacity-30 transition-opacity`}></div>
           
           <CardContent className="p-6 relative z-10">
@@ -106,11 +111,31 @@ function CasesStats({ cases }: { cases: Case[] }) {
 export function CasesModule({ initialFilters }: CasesModuleProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Estados de filtros e busca
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState(initialFilters?.status || "all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  
+  // Estados para modal de novo caso
+  const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
+  const [newCaseForm, setNewCaseForm] = useState({
+    title: '',
+    case_number: '',
+    court: '',
+    priority: 'Média' as 'Alta' | 'Média' | 'Baixa',
+    main_status: 'Em andamento' as Case['main_status'],
+    description: '',
+    value: '',
+  });
+  
+  // Estados para modal de importação
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
+  // Query para buscar casos
   const { data, isLoading } = useQuery({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
@@ -118,6 +143,86 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   
   const cases: Case[] = data?.cases ?? [];
 
+  // Mutation para criar caso
+  const createCaseMutation = useMutation({
+    mutationFn: (caseData: typeof newCaseForm) => {
+      return apiClient.createCase({
+        ...caseData,
+        value: caseData.value ? parseFloat(caseData.value) : null,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Sucesso!", description: "Caso criado com sucesso." });
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      setIsNewCaseModalOpen(false);
+      // Reset form
+      setNewCaseForm({
+        title: '',
+        case_number: '',
+        court: '',
+        priority: 'Média',
+        main_status: 'Em andamento',
+        description: '',
+        value: '',
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao criar caso", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Handler para salvar novo caso
+  const handleSaveNewCase = () => {
+    if (!newCaseForm.title) {
+      toast({ title: "Erro", description: "O título do caso é obrigatório.", variant: "destructive" });
+      return;
+    }
+    createCaseMutation.mutate(newCaseForm);
+  };
+
+  // Handler para importação
+  const handleImportCases = async () => {
+    if (!importFile) {
+      toast({ title: "Erro", description: "Selecione um arquivo para importar.", variant: "destructive" });
+      return;
+    }
+
+    setIsImporting(true);
+    const formData = new FormData();
+    formData.append('file', importFile);
+
+    try {
+      const response = await fetch('/api/cases/import', { 
+        method: 'POST', 
+        body: formData 
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || "Falha na importação.");
+      }
+
+      toast({
+        title: "Importação Concluída!",
+        description: `${result.successCount || 0} casos importados com sucesso.`
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      setIsImportModalOpen(false);
+      setImportFile(null);
+    } catch (error: any) {
+      toast({ 
+        title: "Erro na Importação", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Filtrar casos
   const filteredCases = useMemo(() => {
     if (!cases) return [];
     return cases.filter(c => {
@@ -129,6 +234,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     });
   }, [cases, searchTerm, filterStatus, filterPriority]);
 
+  // Funções de renderização de badges
   const getStatusBadge = (status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago') => {
     const statusMap = {
       'Em andamento': 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg',
@@ -166,9 +272,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
 
   return (
     <div className="space-y-8">
-      {/* Header Moderno com Gradiente */}
+      {/* Header */}
       <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white overflow-hidden">
-        {/* Pattern de fundo */}
         <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-10"></div>
         
         <div className="relative z-10">
@@ -180,7 +285,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       {/* Estatísticas */}
       <CasesStats cases={cases} />
 
-      {/* Controles de Filtro Modernos */}
+      {/* Controles de Filtro */}
       <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
@@ -210,12 +315,13 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
             </div>
             
             <div className="flex gap-3 items-center">
-              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
+              {/* Botões de visualização */}
+              <div className="flex items-center gap-2 bg-slate-200 rounded-xl p-1">
                 <Button 
                   variant={viewMode === 'list' ? 'default' : 'ghost'} 
                   size="sm" 
                   onClick={() => setViewMode('list')}
-                  className="rounded-lg"
+                  className={`rounded-lg ${viewMode === 'list' ? '' : 'text-slate-700 hover:text-slate-900'}`}
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -223,27 +329,41 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                   variant={viewMode === 'kanban' ? 'default' : 'ghost'} 
                   size="sm" 
                   onClick={() => setViewMode('kanban')}
-                  className="rounded-lg"
+                  className={`rounded-lg ${viewMode === 'kanban' ? '' : 'text-slate-700 hover:text-slate-900'}`}
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
               </div>
               
-              <Button variant="outline" className="border-2 border-slate-200 hover:border-slate-400">
+              {/* Botão Importar - FUNCIONAL */}
+              <Button 
+                variant="outline" 
+                className="border-2 border-slate-200 hover:border-slate-400"
+                onClick={() => setIsImportModalOpen(true)}
+              >
                 <Upload className="mr-2 h-4 w-4" />
                 Importar
               </Button>
               
-              <Button className="bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 shadow-lg">
-                <Plus className="mr-2 h-4 w-4" /> 
-                Novo Caso
-              </Button>
+              {/* Botão Novo Caso - TEXTO SEMPRE VISÍVEL */}
+              <Button
+  onClick={() => setIsNewCaseModalOpen(true)}
+  className="flex items-center shadow-lg rounded-lg font-semibold transition-colors"
+  style={{
+    background: 'linear-gradient(90deg,#0f172a,#111827)', // equivalente ao from-slate-900 -> to-slate-800
+    color: '#ffffff',
+  }}
+>
+  <Plus className="mr-2 h-4 w-4" />
+  Novo Caso
+</Button>
+
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tabela Moderna */}
+      {/* Visualização em Lista */}
       {viewMode === 'list' && (
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
           <CardContent className="p-0">
@@ -302,7 +422,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         </Card>
       )}
 
-      {/* Kanban View Moderno */}
+      {/* Visualização Kanban */}
       {viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {(['Em andamento', 'Acordo', 'Extinto', 'Pago'] as const).map(status => (
@@ -340,107 +460,224 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
 
-// =====================================
-// components/entities-module.tsx - VERSÃO MODERNA E SOFISTICADA
-// =====================================
+      {/* Modal de Novo Caso */}
+      <Dialog open={isNewCaseModalOpen} onOpenChange={setIsNewCaseModalOpen}>
+        <DialogContent className="sm:max-w-[650px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Briefcase className="mr-2 h-5 w-5 text-slate-600" />
+              Criar Novo Caso
+            </DialogTitle>
+            <DialogDescription>
+              Preencha as informações do novo caso/processo judicial
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Título do Caso *</Label>
+                <Input
+                  id="title"
+                  value={newCaseForm.title}
+                  onChange={(e) => setNewCaseForm({ ...newCaseForm, title: e.target.value })}
+                  placeholder="Ex: Ação de Cobrança - João Silva"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="case_number">Número do Processo</Label>
+                <Input
+                  id="case_number"
+                  value={newCaseForm.case_number}
+                  onChange={(e) => setNewCaseForm({ ...newCaseForm, case_number: e.target.value })}
+                  placeholder="0000000-00.0000.0.00.0000"
+                  className="font-mono"
+                />
+              </div>
+            </div>
 
-export function EntitiesModule() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState("");
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="court">Vara/Tribunal</Label>
+                <Input
+                  id="court"
+                  value={newCaseForm.court}
+                  onChange={(e) => setNewCaseForm({ ...newCaseForm, court: e.target.value })}
+                  placeholder="Ex: 1ª Vara Cível de Campo Grande"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="value">Valor da Causa</Label>
+                <Input
+                  id="value"
+                  type="number"
+                  value={newCaseForm.value}
+                  onChange={(e) => setNewCaseForm({ ...newCaseForm, value: e.target.value })}
+                  placeholder="0,00"
+                />
+              </div>
+            </div>
 
-  // [Manter toda lógica existente...]
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="priority">Prioridade</Label>
+                <Select
+                  value={newCaseForm.priority}
+                  onValueChange={(value: 'Alta' | 'Média' | 'Baixa') => 
+                    setNewCaseForm({ ...newCaseForm, priority: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Alta">Alta</SelectItem>
+                    <SelectItem value="Média">Média</SelectItem>
+                    <SelectItem value="Baixa">Baixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={newCaseForm.main_status}
+                  onValueChange={(value: Case['main_status']) => 
+                    setNewCaseForm({ ...newCaseForm, main_status: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Em andamento">Em andamento</SelectItem>
+                    <SelectItem value="Acordo">Acordo</SelectItem>
+                    <SelectItem value="Extinto">Extinto</SelectItem>
+                    <SelectItem value="Pago">Pago</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-  return (
-    <div className="space-y-8">
-      {/* Header Moderno */}
-      <div className="relative bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 rounded-3xl p-8 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2040%2040%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%20fill-rule%3D%22evenodd%22%3E%3Cpath%20d%3D%22m0%2040l40-40h-40v40zm40%200v-40h-40l40%2040z%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-20"></div>
-        
-        <div className="relative z-10">
-          <h2 className="text-4xl font-bold mb-3">Gestão de Clientes e Partes</h2>
-          <p className="text-blue-100 text-xl">Acesse a pasta virtual de cada entidade para ver processos e documentos organizados.</p>
-        </div>
-      </div>
-
-      {/* Barra de Busca Moderna */}
-      <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-6 justify-between items-center">
-            <div className="relative flex-1 max-w-2xl">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-              <Input 
-                placeholder="Buscar por nome, documento ou informações..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-                className="pl-12 h-12 text-lg bg-white border-2 border-slate-200 focus:border-blue-400 rounded-xl"
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrição</Label>
+              <Textarea
+                id="description"
+                value={newCaseForm.description}
+                onChange={(e) => setNewCaseForm({ ...newCaseForm, description: e.target.value })}
+                placeholder="Descrição detalhada do caso..."
+                className="min-h-[100px]"
               />
             </div>
-            
-            <div className="flex gap-3">
-              <Button variant="outline" className="border-2 border-slate-200 hover:border-slate-400 h-12">
-                <Upload className="mr-2 h-4 w-4" /> 
-                Importar Clientes
-              </Button>
-              <Button variant="outline" className="border-2 border-slate-200 hover:border-slate-400 h-12">
-                <Upload className="mr-2 h-4 w-4" /> 
-                Importar Executados
-              </Button>
-              <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg h-12">
-                <Plus className="mr-2 h-4 w-4" /> 
-                Novo Cadastro
-              </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewCaseModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveNewCase}
+              disabled={createCaseMutation.isPending}
+              className="bg-slate-800 hover:bg-slate-900"
+              style={{ color: 'white' }}
+            >
+              {createCaseMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />
+                  <span className="text-white">Salvando...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-2 h-4 w-4 text-white" />
+                  <span className="text-white">Criar Caso</span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Importação */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Upload className="mr-2 h-5 w-5 text-slate-600" />
+              Importar Casos em Massa
+            </DialogTitle>
+            <DialogDescription>
+              Faça upload de uma planilha Excel ou CSV com os casos para importar
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-6 py-4">
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-slate-400 transition-colors">
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                />
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <Upload className="mx-auto h-12 w-12 text-slate-400 mb-3" />
+                  <p className="text-sm font-medium text-slate-900">
+                    {importFile ? importFile.name : 'Clique para selecionar ou arraste o arquivo aqui'}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Formatos aceitos: Excel (.xlsx, .xls) ou CSV
+                  </p>
+                </label>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Formato esperado da planilha:</h4>
+                <p className="text-sm text-blue-800 mb-2">
+                  Título | Número do Processo | Vara/Tribunal | Status | Prioridade | Valor | Descrição
+                </p>
+                <a 
+                  href="/modelo-importacao-casos.xlsx" 
+                  download 
+                  className="text-sm text-blue-600 hover:underline font-medium"
+                >
+                  Baixar modelo de planilha
+                </a>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Grid de Clientes Moderno */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Exemplo de card de cliente moderno */}
-        <Card className="group cursor-pointer hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
-          {/* Decoração de fundo */}
-          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full transform translate-x-10 -translate-y-10 opacity-50 group-hover:opacity-70 transition-opacity"></div>
-          
-          <CardContent className="p-6 relative z-10">
-            <div className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
-                    João da Silva Santos
-                  </h3>
-                  <p className="text-sm text-slate-600 font-mono">123.456.789-00</p>
-                </div>
-                <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg">
-                  Cliente
-                </Badge>
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-sm text-slate-600">📧 joao@email.com</p>
-                <p className="text-sm text-slate-600">📱 (67) 99999-9999</p>
-                <p className="text-sm text-slate-600">📍 Campo Grande, MS</p>
-              </div>
-              
-              <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                <span className="text-xs text-slate-500">3 processos ativos</span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsImportModalOpen(false);
+                setImportFile(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleImportCases}
+              disabled={isImporting || !importFile}
+              className="bg-slate-800 hover:bg-slate-900"
+              style={{ color: 'white' }}
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />
+                  <span className="text-white">Importando...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4 text-white" />
+                  <span className="text-white">Importar Casos</span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
