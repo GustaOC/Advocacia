@@ -37,6 +37,13 @@ export const CaseSchema = z.object({
   executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
   payment_date: z.string().optional().nullable(),
   final_value: z.number().optional().nullable(),
+  
+  // Campos para Acordo (opcionais)
+  agreement_type: z.enum(['Judicial', 'Extrajudicial', 'Em Audiência', 'Pela Loja']).optional().nullable(),
+  agreement_value: z.number().optional().nullable(),
+  installments: z.number().int().optional().nullable(),
+  down_payment: z.number().optional().nullable(),
+  installment_due_date: z.string().optional().nullable(),
 });
 
 export const CaseUpdateSchema = CaseSchema.partial().omit({

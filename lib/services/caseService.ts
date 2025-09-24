@@ -129,13 +129,22 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     // 1. Busca o estado atual do caso ANTES da atualização
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("status") // Seleciona apenas a coluna que existe
+        .select("status")
         .eq("id", id)
         .single();
 
     if (fetchError) {
         console.error(`Erro ao buscar caso ${id} antes de atualizar:`, fetchError.message);
         throw new Error("Não foi possível encontrar o caso para atualização.");
+    }
+
+    // Se o status não for 'Acordo', garante que os campos de acordo sejam nulos
+    if (parsedData.status && parsedData.status !== 'Acordo') {
+        parsedData.agreement_type = null;
+        parsedData.agreement_value = null;
+        parsedData.installments = null;
+        parsedData.down_payment = null;
+        parsedData.installment_due_date = null;
     }
 
     // 2. Realiza a atualização
