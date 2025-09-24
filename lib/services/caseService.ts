@@ -7,8 +7,6 @@ import { logAudit } from "./auditService";
 
 /**
  * Busca casos com paginação, incluindo as partes (entidades) associadas.
- * @param page - O número da página a ser buscada.
- * @param limit - O número de itens por página.
  */
 export async function getCases(page: number = 1, limit: number = 10) {
   const supabase = createAdminClient();
@@ -106,7 +104,7 @@ export async function createCase(caseData: unknown, user: AuthUser) {
     
     await supabase.from('case_status_history').insert({
       case_id: newCase.id,
-      new_main_status: newCase.status, // Corrigido
+      new_main_status: newCase.status,
       new_status_reason: newCase.status_reason,
       changed_by_user_id: user.id,
       changed_by_user_email: user.email,
@@ -131,7 +129,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
 
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("status, status_reason") // Corrigido
+        .select("status, status_reason")
         .eq("id", id)
         .single();
 
@@ -157,8 +155,8 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     if (statusChanged) {
         await supabase.from('case_status_history').insert({
             case_id: id,
-            previous_main_status: currentCase.status, // Corrigido
-            new_main_status: updatedCase.status,       // Corrigido
+            previous_main_status: currentCase.status,
+            new_main_status: updatedCase.status,
             previous_status_reason: currentCase.status_reason,
             new_status_reason: updatedCase.status_reason,
             changed_by_user_id: user.id,

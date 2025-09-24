@@ -14,13 +14,11 @@ interface UpdateEmployeeData {
   role_id?: number;
 }
 
-// ✅ CORREÇÃO: Esta será a nossa definição central do tipo 'Case'.
-// Adicionamos 'action_type' como um campo opcional para resolver o erro.
 export interface Case {
   id: number;
   case_number: string | null;
   title: string;
-  main_status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+  status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
   status_reason: string | null;
   value: number | null;
   court: string | null;

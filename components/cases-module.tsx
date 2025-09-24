@@ -26,7 +26,7 @@ interface Case {
   id: number;
   case_number: string | null;
   title: string;
-  main_status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+  status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
   status_reason: string | null;
   value: number | null;
   court: string | null;
@@ -57,7 +57,7 @@ function CasesStats({ cases }: { cases: Case[] }) {
     },
     { 
       label: "Em Andamento", 
-      value: cases.filter(c => c.main_status === 'Em andamento').length.toString(), 
+      value: cases.filter(c => c.status === 'Em andamento').length.toString(), 
       icon: Clock, 
       color: "text-orange-600",
       bg: "bg-orange-50",
@@ -65,7 +65,7 @@ function CasesStats({ cases }: { cases: Case[] }) {
     },
     { 
       label: "Acordos", 
-      value: cases.filter(c => c.main_status === 'Acordo').length.toString(), 
+      value: cases.filter(c => c.status === 'Acordo').length.toString(), 
       icon: Star, 
       color: "text-green-600",
       bg: "bg-green-50",
@@ -125,7 +125,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     case_number: '',
     court: '',
     priority: 'Média' as 'Alta' | 'Média' | 'Baixa',
-    main_status: 'Em andamento' as Case['main_status'],
+    status: 'Em andamento' as Case['status'],
     description: '',
     value: '',
   });
@@ -161,7 +161,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         case_number: '',
         court: '',
         priority: 'Média',
-        main_status: 'Em andamento',
+        status: 'Em andamento',
         description: '',
         value: '',
       });
@@ -228,7 +228,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     return cases.filter(c => {
       const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
                          (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const statusMatch = filterStatus === "all" || c.main_status === filterStatus;
+      const statusMatch = filterStatus === "all" || c.status === filterStatus;
       const priorityMatch = filterPriority === "all" || c.priority === filterPriority;
       return searchMatch && statusMatch && priorityMatch;
     });
@@ -302,7 +302,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="w-[200px] bg-white/80 border-2 border-slate-200">
-                  <SelectValue placeholder="Status Principal" />
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os Status</SelectItem>
@@ -347,16 +347,16 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               
               {/* Botão Novo Caso - TEXTO SEMPRE VISÍVEL */}
               <Button
-  onClick={() => setIsNewCaseModalOpen(true)}
-  className="flex items-center shadow-lg rounded-lg font-semibold transition-colors"
-  style={{
-    background: 'linear-gradient(90deg,#0f172a,#111827)', // equivalente ao from-slate-900 -> to-slate-800
-    color: '#ffffff',
-  }}
->
-  <Plus className="mr-2 h-4 w-4" />
-  Novo Caso
-</Button>
+                onClick={() => setIsNewCaseModalOpen(true)}
+                className="flex items-center shadow-lg rounded-lg font-semibold transition-colors"
+                style={{
+                  background: 'linear-gradient(90deg,#0f172a,#111827)', // equivalente ao from-slate-900 -> to-slate-800
+                  color: '#ffffff',
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Caso
+              </Button>
 
             </div>
           </div>
@@ -393,7 +393,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                     <TableCell>{getPriorityBadge(caseItem.priority)}</TableCell>
                     <TableCell>
                       <div className="flex flex-col items-start space-y-1">
-                        {getStatusBadge(caseItem.main_status)}
+                        {getStatusBadge(caseItem.status)}
                         {caseItem.status_reason && (
                           <span className="text-xs text-slate-500 mt-1">{caseItem.status_reason}</span>
                         )}
@@ -431,14 +431,14 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-slate-800 text-lg">{status}</h3>
                   <Badge variant="secondary" className="bg-white text-slate-700 font-semibold">
-                    {filteredCases.filter(c => c.main_status === status).length}
+                    {filteredCases.filter(c => c.status === status).length}
                   </Badge>
                 </div>
               </div>
               
               <div className="space-y-4 min-h-[400px]">
                 {filteredCases
-                  .filter(c => c.main_status === status)
+                  .filter(c => c.status === status)
                   .map(caseItem => (
                     <Card key={caseItem.id} className="cursor-move group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
@@ -541,9 +541,9 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
-                  value={newCaseForm.main_status}
-                  onValueChange={(value: Case['main_status']) => 
-                    setNewCaseForm({ ...newCaseForm, main_status: value })
+                  value={newCaseForm.status}
+                  onValueChange={(value: Case['status']) => 
+                    setNewCaseForm({ ...newCaseForm, status: value })
                   }
                 >
                   <SelectTrigger>

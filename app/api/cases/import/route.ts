@@ -1,4 +1,4 @@
-// app/api/cases/import/route.ts - VERSÃO CORRIGIDA
+// app/api/cases/import/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import * as caseService from "@/lib/services/caseService";
@@ -12,7 +12,7 @@ const ImportCaseSchema = z.object({
   "Executado": z.string().min(2, "O nome do executado é obrigatório."),
   "Numero Processo": z.string().optional().nullable(),
   "Observacao": z.string().min(3, "A observação (título) é obrigatória."),
-  "Status": z.enum(['active', 'archived', 'suspended', 'completed']).default('active'),
+  "Status": z.enum(['Em andamento', 'Acordo', 'Extinto', 'Pago']).default('Em andamento'),
   "Prioridade": z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
 });
 
@@ -30,21 +30,18 @@ export async function POST(req: NextRequest) {
     const allEntities = await getEntities();
     const entityMap = new Map(allEntities.map(e => [e.name.toLowerCase(), e.id]));
 
-    // 2. Processar o arquivo
+    // 2. Processar o arquivo com validação
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
+
     if (!sheetName) {
-        return NextResponse.json({ error: "O arquivo enviado não contém planilhas." }, { status: 400 });
+        return NextResponse.json({ error: "O arquivo Excel enviado não contém nenhuma planilha." }, { status: 400 });
     }
     const sheet = workbook.Sheets[sheetName];
-
-    // --- CORREÇÃO APLICADA AQUI ---
-    // Verifica se a planilha foi encontrada antes de continuar.
     if (!sheet) {
-        return NextResponse.json({ error: `A planilha chamada '${sheetName}' não foi encontrada no arquivo.` }, { status: 400 });
+        return NextResponse.json({ error: `A planilha chamada '${sheetName}' não foi encontrada ou está vazia.` }, { status: 400 });
     }
-    // --- FIM DA CORREÇÃO ---
 
     const data = XLSX.utils.sheet_to_json(sheet);
 
@@ -61,10 +58,10 @@ export async function POST(req: NextRequest) {
         const executedId = entityMap.get(validatedRow.Executado.toLowerCase());
 
         if (!clientId) {
-          throw new Error(`Cliente "${validatedRow.Cliente}" não encontrado no sistema.`);
+          throw new Error(`Cliente "${validatedRow.Cliente}" não encontrado no sistema. Cadastre-o primeiro.`);
         }
         if (!executedId) {
-          throw new Error(`Executado "${validatedRow.Executado}" não encontrado no sistema.`);
+          throw new Error(`Executado "${validatedRow.Executado}" não encontrado no sistema. Cadastre-o primeiro.`);
         }
 
         const caseData = {
@@ -81,7 +78,7 @@ export async function POST(req: NextRequest) {
       } catch (error: any) {
         errorCount++;
         const errorMessage = error instanceof z.ZodError 
-            ? error.errors.map(e => e.message).join(', ') 
+            ? error.errors.map(e => `Coluna '${e.path.join('.')}': ${e.message}`).join(', ') 
             : error.message;
         errors.push({ row: index + 2, error: errorMessage });
       }
@@ -99,6 +96,6 @@ export async function POST(req: NextRequest) {
     if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
-    return NextResponse.json({ error: "Ocorreu um erro ao processar o arquivo." }, { status: 500 });
+    return NextResponse.json({ error: "Ocorreu um erro inesperado ao processar o arquivo." }, { status: 500 });
   }
 }

@@ -7,18 +7,15 @@ import { z } from "zod";
 
 export const EntitySchema = z.object({
   name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres.").max(255),
-  document: z.string().max(20).optional().nullable(), // Cpf
+  document: z.string().max(20).optional().nullable(),
   email: z.string().email("Email inválido.").optional().nullable(),
-  // Endereço detalhado
   address: z.string().max(500).optional().nullable(),
   address_number: z.string().max(20).optional().nullable(),
   neighborhood: z.string().max(100).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
   zip_code: z.string().max(20).optional().nullable(),
-  // Contato
-  phone: z.string().max(20).optional().nullable(), // Celular 1
-  phone2: z.string().max(20).optional().nullable(), // Celular 2
-  // Tipo
+  phone: z.string().max(20).optional().nullable(),
+  phone2: z.string().max(20).optional().nullable(),
   type: z.string().min(1, "O tipo é obrigatório."),
 });
 
@@ -32,26 +29,21 @@ export const CaseSchema = z.object({
   case_number: z.string().max(100).optional().nullable(),
   title: z.string().min(3, "O título (Observação) é obrigatório.").max(255),
   description: z.string().optional().nullable(),
-  main_status: z.enum(['Em andamento', 'Acordo', 'Extinto', 'Pago']).default('Em andamento'),
+  status: z.enum(['Em andamento', 'Acordo', 'Extinto', 'Pago']).default('Em andamento'),
   status_reason: z.string().optional().nullable(),
   court: z.string().max(255).optional().nullable(),
   priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
-  // Campos para o novo formulário de criação
   client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
   executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
   payment_date: z.string().optional().nullable(),
   final_value: z.number().optional().nullable(),
 });
 
-
-// Ao atualizar um caso, não permitimos a troca das partes principais pelo formulário simples
 export const CaseUpdateSchema = CaseSchema.partial().omit({
   client_entity_id: true,
   executed_entity_id: true
 });
 
-
-// ... (o resto do arquivo permanece sem alterações)
 // =================================
 // AGREEMENT SCHEMAS
 // =================================
