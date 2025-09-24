@@ -1,7 +1,7 @@
 // components/cases-module.tsx
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Interfaces
-interface Entity { 
-  id: number; 
-  name: string; 
+interface Entity {
+  id: number;
+  name: string;
 }
 
 interface Case {
@@ -40,41 +40,41 @@ interface Case {
   final_value?: number | null;
 }
 
-interface CasesModuleProps { 
-  initialFilters?: { status: string }; 
+interface CasesModuleProps {
+  initialFilters?: { status: string };
 }
 
 // Componente de estatísticas
 function CasesStats({ cases }: { cases: Case[] }) {
   const stats = [
-    { 
-      label: "Total de Casos", 
-      value: cases.length.toString(), 
-      icon: Briefcase, 
+    {
+      label: "Total de Casos",
+      value: cases.length.toString(),
+      icon: Briefcase,
       color: "text-blue-600",
       bg: "bg-blue-50",
       trend: "+5%"
     },
-    { 
-      label: "Em Andamento", 
-      value: cases.filter(c => c.status === 'Em andamento').length.toString(), 
-      icon: Clock, 
+    {
+      label: "Em Andamento",
+      value: cases.filter(c => c.status === 'Em andamento').length.toString(),
+      icon: Clock,
       color: "text-orange-600",
       bg: "bg-orange-50",
       trend: "+2%"
     },
-    { 
-      label: "Acordos", 
-      value: cases.filter(c => c.status === 'Acordo').length.toString(), 
-      icon: Star, 
+    {
+      label: "Acordos",
+      value: cases.filter(c => c.status === 'Acordo').length.toString(),
+      icon: Star,
       color: "text-green-600",
       bg: "bg-green-50",
       trend: "+12%"
     },
-    { 
-      label: "Alta Prioridade", 
-      value: cases.filter(c => c.priority === 'Alta').length.toString(), 
-      icon: AlertTriangle, 
+    {
+      label: "Alta Prioridade",
+      value: cases.filter(c => c.priority === 'Alta').length.toString(),
+      icon: AlertTriangle,
       color: "text-red-600",
       bg: "bg-red-50",
       trend: "-3%"
@@ -86,7 +86,7 @@ function CasesStats({ cases }: { cases: Case[] }) {
       {stats.map((stat, index) => (
         <Card key={index} className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
           <div className={`absolute top-0 right-0 w-20 h-20 ${stat.bg} rounded-full transform translate-x-8 -translate-y-8 opacity-20 group-hover:opacity-30 transition-opacity`}></div>
-          
+
           <CardContent className="p-6 relative z-10">
             <div className="flex items-start justify-between">
               <div className="space-y-2">
@@ -111,73 +111,103 @@ function CasesStats({ cases }: { cases: Case[] }) {
 export function CasesModule({ initialFilters }: CasesModuleProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   // Estados de filtros e busca
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState(initialFilters?.status || "all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
-  
-  // Estados para modal de novo caso
-  const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
-  const [newCaseForm, setNewCaseForm] = useState({
-    title: '',
-    case_number: '',
-    court: '',
-    priority: 'Média' as 'Alta' | 'Média' | 'Baixa',
-    status: 'Em andamento' as Case['status'],
-    description: '',
-    value: '',
-  });
-  
+
+  // Estados para modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentCase, setCurrentCase] = useState<Partial<Case>>({});
+
+
   // Estados para modal de importação
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+
+  // Kanban drag-and-drop state
+  const [draggedCase, setDraggedCase] = useState<Case | null>(null);
 
   // Query para buscar casos
   const { data, isLoading } = useQuery({
     queryKey: ['cases'],
     queryFn: () => apiClient.getCases(),
   });
-  
-  const cases: Case[] = data?.cases ?? [];
 
-  // Mutation para criar caso
-  const createCaseMutation = useMutation({
-    mutationFn: (caseData: typeof newCaseForm) => {
-      return apiClient.createCase({
+  const cases: Case[] = data?.cases ?? [];
+  const allEntities: Entity[] = []; // This should be populated from an API call if needed for the dropdowns
+
+  // Mutation para criar/atualizar caso
+  const saveCaseMutation = useMutation({
+    mutationFn: (caseData: Partial<Case>) => {
+      const dataToSave = {
         ...caseData,
-        value: caseData.value ? parseFloat(caseData.value) : null,
-      });
+        value: caseData.value ? parseFloat(String(caseData.value)) : null,
+      };
+      if (isEditMode) {
+        return apiClient.updateCase(String(dataToSave.id), dataToSave);
+      }
+      return apiClient.createCase(dataToSave);
     },
     onSuccess: () => {
-      toast({ title: "Sucesso!", description: "Caso criado com sucesso." });
+      toast({ title: "Sucesso!", description: `Caso ${isEditMode ? 'atualizado' : 'criado'} com sucesso.` });
       queryClient.invalidateQueries({ queryKey: ['cases'] });
-      setIsNewCaseModalOpen(false);
-      // Reset form
-      setNewCaseForm({
+      setIsModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: `Erro ao ${isEditMode ? 'atualizar' : 'criar'} caso`, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateCaseStatusMutation = useMutation({
+    mutationFn: ({ caseId, status }: { caseId: number; status: Case['status'] }) => {
+      return apiClient.updateCase(String(caseId), { status });
+    },
+    onSuccess: () => {
+      toast({ title: "Status Atualizado!", description: "O status do caso foi alterado." });
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
+      // Revert optimistic update if needed
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+    },
+  });
+
+
+  const openModal = (caseItem: Partial<Case> | null = null) => {
+    if (caseItem) {
+      setIsEditMode(true);
+      setCurrentCase(caseItem);
+    } else {
+      setIsEditMode(false);
+      setCurrentCase({
         title: '',
         case_number: '',
         court: '',
         priority: 'Média',
         status: 'Em andamento',
         description: '',
-        value: '',
+        value: null,
+        client_entity_id: undefined,
+        executed_entity_id: undefined,
       });
-    },
-    onError: (error: any) => {
-      toast({ title: "Erro ao criar caso", description: error.message, variant: "destructive" });
-    },
-  });
+    }
+    setIsModalOpen(true);
+  };
+
 
   // Handler para salvar novo caso
-  const handleSaveNewCase = () => {
-    if (!newCaseForm.title) {
+  const handleSaveCase = () => {
+    if (!currentCase.title) {
       toast({ title: "Erro", description: "O título do caso é obrigatório.", variant: "destructive" });
       return;
     }
-    createCaseMutation.mutate(newCaseForm);
+    saveCaseMutation.mutate(currentCase);
   };
 
   // Handler para importação
@@ -192,13 +222,13 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     formData.append('file', importFile);
 
     try {
-      const response = await fetch('/api/cases/import', { 
-        method: 'POST', 
-        body: formData 
+      const response = await fetch('/api/cases/import', {
+        method: 'POST',
+        body: formData
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.error || "Falha na importação.");
       }
@@ -207,15 +237,15 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         title: "Importação Concluída!",
         description: `${result.successCount || 0} casos importados com sucesso.`
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['cases'] });
       setIsImportModalOpen(false);
       setImportFile(null);
     } catch (error: any) {
-      toast({ 
-        title: "Erro na Importação", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: "Erro na Importação",
+        description: error.message,
+        variant: "destructive"
       });
     } finally {
       setIsImporting(false);
@@ -226,8 +256,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
   const filteredCases = useMemo(() => {
     if (!cases) return [];
     return cases.filter(c => {
-      const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const searchMatch = (c.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.case_number || "").toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = filterStatus === "all" || c.status === filterStatus;
       const priorityMatch = filterPriority === "all" || c.priority === filterPriority;
       return searchMatch && statusMatch && priorityMatch;
@@ -259,6 +289,41 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     );
   };
 
+  // Funções do Kanban
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, caseItem: Case) => {
+    setDraggedCase(caseItem);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, status: Case['status']) => {
+    e.preventDefault();
+    if (draggedCase && draggedCase.status !== status) {
+      // Optimistic update
+      const originalCases = queryClient.getQueryData<any>(['cases']);
+      queryClient.setQueryData(['cases'], (oldData: any) => {
+        const newCases = oldData.cases.map((c: Case) =>
+          c.id === draggedCase.id ? { ...c, status } : c
+        );
+        return { ...oldData, cases: newCases };
+      });
+
+      updateCaseStatusMutation.mutate(
+        { caseId: draggedCase.id, status },
+        {
+          onError: () => {
+            // Revert on error
+            queryClient.setQueryData(['cases'], originalCases);
+          },
+        }
+      );
+    }
+    setDraggedCase(null);
+  };
+
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-96 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl">
@@ -275,7 +340,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       {/* Header */}
       <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-10"></div>
-        
+
         <div className="relative z-10">
           <h2 className="text-4xl font-bold mb-3">Gestão de Casos e Processos</h2>
           <p className="text-slate-300 text-xl">Administre todos os casos do escritório de forma centralizada e eficiente.</p>
@@ -292,14 +357,14 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
             <div className="flex flex-col sm:flex-row gap-4 flex-1">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-                <Input 
-                  placeholder="Buscar por título ou número..." 
-                  value={searchTerm} 
-                  onChange={e => setSearchTerm(e.target.value)} 
+                <Input
+                  placeholder="Buscar por título ou número..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
                   className="pl-12 bg-white/80 border-2 border-slate-200 focus:border-slate-400"
                 />
               </div>
-              
+
               <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger className="w-[200px] bg-white/80 border-2 border-slate-200">
                   <SelectValue placeholder="Status" />
@@ -313,41 +378,41 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex gap-3 items-center">
               {/* Botões de visualização */}
               <div className="flex items-center gap-2 bg-slate-200 rounded-xl p-1">
-                <Button 
-                  variant={viewMode === 'list' ? 'default' : 'ghost'} 
-                  size="sm" 
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
                   onClick={() => setViewMode('list')}
                   className={`rounded-lg ${viewMode === 'list' ? '' : 'text-slate-700 hover:text-slate-900'}`}
                 >
                   <List className="h-4 w-4" />
                 </Button>
-                <Button 
-                  variant={viewMode === 'kanban' ? 'default' : 'ghost'} 
-                  size="sm" 
+                <Button
+                  variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                  size="sm"
                   onClick={() => setViewMode('kanban')}
                   className={`rounded-lg ${viewMode === 'kanban' ? '' : 'text-slate-700 hover:text-slate-900'}`}
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               {/* Botão Importar - FUNCIONAL */}
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="border-2 border-slate-200 hover:border-slate-400"
                 onClick={() => setIsImportModalOpen(true)}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Importar
               </Button>
-              
+
               {/* Botão Novo Caso - TEXTO SEMPRE VISÍVEL */}
               <Button
-                onClick={() => setIsNewCaseModalOpen(true)}
+                onClick={() => openModal()}
                 className="flex items-center shadow-lg rounded-lg font-semibold transition-colors"
                 style={{
                   background: 'linear-gradient(90deg,#0f172a,#111827)', // equivalente ao from-slate-900 -> to-slate-800
@@ -406,10 +471,10 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="hover:bg-slate-100 hover:scale-110 transition-all">
+                        <Button variant="ghost" size="icon" onClick={() => openModal(caseItem)} className="hover:bg-slate-100 hover:scale-110 transition-all">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="hover:bg-slate-100 hover:scale-110 transition-all">
+                        <Button variant="ghost" size="icon" onClick={() => openModal(caseItem)} className="hover:bg-slate-100 hover:scale-110 transition-all">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </div>
@@ -426,7 +491,12 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
       {viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {(['Em andamento', 'Acordo', 'Extinto', 'Pago'] as const).map(status => (
-            <div key={status} className="space-y-4">
+            <div
+              key={status}
+              className="space-y-4"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, status)}
+            >
               <div className="bg-gradient-to-r from-slate-100 to-slate-200 rounded-xl p-4 sticky top-0 z-10">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-slate-800 text-lg">{status}</h3>
@@ -435,25 +505,31 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                   </Badge>
                 </div>
               </div>
-              
+
               <div className="space-y-4 min-h-[400px]">
                 {filteredCases
                   .filter(c => c.status === status)
                   .map(caseItem => (
-                    <Card key={caseItem.id} className="cursor-move group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-l-4 border-l-blue-500">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <p className="font-semibold text-slate-900 line-clamp-2">{caseItem.title}</p>
-                          <p className="text-sm text-slate-500 font-mono">{caseItem.case_number}</p>
-                          <div className="flex justify-between items-center">
-                            {getPriorityBadge(caseItem.priority)}
-                            <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                    <div
+                      key={caseItem.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, caseItem)}
+                    >
+                      <Card className="cursor-move group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-l-4 border-l-blue-500">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            <p className="font-semibold text-slate-900 line-clamp-2">{caseItem.title}</p>
+                            <p className="text-sm text-slate-500 font-mono">{caseItem.case_number}</p>
+                            <div className="flex justify-between items-center">
+                              {getPriorityBadge(caseItem.priority)}
+                              <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => openModal(caseItem)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    </div>
                   ))}
               </div>
             </div>
@@ -461,27 +537,28 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         </div>
       )}
 
-      {/* Modal de Novo Caso */}
-      <Dialog open={isNewCaseModalOpen} onOpenChange={setIsNewCaseModalOpen}>
+
+      {/* Modal de Novo/Editar Caso */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[650px]">
           <DialogHeader>
             <DialogTitle className="flex items-center">
               <Briefcase className="mr-2 h-5 w-5 text-slate-600" />
-              Criar Novo Caso
+              {isEditMode ? 'Editar Caso' : 'Criar Novo Caso'}
             </DialogTitle>
             <DialogDescription>
-              Preencha as informações do novo caso/processo judicial
+              {isEditMode ? 'Altere as informações do caso.' : 'Preencha as informações do novo caso/processo judicial'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-6 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Título do Caso *</Label>
                 <Input
                   id="title"
-                  value={newCaseForm.title}
-                  onChange={(e) => setNewCaseForm({ ...newCaseForm, title: e.target.value })}
+                  value={currentCase.title || ''}
+                  onChange={(e) => setCurrentCase({ ...currentCase, title: e.target.value })}
                   placeholder="Ex: Ação de Cobrança - João Silva"
                 />
               </div>
@@ -489,8 +566,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <Label htmlFor="case_number">Número do Processo</Label>
                 <Input
                   id="case_number"
-                  value={newCaseForm.case_number}
-                  onChange={(e) => setNewCaseForm({ ...newCaseForm, case_number: e.target.value })}
+                  value={currentCase.case_number || ''}
+                  onChange={(e) => setCurrentCase({ ...currentCase, case_number: e.target.value })}
                   placeholder="0000000-00.0000.0.00.0000"
                   className="font-mono"
                 />
@@ -502,8 +579,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <Label htmlFor="court">Vara/Tribunal</Label>
                 <Input
                   id="court"
-                  value={newCaseForm.court}
-                  onChange={(e) => setNewCaseForm({ ...newCaseForm, court: e.target.value })}
+                  value={currentCase.court || ''}
+                  onChange={(e) => setCurrentCase({ ...currentCase, court: e.target.value })}
                   placeholder="Ex: 1ª Vara Cível de Campo Grande"
                 />
               </div>
@@ -512,20 +589,47 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <Input
                   id="value"
                   type="number"
-                  value={newCaseForm.value}
-                  onChange={(e) => setNewCaseForm({ ...newCaseForm, value: e.target.value })}
+                  value={currentCase.value || ''}
+                  onChange={(e) => setCurrentCase({ ...currentCase, value: parseFloat(e.target.value) })}
                   placeholder="0,00"
                 />
               </div>
             </div>
-
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Cliente *</Label>
+                <Select
+                  value={String(currentCase.client_entity_id || '')}
+                  onValueChange={(value) => setCurrentCase({ ...currentCase, client_entity_id: Number(value) })}
+                  disabled={isEditMode}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                  <SelectContent>
+                    {allEntities.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Executado *</Label>
+                <Select
+                  value={String(currentCase.executed_entity_id || '')}
+                  onValueChange={(value) => setCurrentCase({ ...currentCase, executed_entity_id: Number(value) })}
+                  disabled={isEditMode}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o executado" /></SelectTrigger>
+                  <SelectContent>
+                    {allEntities.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="priority">Prioridade</Label>
                 <Select
-                  value={newCaseForm.priority}
-                  onValueChange={(value: 'Alta' | 'Média' | 'Baixa') => 
-                    setNewCaseForm({ ...newCaseForm, priority: value })
+                  value={currentCase.priority}
+                  onValueChange={(value: 'Alta' | 'Média' | 'Baixa') =>
+                    setCurrentCase({ ...currentCase, priority: value })
                   }
                 >
                   <SelectTrigger>
@@ -541,9 +645,9 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
-                  value={newCaseForm.status}
-                  onValueChange={(value: Case['status']) => 
-                    setNewCaseForm({ ...newCaseForm, status: value })
+                  value={currentCase.status}
+                  onValueChange={(value: Case['status']) =>
+                    setCurrentCase({ ...currentCase, status: value })
                   }
                 >
                   <SelectTrigger>
@@ -563,8 +667,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               <Label htmlFor="description">Descrição</Label>
               <Textarea
                 id="description"
-                value={newCaseForm.description}
-                onChange={(e) => setNewCaseForm({ ...newCaseForm, description: e.target.value })}
+                value={currentCase.description || ''}
+                onChange={(e) => setCurrentCase({ ...currentCase, description: e.target.value })}
                 placeholder="Descrição detalhada do caso..."
                 className="min-h-[100px]"
               />
@@ -572,16 +676,16 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNewCaseModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleSaveNewCase}
-              disabled={createCaseMutation.isPending}
+            <Button
+              onClick={handleSaveCase}
+              disabled={saveCaseMutation.isPending}
               className="bg-slate-800 hover:bg-slate-900"
               style={{ color: 'white' }}
             >
-              {createCaseMutation.isPending ? (
+              {saveCaseMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />
                   <span className="text-white">Salvando...</span>
@@ -589,7 +693,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4 text-white" />
-                  <span className="text-white">Criar Caso</span>
+                  <span className="text-white">{isEditMode ? 'Salvar Alterações' : 'Criar Caso'}</span>
                 </>
               )}
             </Button>
@@ -609,7 +713,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
               Faça upload de uma planilha Excel ou CSV com os casos para importar
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-6 py-4">
             <div className="space-y-4">
               <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-slate-400 transition-colors">
@@ -636,9 +740,9 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <p className="text-sm text-blue-800 mb-2">
                   Título | Número do Processo | Vara/Tribunal | Status | Prioridade | Valor | Descrição
                 </p>
-                <a 
-                  href="/modelo-importacao-casos.xlsx" 
-                  download 
+                <a
+                  href="/modelo-importacao-casos.xlsx"
+                  download
                   className="text-sm text-blue-600 hover:underline font-medium"
                 >
                   Baixar modelo de planilha
@@ -648,8 +752,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setIsImportModalOpen(false);
                 setImportFile(null);
@@ -657,7 +761,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleImportCases}
               disabled={isImporting || !importFile}
               className="bg-slate-800 hover:bg-slate-900"
