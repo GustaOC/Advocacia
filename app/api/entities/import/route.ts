@@ -1,4 +1,4 @@
-// app/api/entities/import/route.ts - VERSÃO ULTRA ROBUSTA
+// app/api/entities/import/route.ts - VERSÃO ULTRA ROBUSTA E CORRIGIDA
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import * as entityService from "@/lib/services/entityService";
@@ -140,20 +140,24 @@ export async function POST(req: NextRequest) {
     if (!sheetInfo) {
       // Se não encontrou, tentar com a primeira planilha como fallback
       const firstSheetName = workbook.SheetNames[0];
-      const firstSheet = workbook.Sheets[firstSheetName];
       
-      if (firstSheet) {
-        console.log(`[Import] Usando primeira planilha como fallback: "${firstSheetName}"`);
-        const data = XLSX.utils.sheet_to_json(firstSheet);
+      // ✅ CORREÇÃO APLICADA AQUI: Adicionada verificação para garantir que firstSheetName não é undefined
+      if (firstSheetName) { 
+        const firstSheet = workbook.Sheets[firstSheetName];
         
-        if (data.length > 0) {
-          const fields = Object.keys(data[0] as Record<string, any>);
+        if (firstSheet) {
+          console.log(`[Import] Usando primeira planilha como fallback: "${firstSheetName}"`);
+          const data = XLSX.utils.sheet_to_json(firstSheet);
           
-          return NextResponse.json({ 
-            error: "Formato de planilha não reconhecido.",
-            details: `Campos encontrados: ${fields.join(", ")}. Campos esperados: Nome Completo, Cpf, Endereço, Nº, Bairro, Cidade, Cep, Celular 1, Celular 2, Email.`,
-            suggestion: "Verifique se os nomes das colunas estão corretos (com acentos e espaços)."
-          }, { status: 400 });
+          if (data.length > 0) {
+            const fields = Object.keys(data[0] as Record<string, any>);
+            
+            return NextResponse.json({ 
+              error: "Formato de planilha não reconhecido.",
+              details: `Campos encontrados: ${fields.join(", ")}. Campos esperados: Nome Completo, Cpf, Endereço, Nº, Bairro, Cidade, Cep, Celular 1, Celular 2, Email.`,
+              suggestion: "Verifique se os nomes das colunas estão corretos (com acentos e espaços)."
+            }, { status: 400 });
+          }
         }
       }
       
@@ -217,7 +221,6 @@ export async function POST(req: NextRequest) {
         
         if (error instanceof z.ZodError) {
           errorMessage = error.errors.map(e => {
-            const field = e.path.join('.');
             return `${e.message}`;
           }).join(', ');
         }
@@ -248,7 +251,7 @@ export async function POST(req: NextRequest) {
         total: data.length,
         sucesso: successCount,
         falha: errorCount,
-        taxa_sucesso: `${Math.round((successCount / data.length) * 100)}%`
+        taxa_sucesso: data.length > 0 ? `${Math.round((successCount / data.length) * 100)}%` : '0%'
       }
     };
     

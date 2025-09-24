@@ -1,4 +1,4 @@
-// lib/services/caseService.ts 
+// lib/services/caseService.ts
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
@@ -15,7 +15,6 @@ export async function getCases(page: number = 1, limit: number = 10) {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // ==> PASSO 5: ADICIONANDO PAGINAÇÃO E CONTAGEM TOTAL
   const { data, error, count } = await supabase
     .from("cases")
     .select(`
@@ -28,10 +27,9 @@ export async function getCases(page: number = 1, limit: number = 10) {
           document
         )
       )
-    `, { count: "exact" }) // Solicita a contagem total de registros
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
-    .range(from, to); // Aplica a paginação
-  // ==> FIM DO PASSO 5
+    .range(from, to);
 
   if (error) {
     console.error("Erro ao buscar casos:", error.message);
@@ -71,7 +69,6 @@ export async function getCaseById(id: string) {
  * Cria um novo caso e associa as partes (cliente e executado).
  */
 export async function createCase(caseData: unknown, user: AuthUser) {
-    // ... (restante da função permanece inalterado)
     const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseSchema.parse(caseData);
 
     const supabase = createAdminClient();
@@ -106,9 +103,10 @@ export async function createCase(caseData: unknown, user: AuthUser) {
     }
   
     await logAudit('CASE_CREATE', user, { caseId: newCase.id, title: newCase.title });
+    
     await supabase.from('case_status_history').insert({
       case_id: newCase.id,
-      new_main_status: newCase.main_status,
+      new_main_status: newCase.status, // Corrigido
       new_status_reason: newCase.status_reason,
       changed_by_user_id: user.id,
       changed_by_user_email: user.email,
@@ -128,13 +126,12 @@ export async function createCase(caseData: unknown, user: AuthUser) {
  * Atualiza um caso existente.
  */
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
-    // ... (restante da função permanece inalterado)
     const parsedData = CaseUpdateSchema.parse(caseData);
     const supabase = createAdminClient();
 
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("main_status, status_reason")
+        .select("status, status_reason") // Corrigido
         .eq("id", id)
         .single();
 
@@ -155,13 +152,13 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         throw new Error("Não foi possível atualizar o caso.");
     }
     
-    const statusChanged = currentCase.main_status !== updatedCase.main_status || currentCase.status_reason !== updatedCase.status_reason;
+    const statusChanged = currentCase.status !== updatedCase.status || currentCase.status_reason !== updatedCase.status_reason;
 
     if (statusChanged) {
         await supabase.from('case_status_history').insert({
             case_id: id,
-            previous_main_status: currentCase.main_status,
-            new_main_status: updatedCase.main_status,
+            previous_main_status: currentCase.status, // Corrigido
+            new_main_status: updatedCase.status,       // Corrigido
             previous_status_reason: currentCase.status_reason,
             new_status_reason: updatedCase.status_reason,
             changed_by_user_id: user.id,
@@ -178,7 +175,6 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
  * Busca o histórico de status de um caso.
  */
 export async function getCaseHistory(caseId: number) {
-    // ... (restante da função permanece inalterado)
     const supabase = createAdminClient();
     const { data, error } = await supabase
         .from("case_status_history")
