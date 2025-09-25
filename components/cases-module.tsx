@@ -140,6 +140,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         },
         onSuccess: () => {
             toast({ title: "Sucesso!", description: `Caso ${isEditMode ? 'atualizado' : 'criado'} com sucesso.` });
+            console.log('[cases-module] Mutação bem-sucedida. Invalidando queries: ["cases", "financialAgreements"]');
             queryClient.invalidateQueries({ queryKey: ['cases'] });
             queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
             setIsModalOpen(false);
