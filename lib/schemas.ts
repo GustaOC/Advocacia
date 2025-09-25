@@ -33,6 +33,7 @@ export const CaseSchema = z.object({
   status_reason: z.string().optional().nullable(),
   court: z.string().max(255).optional().nullable(),
   priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
+  value: z.number().optional().nullable(),
   client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
   executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
   payment_date: z.string().optional().nullable(),
@@ -58,7 +59,7 @@ export const CaseUpdateSchema = CaseSchema.partial().omit({
 export const AgreementSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
   client_entity_id: z.number().int().positive("O ID da entidade cliente é obrigatório."),
-  agreement_type: z.string().min(3, "O tipo de acordo é obrigatório."),
+  agreement_type: z.string().min(1, "O tipo de acordo é obrigatório."),
   total_value: z.number().positive("O valor total deve ser maior que zero."),
   entry_value: z.number().min(0).default(0),
   installments: z.number().int().min(1).default(1),

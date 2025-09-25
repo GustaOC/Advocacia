@@ -1,4 +1,4 @@
-// lib/services/caseService.ts - VERSÃO COM CORREÇÃO DE TIPO
+// lib/services/caseService.ts - VERSÃO CORRIGIDA
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
@@ -19,7 +19,8 @@ export async function getCases(page: number = 1, limit: number = 10) {
       *,
       case_parties (
         role,
-        entities (
+        entity_id,
+        entities:entity_id (
           id,
           name,
           document
@@ -33,7 +34,17 @@ export async function getCases(page: number = 1, limit: number = 10) {
     console.error("Erro ao buscar casos:", error);
     throw new Error("Não foi possível buscar os casos.");
   }
-  return { data: data || [], count: count || 0 };
+  
+  // Normalizar a estrutura para o formato esperado pelo frontend
+  const normalizedData = (data || []).map(caseItem => ({
+    ...caseItem,
+    case_parties: caseItem.case_parties.map((party: any) => ({
+      role: party.role,
+      entities: party.entities
+    }))
+  }));
+  
+  return { data: normalizedData, count: count || 0 };
 }
 
 /**
@@ -47,7 +58,8 @@ export async function getCaseById(id: string) {
       *,
       case_parties (
         role,
-        entities (*)
+        entity_id,
+        entities:entity_id (*)
       )
     `)
     .eq("id", id)
@@ -60,6 +72,15 @@ export async function getCaseById(id: string) {
     console.error(`Erro ao buscar caso ${id}:`, error);
     throw new Error("Não foi possível buscar o caso.");
   }
+  
+  // Normalizar a estrutura
+  if (data) {
+    data.case_parties = data.case_parties.map((party: any) => ({
+      role: party.role,
+      entities: party.entities
+    }));
+  }
+  
   return data;
 }
 
@@ -109,17 +130,47 @@ export async function createCase(caseData: unknown, user: AuthUser) {
 
     if (newCase.status === 'Acordo' && newCase.agreement_value && newCase.agreement_type) {
         const agreementData = {
-            case_id: newCase.id, client_entity_id,
-            agreement_type: newCase.agreement_type, total_value: newCase.agreement_value,
-            entry_value: newCase.down_payment || 0, installments: newCase.installments || 1,
-            status: 'active' as const, notes: `Acordo criado junto com o caso #${newCase.id}.`
+            case_id: newCase.id, 
+            client_entity_id,
+            agreement_type: newCase.agreement_type, 
+            total_value: newCase.agreement_value,
+            entry_value: newCase.down_payment || 0, 
+            installments: newCase.installments || 1,
+            status: 'active' as const, 
+            notes: `Acordo criado junto com o caso #${newCase.id}.`
         };
+        
+        console.log('[caseService.createCase] Criando acordo financeiro:', agreementData);
+        
         const { error: agreementError } = await supabase.from('financial_agreements').insert(agreementData);
-        if (agreementError) console.error(`Erro ao criar acordo financeiro para o caso ${newCase.id}:`, agreementError);
-        else console.log(`Acordo financeiro criado com sucesso para o caso ${newCase.id}`);
+        if (agreementError) {
+            console.error(`Erro ao criar acordo financeiro para o caso ${newCase.id}:`, agreementError);
+        } else {
+            console.log(`[caseService.createCase] Acordo financeiro criado com sucesso para o caso ${newCase.id}`);
+        }
     }
 
-    const { data: createdCaseWithParties } = await supabase.from("cases").select(`*, case_parties(role, entities(id, name))`).eq('id', newCase.id).single();
+    const { data: createdCaseWithParties } = await supabase
+      .from("cases")
+      .select(`
+        *, 
+        case_parties (
+          role, 
+          entity_id,
+          entities:entity_id (id, name)
+        )
+      `)
+      .eq('id', newCase.id)
+      .single();
+    
+    // Normalizar a estrutura antes de retornar
+    if (createdCaseWithParties) {
+      createdCaseWithParties.case_parties = createdCaseWithParties.case_parties.map((party: any) => ({
+        role: party.role,
+        entities: party.entities
+      }));
+    }
+    
     return createdCaseWithParties;
 }
 
@@ -130,20 +181,38 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     const parsedData = CaseUpdateSchema.parse(caseData);
     const supabase = createAdminClient();
 
+    // Buscar caso atual com as partes para obter o client_entity_id
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("*, case_parties(role, entities(id))")
-        .eq("id", id).single();
+        .select(`
+          *, 
+          case_parties (
+            role, 
+            entity_id
+          )
+        `)
+        .eq("id", id)
+        .single();
 
     if (fetchError || !currentCase) {
         console.error(`Erro ao buscar caso ${id} antes de atualizar:`, fetchError);
         throw new Error("Não foi possível encontrar o caso para atualização.");
     }
 
+    console.log('[caseService.updateCase] Case parties do caso atual:', currentCase.case_parties);
+
+    // Se o status não for mais 'Acordo', limpar campos relacionados
     if (parsedData.status && parsedData.status !== 'Acordo') {
-        Object.assign(parsedData, { agreement_type: null, agreement_value: null, installments: null, down_payment: null, installment_due_date: null });
+        Object.assign(parsedData, { 
+            agreement_type: null, 
+            agreement_value: null, 
+            installments: null, 
+            down_payment: null, 
+            installment_due_date: null 
+        });
     }
 
+    // Atualizar o caso
     const { data: updatedCase, error: updateError } = await supabase
         .from("cases")
         .update(parsedData)
@@ -156,92 +225,210 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         throw new Error("Não foi possível atualizar o caso.");
     }
     
-    console.log('[caseService] Dados antes da atualização:', currentCase);
-    console.log('[caseService] Dados após a atualização:', updatedCase);
+    console.log('[caseService.updateCase] Caso atualizado:', updatedCase);
+    console.log('[caseService.updateCase] Status mudou?', currentCase.status, '->', updatedCase.status);
 
+    // Verificar se o status mudou
     const statusChanged = currentCase.status !== updatedCase.status;
     if (statusChanged) {
         await supabase.from('case_status_history').insert({
-            case_id: id, previous_main_status: currentCase.status, new_main_status: updatedCase.status,
-            changed_by_user_id: user.id, changed_by_user_email: user.email,
+            case_id: id, 
+            previous_main_status: currentCase.status, 
+            new_main_status: updatedCase.status,
+            changed_by_user_id: user.id, 
+            changed_by_user_email: user.email,
         });
     }
 
+    // Obter o ID da entidade cliente diretamente do array de case_parties
     const clientParty = currentCase.case_parties.find((p: any) => p.role === 'Cliente');
-    // ✅ CORREÇÃO DE TIPO APLICADA AQUI
-    const clientEntityId = clientParty?.entities?.id;
+    const clientEntityId = clientParty?.entity_id;
+
+    console.log('[caseService.updateCase] Cliente encontrado:', { clientParty, clientEntityId });
 
     if (clientEntityId) {
-        const { data: existingAgreement } = await supabase.from('financial_agreements').select('id').eq('case_id', id).single();
-        console.log(`[caseService] Verificando acordo para caso ${id}. Existente:`, !!existingAgreement);
+        // Verificar se já existe um acordo financeiro para este caso
+        const { data: existingAgreements } = await supabase
+            .from('financial_agreements')
+            .select('id, status')
+            .eq('case_id', id);
+        
+        const existingAgreement = existingAgreements && existingAgreements.length > 0 ? existingAgreements[0] : null;
+        
+        console.log(`[caseService.updateCase] Acordo existente para caso ${id}:`, existingAgreement);
 
         const hasAgreementData = updatedCase.agreement_value && updatedCase.agreement_type;
+        console.log('[caseService.updateCase] Tem dados de acordo?', hasAgreementData, { 
+            value: updatedCase.agreement_value, 
+            type: updatedCase.agreement_type 
+        });
 
         // Cenário 1: Status mudou para 'Acordo' e não existia acordo antes
         if (statusChanged && updatedCase.status === 'Acordo' && hasAgreementData && !existingAgreement) {
-            console.log(`[caseService] Cenário 1: Status mudou para 'Acordo', criando acordo.`);
-            const { error } = await supabase.from('financial_agreements').insert({
-                case_id: updatedCase.id, client_entity_id: clientEntityId, agreement_type: updatedCase.agreement_type!,
-                total_value: updatedCase.agreement_value, entry_value: updatedCase.down_payment || 0,
-                installments: updatedCase.installments || 1, status: 'active' as const, notes: `Acordo gerado a partir da atualização do caso #${updatedCase.id}.`
-            });
-            if (error) console.error(`Erro ao criar acordo (Cenário 1):`, error); else console.log(`Acordo criado (Cenário 1) para caso ${id}`);
+            console.log(`[caseService.updateCase] Criando novo acordo financeiro`);
+            
+            const agreementData = {
+                case_id: id, 
+                client_entity_id: clientEntityId, 
+                agreement_type: updatedCase.agreement_type,
+                total_value: Number(updatedCase.agreement_value), 
+                entry_value: Number(updatedCase.down_payment) || 0,
+                installments: Number(updatedCase.installments) || 1, 
+                status: 'active', 
+                notes: `Acordo gerado a partir da atualização do caso #${id}.`
+            };
+            
+            console.log('[caseService.updateCase] Dados do novo acordo:', agreementData);
+            
+            const { error, data } = await supabase
+                .from('financial_agreements')
+                .insert(agreementData)
+                .select()
+                .single();
+            
+            if (error) {
+                console.error(`[caseService.updateCase] Erro ao criar acordo:`, error);
+            } else {
+                console.log(`[caseService.updateCase] Acordo criado com sucesso:`, data);
+            }
         } 
         // Cenário 2: Status continua 'Acordo', acordo já existe, valores mudaram
         else if (!statusChanged && updatedCase.status === 'Acordo' && existingAgreement && hasAgreementData) {
-            console.log(`[caseService] Cenário 2: Status 'Acordo' mantido, atualizando acordo existente.`);
-            const valuesChanged = currentCase.agreement_value !== updatedCase.agreement_value || currentCase.agreement_type !== updatedCase.agreement_type || currentCase.installments !== updatedCase.installments || currentCase.down_payment !== updatedCase.down_payment;
-            console.log(`[caseService] Valores do acordo mudaram: ${valuesChanged}`);
+            const valuesChanged = 
+                currentCase.agreement_value !== updatedCase.agreement_value || 
+                currentCase.agreement_type !== updatedCase.agreement_type || 
+                currentCase.installments !== updatedCase.installments || 
+                currentCase.down_payment !== updatedCase.down_payment;
+            
+            console.log(`[caseService.updateCase] Valores do acordo mudaram: ${valuesChanged}`);
+            
             if (valuesChanged) {
-                const { error } = await supabase.from('financial_agreements').update({
-                    agreement_type: updatedCase.agreement_type!, total_value: updatedCase.agreement_value,
-                    entry_value: updatedCase.down_payment || 0, installments: updatedCase.installments || 1,
-                    updated_at: new Date().toISOString()
-                }).eq('id', existingAgreement.id);
-                if (error) console.error(`Erro ao atualizar acordo (Cenário 2):`, error); else console.log(`Acordo atualizado (Cenário 2) para caso ${id}`);
+                const { error } = await supabase
+                    .from('financial_agreements')
+                    .update({
+                        agreement_type: updatedCase.agreement_type, 
+                        total_value: Number(updatedCase.agreement_value),
+                        entry_value: Number(updatedCase.down_payment) || 0, 
+                        installments: Number(updatedCase.installments) || 1,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingAgreement.id);
+                
+                if (error) {
+                    console.error(`[caseService.updateCase] Erro ao atualizar acordo:`, error);
+                } else {
+                    console.log(`[caseService.updateCase] Acordo atualizado com sucesso`);
+                }
             }
         } 
-        // Cenário 3 (Fallback): Status é 'Acordo', mas acordo não existia. Criar.
-        else if (!statusChanged && updatedCase.status === 'Acordo' && !existingAgreement && hasAgreementData) {
-            console.log(`[caseService] Cenário de Fallback: Status 'Acordo' mantido, mas acordo não existia. Criando...`);
-            const { error } = await supabase.from('financial_agreements').insert({
-                case_id: updatedCase.id, client_entity_id: clientEntityId, agreement_type: updatedCase.agreement_type!,
-                total_value: updatedCase.agreement_value, entry_value: updatedCase.down_payment || 0,
-                installments: updatedCase.installments || 1, status: 'active' as const, notes: `Acordo criado a partir da atualização do caso #${updatedCase.id} (lógica de fallback).`
-            });
-            if (error) console.error(`Erro ao criar acordo (Fallback):`, error); else console.log(`Acordo criado (Fallback) para caso ${id}`);
+        // Cenário 3: Status é 'Acordo', mas acordo não existia (fallback)
+        else if (updatedCase.status === 'Acordo' && !existingAgreement && hasAgreementData) {
+            console.log(`[caseService.updateCase] Criando acordo (fallback)`);
+            
+            const agreementData = {
+                case_id: id, 
+                client_entity_id: clientEntityId, 
+                agreement_type: updatedCase.agreement_type,
+                total_value: Number(updatedCase.agreement_value), 
+                entry_value: Number(updatedCase.down_payment) || 0,
+                installments: Number(updatedCase.installments) || 1, 
+                status: 'active', 
+                notes: `Acordo criado - caso #${id}.`
+            };
+            
+            const { error } = await supabase
+                .from('financial_agreements')
+                .insert(agreementData);
+            
+            if (error) {
+                console.error(`[caseService.updateCase] Erro ao criar acordo (fallback):`, error);
+            } else {
+                console.log(`[caseService.updateCase] Acordo criado com sucesso (fallback)`);
+            }
         } 
         // Cenário 4: Status mudou DE 'Acordo' para outro
         else if (statusChanged && currentCase.status === 'Acordo' && updatedCase.status !== 'Acordo' && existingAgreement) {
-            console.log(`[caseService] Cenário 4: Status mudou de 'Acordo', cancelando acordo.`);
-            const { error } = await supabase.from('financial_agreements').update({ status: 'cancelled', updated_at: new Date().toISOString(), notes: `Acordo cancelado devido à mudança de status do caso para ${updatedCase.status}` }).eq('id', existingAgreement.id);
-            if (error) console.error(`Erro ao cancelar acordo (Cenário 4):`, error); else console.log(`Acordo cancelado (Cenário 4) para caso ${id}`);
+            console.log(`[caseService.updateCase] Cancelando acordo`);
+            
+            const { error } = await supabase
+                .from('financial_agreements')
+                .update({ 
+                    status: 'cancelled', 
+                    updated_at: new Date().toISOString(), 
+                    notes: `Acordo cancelado - status do caso mudou para ${updatedCase.status}` 
+                })
+                .eq('id', existingAgreement.id);
+            
+            if (error) {
+                console.error(`[caseService.updateCase] Erro ao cancelar acordo:`, error);
+            } else {
+                console.log(`[caseService.updateCase] Acordo cancelado com sucesso`);
+            }
         } 
-        // Cenário 5: Status voltou a ser 'Acordo'
-        else if (statusChanged && updatedCase.status === 'Acordo' && existingAgreement && hasAgreementData) {
-            console.log(`[caseService] Cenário 5: Status voltou para 'Acordo', reativando acordo.`);
-            const { error } = await supabase.from('financial_agreements').update({
-                agreement_type: updatedCase.agreement_type!, total_value: updatedCase.agreement_value,
-                entry_value: updatedCase.down_payment || 0, installments: updatedCase.installments || 1,
-                status: 'active' as const, updated_at: new Date().toISOString(), notes: `Acordo reativado`
-            }).eq('id', existingAgreement.id);
-            if (error) console.error(`Erro ao reativar acordo (Cenário 5):`, error); else console.log(`Acordo reativado (Cenário 5) para caso ${id}`);
+        // Cenário 5: Status voltou a ser 'Acordo' e acordo existe mas está cancelado
+        else if (statusChanged && updatedCase.status === 'Acordo' && existingAgreement && hasAgreementData && existingAgreement.status === 'cancelled') {
+            console.log(`[caseService.updateCase] Reativando acordo`);
+            
+            const { error } = await supabase
+                .from('financial_agreements')
+                .update({
+                    agreement_type: updatedCase.agreement_type, 
+                    total_value: Number(updatedCase.agreement_value),
+                    entry_value: Number(updatedCase.down_payment) || 0, 
+                    installments: Number(updatedCase.installments) || 1,
+                    status: 'active', 
+                    updated_at: new Date().toISOString(), 
+                    notes: `Acordo reativado`
+                })
+                .eq('id', existingAgreement.id);
+            
+            if (error) {
+                console.error(`[caseService.updateCase] Erro ao reativar acordo:`, error);
+            } else {
+                console.log(`[caseService.updateCase] Acordo reativado com sucesso`);
+            }
         }
     } else {
-        console.warn(`Caso ${updatedCase.id}: não foi possível encontrar a parte 'Cliente' para gerenciar registro financeiro.`);
+        console.warn(`[caseService.updateCase] Caso ${updatedCase.id}: não foi possível encontrar a parte 'Cliente' para gerenciar registro financeiro.`);
     }
 
     await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
-    return updatedCase;
+    
+    // Retornar o caso atualizado com as partes normalizadas
+    const { data: finalCase } = await supabase
+      .from("cases")
+      .select(`
+        *, 
+        case_parties (
+          role, 
+          entity_id,
+          entities:entity_id (id, name)
+        )
+      `)
+      .eq('id', id)
+      .single();
+    
+    if (finalCase) {
+      finalCase.case_parties = finalCase.case_parties.map((party: any) => ({
+        role: party.role,
+        entities: party.entities
+      }));
+    }
+    
+    return finalCase || updatedCase;
 }
-
 
 /**
  * Busca o histórico de status de um caso.
  */
 export async function getCaseHistory(caseId: number) {
     const supabase = createAdminClient();
-    const { data, error } = await supabase.from("case_status_history").select("*").eq("case_id", caseId).order("changed_at", { ascending: false });
+    const { data, error } = await supabase
+        .from("case_status_history")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("changed_at", { ascending: false });
+    
     if (error) {
         console.error(`Erro ao buscar histórico do caso ${caseId}:`, error);
         throw new Error("Não foi possível buscar o histórico do caso.");

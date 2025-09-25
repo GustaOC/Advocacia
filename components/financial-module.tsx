@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO COM LISTAS LINEARES
+// components/financial-module.tsx - VERSÃO CORRIGIDA
 "use client";
 
 import React, { useState, useMemo } from "react";
@@ -137,8 +137,6 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   );
 }
 
-// --- NOVOS COMPONENTES COM LISTAS LINEARES ---
-
 // Componente para Acordos - Lista Linear
 function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgreement[], onSendMessage: (agreement: FinancialAgreement) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -155,6 +153,7 @@ function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgr
       'active': { label: 'Ativo', variant: 'default' as const },
       'completed': { label: 'Concluído', variant: 'secondary' as const },
       'defaulted': { label: 'Em Atraso', variant: 'destructive' as const },
+      'cancelled': { label: 'Cancelado', variant: 'outline' as const },
       'pending': { label: 'Pendente', variant: 'outline' as const }
     };
     
@@ -629,8 +628,9 @@ export function FinancialModule() {
   } = useQuery<FinancialAgreement[], Error>({
     queryKey: ['financialAgreements'],
     queryFn: () => apiClient.getFinancialAgreements(),
-    refetchOnWindowFocus: false,
-    initialData: [],
+    refetchOnWindowFocus: true, // Mudado para true para atualizar quando voltar para a aba
+    retry: 2,
+    staleTime: 10000, // 10 segundos
   });
   
   const [alvaras, setAlvaras] = useState<Alvara[]>(mockAlvaras);
@@ -639,7 +639,10 @@ export function FinancialModule() {
   const [messageText, setMessageText] = useState("");
   const [selectedAgreement, setSelectedAgreement] = useState<FinancialAgreement | null>(null);
 
+  // Garantir que agreements é sempre um array
   const safeAgreements: FinancialAgreement[] = Array.isArray(agreements) ? agreements : [];
+  
+  console.log('[FinancialModule] Acordos carregados:', safeAgreements.length);
 
   const handleSendMessage = (agreement: FinancialAgreement) => {
     setSelectedAgreement(agreement);
@@ -676,8 +679,10 @@ export function FinancialModule() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2"/>
-          <p className="text-gray-500">Carregando dados financeiros...</p>
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2"/>
+            <p className="text-gray-500">Carregando dados financeiros...</p>
+          </div>
       </div>
     );
   }
