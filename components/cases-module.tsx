@@ -141,7 +141,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         onSuccess: () => {
             toast({ title: "Sucesso!", description: `Caso ${isEditMode ? 'atualizado' : 'criado'} com sucesso.` });
             queryClient.invalidateQueries({ queryKey: ['cases'] });
-            // CORREÇÃO: Invalida também a query do financeiro
             queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
             setIsModalOpen(false);
         },
@@ -155,6 +154,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         onSuccess: () => {
             toast({ title: "Status Atualizado!", description: "O status do caso foi alterado." });
             queryClient.invalidateQueries({ queryKey: ['cases'] });
+            queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
         },
         onError: (error: any) => {
             toast({ title: "Erro ao atualizar status", description: error.message, variant: "destructive" });
@@ -164,8 +164,6 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
 
     const openEditModal = (caseItem: Case) => {
         setIsEditMode(true);
-        // **CORREÇÃO CRÍTICA AQUI**
-        // Extrai os IDs das partes para popular o estado do formulário corretamente.
         const client = caseItem.case_parties.find(p => p.role === 'Cliente');
         const executed = caseItem.case_parties.find(p => p.role === 'Executado');
         

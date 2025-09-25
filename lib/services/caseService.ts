@@ -1,4 +1,4 @@
-// lib/services/caseService.ts
+// lib/services/caseService.ts - VERSÃO CORRIGIDA
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
@@ -110,6 +110,30 @@ export async function createCase(caseData: unknown, user: AuthUser) {
       notes: 'Caso criado no sistema.'
     });
 
+    // 🆕 Se o caso já for criado com status 'Acordo', criar registro financeiro
+    if (newCase.status === 'Acordo' && newCase.agreement_value && newCase.agreement_type) {
+        const agreementData = {
+            case_id: newCase.id,
+            client_entity_id: client_entity_id,
+            agreement_type: newCase.agreement_type,
+            total_value: newCase.agreement_value,
+            entry_value: newCase.down_payment || 0,
+            installments: newCase.installments || 1,
+            status: 'active' as const,
+            notes: `Acordo criado junto com o caso #${newCase.id}.`
+        };
+        
+        const { error: agreementError } = await supabase
+            .from('financial_agreements')
+            .insert(agreementData);
+
+        if (agreementError) {
+            console.error(`Erro ao criar acordo financeiro para o caso ${newCase.id}:`, agreementError.message);
+        } else {
+            console.log(`Acordo financeiro criado com sucesso para o caso ${newCase.id}`);
+        }
+    }
+
     const { data: createdCaseWithParties } = await supabase
       .from("cases")
       .select(`*, case_parties(role, entities(id, name))`)
@@ -120,7 +144,7 @@ export async function createCase(caseData: unknown, user: AuthUser) {
 }
 
 /**
- * Atualiza um caso existente.
+ * Atualiza um caso existente e sincroniza com financial_agreements quando necessário.
  */
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
     const parsedData = CaseUpdateSchema.parse(caseData);
@@ -129,7 +153,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     // 1. Busca o estado atual do caso ANTES da atualização
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("status, case_parties(role, entities(id))")
+        .select("status, agreement_value, agreement_type, installments, down_payment, case_parties(role, entities(id))")
         .eq("id", id)
         .single();
 
@@ -173,49 +197,127 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         });
     }
 
-    // LÓGICA CORRIGIDA: Se o status mudou para 'Acordo', cria o registro financeiro
-    if (statusChanged && updatedCase.status === 'Acordo' && updatedCase.agreement_value && updatedCase.agreement_type) {
-        // CORREÇÃO: Verifica se 'clientParty' foi encontrado antes de tentar acessar suas propriedades.
-        const clientParty = currentCase.case_parties.find((p: any) => p.role === 'Cliente');
-        
-        // CORREÇÃO: Garante que clientParty e suas propriedades aninhadas existam.
-        if (clientParty && Array.isArray(clientParty.entities) && clientParty.entities.length > 0) {
-            const clientEntityId = clientParty.entities[0]?.id;
+    // 4. 🆕 CORREÇÃO PRINCIPAL: Gerenciar sincronização com financial_agreements
+    const clientParty = currentCase.case_parties.find((p: any) => p.role === 'Cliente');
+    const clientEntityId = clientParty?.entities?.[0]?.id;
 
-            if (clientEntityId) {
-                const agreementData = {
-                    case_id: updatedCase.id,
-                    client_entity_id: clientEntityId,
+    if (clientEntityId) {
+        // Verifica se já existe um acordo financeiro para este caso
+        const { data: existingAgreement, error: checkError } = await supabase
+            .from('financial_agreements')
+            .select('id')
+            .eq('case_id', id)
+            .single();
+
+        // Caso 1: Status mudou para 'Acordo' E não existe acordo financeiro
+        if (statusChanged && updatedCase.status === 'Acordo' && 
+            updatedCase.agreement_value && updatedCase.agreement_type && !existingAgreement) {
+            
+            const agreementData = {
+                case_id: updatedCase.id,
+                client_entity_id: clientEntityId,
+                agreement_type: updatedCase.agreement_type,
+                total_value: updatedCase.agreement_value,
+                entry_value: updatedCase.down_payment || 0,
+                installments: updatedCase.installments || 1,
+                status: 'active' as const,
+                notes: `Acordo gerado a partir da atualização do caso #${updatedCase.id}.`
+            };
+            
+            const { error: agreementError } = await supabase
+                .from('financial_agreements')
+                .insert(agreementData);
+
+            if (agreementError) {
+                console.error(`Erro ao criar acordo financeiro para o caso ${updatedCase.id}:`, agreementError.message);
+            } else {
+                console.log(`Acordo financeiro criado com sucesso para o caso ${updatedCase.id}`);
+            }
+        }
+        // 🆕 Caso 2: Status continua 'Acordo' mas valores mudaram - ATUALIZA o acordo existente
+        else if (!statusChanged && updatedCase.status === 'Acordo' && existingAgreement && 
+                 updatedCase.agreement_value && updatedCase.agreement_type) {
+            
+            // Verifica se houve mudança nos valores do acordo
+            const valuesChanged = 
+                currentCase.agreement_value !== updatedCase.agreement_value ||
+                currentCase.agreement_type !== updatedCase.agreement_type ||
+                currentCase.installments !== updatedCase.installments ||
+                currentCase.down_payment !== updatedCase.down_payment;
+
+            if (valuesChanged) {
+                const updateAgreementData = {
                     agreement_type: updatedCase.agreement_type,
                     total_value: updatedCase.agreement_value,
                     entry_value: updatedCase.down_payment || 0,
                     installments: updatedCase.installments || 1,
-                    status: 'active' as const,
-                    notes: `Acordo gerado a partir da atualização do caso #${updatedCase.id}.`
+                    updated_at: new Date().toISOString()
                 };
                 
-                const { error: agreementError } = await supabase
+                const { error: updateAgreementError } = await supabase
                     .from('financial_agreements')
-                    .insert(agreementData);
+                    .update(updateAgreementData)
+                    .eq('id', existingAgreement.id);
 
-                if (agreementError) {
-                    console.error(`Erro ao criar acordo financeiro para o caso ${updatedCase.id}:`, agreementError.message);
+                if (updateAgreementError) {
+                    console.error(`Erro ao atualizar acordo financeiro ${existingAgreement.id}:`, updateAgreementError.message);
                 } else {
-                    console.log(`Acordo financeiro criado com sucesso para o caso ${updatedCase.id}`);
+                    console.log(`Acordo financeiro ${existingAgreement.id} atualizado com sucesso`);
                 }
-            } else {
-                 console.warn(`Cliente encontrado para o caso ${updatedCase.id}, mas sem um ID de entidade válido.`);
             }
-        } else {
-            console.warn(`Caso ${updatedCase.id} movido para 'Acordo' mas não foi possível encontrar a parte 'Cliente' para criar o registro financeiro.`);
         }
+        // 🆕 Caso 3: Status mudou DE 'Acordo' PARA outro status - marca acordo como cancelado
+        else if (statusChanged && currentCase.status === 'Acordo' && 
+                 updatedCase.status !== 'Acordo' && existingAgreement) {
+            
+            const { error: cancelError } = await supabase
+                .from('financial_agreements')
+                .update({ 
+                    status: 'cancelled',
+                    updated_at: new Date().toISOString(),
+                    notes: `Acordo cancelado devido à mudança de status do caso para ${updatedCase.status}`
+                })
+                .eq('id', existingAgreement.id);
+
+            if (cancelError) {
+                console.error(`Erro ao cancelar acordo financeiro ${existingAgreement.id}:`, cancelError.message);
+            } else {
+                console.log(`Acordo financeiro ${existingAgreement.id} marcado como cancelado`);
+            }
+        }
+        // 🆕 Caso 4: Status mudou PARA 'Acordo' mas acordo já existe (reativar)
+        else if (statusChanged && updatedCase.status === 'Acordo' && existingAgreement &&
+                 updatedCase.agreement_value && updatedCase.agreement_type) {
+            
+            const reactivateData = {
+                agreement_type: updatedCase.agreement_type,
+                total_value: updatedCase.agreement_value,
+                entry_value: updatedCase.down_payment || 0,
+                installments: updatedCase.installments || 1,
+                status: 'active' as const,
+                updated_at: new Date().toISOString(),
+                notes: `Acordo reativado`
+            };
+            
+            const { error: reactivateError } = await supabase
+                .from('financial_agreements')
+                .update(reactivateData)
+                .eq('id', existingAgreement.id);
+
+            if (reactivateError) {
+                console.error(`Erro ao reativar acordo financeiro ${existingAgreement.id}:`, reactivateError.message);
+            } else {
+                console.log(`Acordo financeiro ${existingAgreement.id} reativado com sucesso`);
+            }
+        }
+    } else {
+        console.warn(`Caso ${updatedCase.id}: não foi possível encontrar a parte 'Cliente' para gerenciar registro financeiro.`);
     }
 
     await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
 
     return updatedCase;
 }
-
 
 /**
  * Busca o histórico de status de um caso.
