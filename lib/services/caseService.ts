@@ -129,12 +129,12 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     // 1. Busca o estado atual do caso ANTES da atualização
     const { data: currentCase, error: fetchError } = await supabase
         .from("cases")
-        .select("status")
+        .select("status, case_parties(role, entities(id))")
         .eq("id", id)
         .single();
 
-    if (fetchError) {
-        console.error(`Erro ao buscar caso ${id} antes de atualizar:`, fetchError.message);
+    if (fetchError || !currentCase) {
+        console.error(`Erro ao buscar caso ${id} antes de atualizar:`, fetchError?.message);
         throw new Error("Não foi possível encontrar o caso para atualização.");
     }
 
@@ -171,6 +171,44 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             changed_by_user_id: user.id,
             changed_by_user_email: user.email,
         });
+    }
+
+    // LÓGICA CORRIGIDA: Se o status mudou para 'Acordo', cria o registro financeiro
+    if (statusChanged && updatedCase.status === 'Acordo' && updatedCase.agreement_value && updatedCase.agreement_type) {
+        // CORREÇÃO: Verifica se 'clientParty' foi encontrado antes de tentar acessar suas propriedades.
+        const clientParty = currentCase.case_parties.find((p: any) => p.role === 'Cliente');
+        
+        // CORREÇÃO: Garante que clientParty e suas propriedades aninhadas existam.
+        if (clientParty && Array.isArray(clientParty.entities) && clientParty.entities.length > 0) {
+            const clientEntityId = clientParty.entities[0]?.id;
+
+            if (clientEntityId) {
+                const agreementData = {
+                    case_id: updatedCase.id,
+                    client_entity_id: clientEntityId,
+                    agreement_type: updatedCase.agreement_type,
+                    total_value: updatedCase.agreement_value,
+                    entry_value: updatedCase.down_payment || 0,
+                    installments: updatedCase.installments || 1,
+                    status: 'active' as const,
+                    notes: `Acordo gerado a partir da atualização do caso #${updatedCase.id}.`
+                };
+                
+                const { error: agreementError } = await supabase
+                    .from('financial_agreements')
+                    .insert(agreementData);
+
+                if (agreementError) {
+                    console.error(`Erro ao criar acordo financeiro para o caso ${updatedCase.id}:`, agreementError.message);
+                } else {
+                    console.log(`Acordo financeiro criado com sucesso para o caso ${updatedCase.id}`);
+                }
+            } else {
+                 console.warn(`Cliente encontrado para o caso ${updatedCase.id}, mas sem um ID de entidade válido.`);
+            }
+        } else {
+            console.warn(`Caso ${updatedCase.id} movido para 'Acordo' mas não foi possível encontrar a parte 'Cliente' para criar o registro financeiro.`);
+        }
     }
 
     await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });

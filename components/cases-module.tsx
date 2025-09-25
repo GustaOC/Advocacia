@@ -141,6 +141,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         onSuccess: () => {
             toast({ title: "Sucesso!", description: `Caso ${isEditMode ? 'atualizado' : 'criado'} com sucesso.` });
             queryClient.invalidateQueries({ queryKey: ['cases'] });
+            // CORREÇÃO: Invalida também a query do financeiro
+            queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
             setIsModalOpen(false);
         },
         onError: (error: any) => {
