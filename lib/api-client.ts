@@ -1,4 +1,4 @@
-// lib/api-client.ts 
+// lib/api-client.ts
 // Este arquivo centraliza todas as chamadas de API do frontend para o backend.
 
 // Tipos para os dados dos funcionários, para garantir a consistência
@@ -32,6 +32,12 @@ export interface Case {
   payment_date?: string | null;
   final_value?: number | null;
   action_type?: 'cobranca' | 'divorcio' | 'inventario' | 'outros';
+  // 🆕 ADICIONADO CAMPOS DE ACORDO
+  agreement_type?: 'Judicial' | 'Extrajudicial' | 'Em Audiência' | 'Pela Loja' | null;
+  agreement_value?: number | null;
+  installments?: number | null;
+  down_payment?: number | null;
+  installment_due_date?: string | null;
 }
 
 // ✅ ADICIONADO: Interface completa para acordos financeiros

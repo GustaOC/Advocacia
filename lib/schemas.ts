@@ -33,13 +33,14 @@ export const CaseSchema = z.object({
   status_reason: z.string().optional().nullable(),
   court: z.string().max(255).optional().nullable(),
   priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
-  value: z.number().optional().nullable(),
+  // A COLUNA 'value' FOI REMOVIDA PARA CORRESPONDER AO SEU BANCO DE DADOS
+  // value: z.number().optional().nullable(), 
   client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
   executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
   payment_date: z.string().optional().nullable(),
   final_value: z.number().optional().nullable(),
   
-  // Campos para Acordo (opcionais)
+  // Campos para Acordo (opcionais e sem validação estrita aqui)
   agreement_type: z.enum(['Judicial', 'Extrajudicial', 'Em Audiência', 'Pela Loja']).optional().nullable(),
   agreement_value: z.number().optional().nullable(),
   installments: z.number().int().optional().nullable(),
@@ -60,9 +61,10 @@ export const AgreementSchema = z.object({
   case_id: z.number().int().positive("O ID do caso é obrigatório."),
   client_entity_id: z.number().int().positive("O ID da entidade cliente é obrigatório."),
   agreement_type: z.string().min(1, "O tipo de acordo é obrigatório."),
-  total_value: z.number().positive("O valor total deve ser maior que zero."),
+  // VALIDAÇÃO POSITIVA APLICADA CORRETAMENTE AQUI
+  total_value: z.number().positive("O valor do acordo deve ser positivo."),
   entry_value: z.number().min(0).default(0),
-  installments: z.number().int().min(1).default(1),
+  installments: z.number().int().min(1, "O número de parcelas deve ser positivo.").default(1),
   status: z.enum(['active', 'completed', 'cancelled', 'defaulted']).default('active'),
   notes: z.string().optional().nullable(),
 });

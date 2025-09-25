@@ -114,9 +114,12 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
       {stats.map((stat, index) => {
         const StatIcon = stat.icon;
         return (
-          <Card key={index} className="group hover:shadow-lg transition-all duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+          <Card key={index} className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-br ${stat.bg} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white to-transparent rounded-full transform translate-x-8 -translate-y-8"></div>
+            
+            <CardContent className="p-6 relative z-10">
+              <div className="flex items-start justify-between">
                 <div className="space-y-2">
                   <p className="text-sm text-slate-600 font-medium">{stat.label}</p>
                   <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
@@ -125,7 +128,7 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
                     <span className="text-sm text-green-600 font-medium">{stat.trend}</span>
                   </div>
                 </div>
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg}`}>
+                <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
                   <StatIcon className={`w-6 h-6 ${stat.color}`} />
                 </div>
               </div>
@@ -628,9 +631,9 @@ export function FinancialModule() {
   } = useQuery<FinancialAgreement[], Error>({
     queryKey: ['financialAgreements'],
     queryFn: () => apiClient.getFinancialAgreements(),
-    refetchOnWindowFocus: true, // Mudado para true para atualizar quando voltar para a aba
+    refetchOnWindowFocus: true,
     retry: 2,
-    staleTime: 10000, // 10 segundos
+    staleTime: 10000, 
   });
   
   const [alvaras, setAlvaras] = useState<Alvara[]>(mockAlvaras);
@@ -639,11 +642,8 @@ export function FinancialModule() {
   const [messageText, setMessageText] = useState("");
   const [selectedAgreement, setSelectedAgreement] = useState<FinancialAgreement | null>(null);
 
-  // Garantir que agreements é sempre um array
   const safeAgreements: FinancialAgreement[] = Array.isArray(agreements) ? agreements : [];
   
-  console.log('[FinancialModule] Acordos carregados:', safeAgreements.length);
-
   const handleSendMessage = (agreement: FinancialAgreement) => {
     setSelectedAgreement(agreement);
     setMessageText(`Prezado(a) ${agreement.entities.name},\n\nLembramos que a parcela do seu acordo referente ao processo ${agreement.cases.case_number || 'sem número'} está em atraso. Para evitar a retomada do processo, por favor, regularize o pagamento.\n\nAtenciosamente,\nCássio Miguel Advocacia`);
