@@ -78,15 +78,13 @@ const instance = axios.create({
 });
 
 instance.interceptors.response.use(
-  (response: AxiosResponse) => response.data, // Retorna diretamente response.data
+  (response: AxiosResponse) => response.data,
   (error: AxiosError) => {
     if (error.response && error.response.status === 401) {
-      // Redireciona para o login em caso de não autorizado
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
     }
-    // Extrai a mensagem de erro da resposta da API, se existir
     const errorMessage = (error.response?.data as { error?: string })?.error || error.message;
     return Promise.reject(new Error(errorMessage));
   }
@@ -94,7 +92,7 @@ instance.interceptors.response.use(
 
 
 // ============================================================================
-// CLASSE ApiClient COM MÉTODOS
+// CLASSE ApiClient COM TODOS OS MÉTODOS
 // ============================================================================
 
 class ApiClient {
@@ -154,41 +152,47 @@ class ApiClient {
   }
 
   // Financeiro
-    async getFinancialAgreements(): Promise<FinancialAgreement[]> {
-        return instance.get('/financial-agreements');
-    }
-    async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
-        return instance.post('/financial-agreements', data);
-    }
-    
-    // --> MÉTODOS FINANCEIROS ADICIONAIS QUE VOCÊ IRÁ PRECISAR
-    async getFinancialReports(startDate: string, endDate: string, reportType: string): Promise<any> {
-        return instance.get('/financial-reports', { params: { startDate, endDate, reportType } });
-    }
-    
-    async exportFinancialAgreements(format: 'excel' | 'csv', filters: any): Promise<Blob> {
-        const response = await instance.get(`/financial-agreements/export/${format}`, {
-            params: filters,
-            responseType: 'blob', // Importante para receber arquivos
-        });
-        return response as unknown as Blob; // Axios-specific response handling
-    }
-    
-    async getAgreementInstallments(agreementId: string): Promise<any[]> {
-        return instance.get(`/financial-agreements/${agreementId}/installments`);
-    }
-
-    async getAgreementPaymentHistory(agreementId: string): Promise<any[]> {
-        return instance.get(`/financial-agreements/${agreementId}/payments`);
-    }
-    
-    async recordInstallmentPayment(agreementId: string, paymentData: any): Promise<any> {
-        return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData);
-    }
-
-    async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> {
-        return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
-    }
+  async getFinancialAgreements(): Promise<FinancialAgreement[]> {
+      return instance.get('/financial-agreements');
+  }
+  async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
+      return instance.post('/financial-agreements', data);
+  }
+  
+  // ✅ MÉTODOS FINANCEIROS ADICIONADOS PARA CORRIGIR OS ERROS
+  async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> {
+    return instance.get(`/financial-agreements/${id}`);
+  }
+  async updateFinancialAgreement(id: string, data: Partial<FinancialAgreement>): Promise<FinancialAgreement> {
+    return instance.put(`/financial-agreements/${id}`, data);
+  }
+  async deleteFinancialAgreement(id: string): Promise<boolean> {
+    return instance.delete(`/financial-agreements/${id}`);
+  }
+  
+  // --> Outros métodos que você já tinha ou irá precisar
+  async getFinancialReports(startDate: string, endDate: string, reportType: string): Promise<any> {
+      return instance.get('/financial-reports', { params: { startDate, endDate, reportType } });
+  }
+  async exportFinancialAgreements(format: 'excel' | 'csv', filters: any): Promise<Blob> {
+      const response = await instance.get(`/financial-agreements/export/${format}`, {
+          params: filters,
+          responseType: 'blob',
+      });
+      return response as unknown as Blob;
+  }
+  async getAgreementInstallments(agreementId: string): Promise<any[]> {
+      return instance.get(`/financial-agreements/${agreementId}/installments`);
+  }
+  async getAgreementPaymentHistory(agreementId: string): Promise<any[]> {
+      return instance.get(`/financial-agreements/${agreementId}/payments`);
+  }
+  async recordInstallmentPayment(agreementId: string, paymentData: any): Promise<any> {
+      return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData);
+  }
+  async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> {
+      return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
+  }
 
   // Autenticação
   async getCurrentUser(): Promise<any> {
@@ -213,7 +217,6 @@ class ApiClient {
 
 // ============================================================================
 // EXPORTAÇÃO
-// Exporta uma única instância da classe para ser usada como um singleton.
 // ============================================================================
 
 export const apiClient = new ApiClient();

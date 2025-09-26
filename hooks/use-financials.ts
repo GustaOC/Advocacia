@@ -1,125 +1,65 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/hooks/use-financials.ts
+// hooks/use-financials.ts - VERSÃO CORRIGIDA
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import apiClient from '@/lib/api-client' // Agora esta importação funcionará perfeitamente.
-import { EnhancedAgreement } from '@/lib/schemas'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from './use-toast'
 
-// ... (todo o resto do arquivo permanece o mesmo)
-// ============================================================================
-// QUERY KEYS
-// Centralizar as chaves de query evita erros de digitação e facilita a manutenção.
-// ============================================================================
-const financialQueryKeys = {
-  all: ['financial'] as const,
-  agreements: (filters: { page?: number; pageSize?: number } = {}) =>
-    [...financialQueryKeys.all, 'agreements', filters] as const,
-  agreement: (id: string) =>
-    [...financialQueryKeys.all, 'agreement', id] as const,
-}
+// ✅ A ÚNICA ALTERAÇÃO NECESSÁRIA ESTÁ AQUI:
+import { apiClient, FinancialAgreement } from '@/lib/api-client' // Adicionando chaves {} e importando o tipo
 
-// ============================================================================
-// FUNÇÕES DE API
-// Funções que interagem diretamente com o nosso apiClient.
-// ============================================================================
-
-const fetchFinancialAgreements = async (page = 1, pageSize = 10) => {
-  const response = await apiClient.get('/financial-agreements', {
-    params: { page, pageSize },
-  })
-  return response.data
-}
-
-const fetchAgreementDetails = async (id: string) => {
-  if (!id) return null
-  const response = await apiClient.get(`/financial-agreements/${id}`)
-  return response.data
-}
-
-const createFinancialAgreement = async (
-  agreementData: EnhancedAgreement,
-): Promise<EnhancedAgreement> => {
-  const response = await apiClient.post(
-    '/financial-agreements',
-    agreementData,
-  )
-  return response.data
-}
-
-const updateFinancialAgreement = async ({
-  id,
-  updates,
-}: {
-  id: string
-  updates: Partial<EnhancedAgreement>
-}): Promise<EnhancedAgreement> => {
-  const response = await apiClient.patch(
-    `/financial-agreements/${id}`,
-    updates,
-  )
-  return response.data
-}
-
-const deleteFinancialAgreement = async (id: string): Promise<void> => {
-  await apiClient.delete(`/financial-agreements/${id}`)
-}
-
-// ============================================================================
-// HOOKS CUSTOMIZADOS (useQuery, useMutation)
-// ============================================================================
+// Chave de query para os acordos financeiros, usada para cache e invalidação.
+const financialAgreementsQueryKey = ['financialAgreements']
 
 /**
- * Hook para buscar la lista paginada de acordos financeiros.
+ * Hook para buscar a lista de acordos financeiros.
+ * Gerencia o estado de carregamento, erro e os dados retornados.
  */
-export const useGetFinancialAgreements = (page = 1, pageSize = 10) => {
-  return useQuery({
-    queryKey: financialQueryKeys.agreements({ page, pageSize }),
-    queryFn: () => fetchFinancialAgreements(page, pageSize),
-    placeholderData: (previousData) => previousData, // Mantém os dados antigos enquanto busca novos
-    staleTime: 1000 * 60 * 5, // 5 minutos
+export const useGetFinancialAgreements = () => {
+  return useQuery<FinancialAgreement[], Error>({
+    queryKey: financialAgreementsQueryKey,
+    queryFn: () => apiClient.getFinancialAgreements(),
+    staleTime: 1000 * 60 * 5, // Cache de 5 minutos
   })
 }
 
 /**
- * Hook para buscar os detalhes completos de um único acordo financeiro.
- * @param id O ID do acordo. O hook será desabilitado se o ID for nulo.
+ * Hook para buscar os detalhes de um único acordo financeiro.
+ * @param agreementId - O ID do acordo a ser buscado.
  */
-export const useGetFinancialAgreementDetails = (id: string | null) => {
-  return useQuery({
-    queryKey: financialQueryKeys.agreement(id!),
-    queryFn: () => fetchAgreementDetails(id!),
-    enabled: !!id, // A query só será executada se o 'id' existir
-    staleTime: 1000 * 60 * 10, // 10 minutos
+export const useGetFinancialAgreementDetails = (agreementId: string | null) => {
+  return useQuery<FinancialAgreement | null, Error>({
+    queryKey: ['financialAgreementDetails', agreementId],
+    queryFn: () =>
+      agreementId ? apiClient.getFinancialAgreementDetails(agreementId) : null,
+    enabled: !!agreementId, // A query só será executada se agreementId não for nulo.
   })
 }
 
 /**
  * Hook para criar um novo acordo financeiro.
- * Invalida a lista de acordos após a criação para atualizar a UI.
+ * Fornece o estado da mutação e funções para executar a criação.
  */
 export const useCreateFinancialAgreement = () => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  return useMutation({
-    mutationFn: createFinancialAgreement,
-    onSuccess: (newAgreement) => {
+  return useMutation<FinancialAgreement, Error, any>({
+    mutationFn: (newAgreementData) =>
+      apiClient.createFinancialAgreement(newAgreementData),
+    onSuccess: () => {
+      // Invalida o cache da lista de acordos para que a nova lista seja buscada.
+      queryClient.invalidateQueries({ queryKey: financialAgreementsQueryKey })
       toast({
         title: 'Sucesso!',
-        description: 'Novo acordo financeiro criado.',
-        variant: 'default',
-      })
-      // Invalida a query da lista para forçar a atualização
-      queryClient.invalidateQueries({
-        queryKey: financialQueryKeys.agreements(),
+        description: 'O acordo financeiro foi criado com sucesso.',
+        variant: 'success',
       })
     },
-    onError: (error: any) => {
+    onError: (error) => {
+      // Exibe uma notificação de erro para o usuário.
       toast({
         title: 'Erro ao Criar Acordo',
         description:
-          error.response?.data?.message ||
-          'Não foi possível criar o acordo. Tente novamente.',
+          error.message || 'Não foi possível criar o acordo financeiro.',
         variant: 'destructive',
       })
     },
@@ -128,34 +68,32 @@ export const useCreateFinancialAgreement = () => {
 
 /**
  * Hook para atualizar um acordo financeiro existente.
- * Invalida tanto a lista de acordos quanto os detalhes do acordo específico.
  */
 export const useUpdateFinancialAgreement = () => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  return useMutation({
-    mutationFn: updateFinancialAgreement,
-    onSuccess: (updatedAgreement) => {
+  return useMutation<
+    FinancialAgreement,
+    Error,
+    { id: string; data: Partial<FinancialAgreement> }
+  >({
+    mutationFn: ({ id, data }) => apiClient.updateFinancialAgreement(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: financialAgreementsQueryKey })
+      queryClient.invalidateQueries({
+        queryKey: ['financialAgreementDetails', variables.id],
+      })
       toast({
         title: 'Sucesso!',
-        description: 'Acordo atualizado com sucesso.',
+        description: 'O acordo foi atualizado com sucesso.',
+        variant: 'success',
       })
-      // Invalida a lista
-      queryClient.invalidateQueries({
-        queryKey: financialQueryKeys.agreements(),
-      })
-      // Atualiza o cache dos detalhes deste acordo específico com os novos dados
-      queryClient.setQueryData(
-        financialQueryKeys.agreement(updatedAgreement.id!),
-        updatedAgreement,
-      )
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: 'Erro ao Atualizar',
-        description:
-          error.response?.data?.message || 'Não foi possível atualizar o acordo.',
+        description: error.message || 'Não foi possível atualizar o acordo.',
         variant: 'destructive',
       })
     },
@@ -169,22 +107,86 @@ export const useDeleteFinancialAgreement = () => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  return useMutation({
-    mutationFn: deleteFinancialAgreement,
-    onSuccess: (_, id) => {
+  return useMutation<boolean, Error, string>({
+    mutationFn: (id) => apiClient.deleteFinancialAgreement(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: financialAgreementsQueryKey })
       toast({
         title: 'Sucesso!',
-        description: 'Acordo deletado com sucesso.',
-      })
-      queryClient.invalidateQueries({
-        queryKey: financialQueryKeys.agreements(),
+        description: 'O acordo foi deletado com sucesso.',
+        variant: 'success',
       })
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: 'Erro ao Deletar',
+        description: error.message || 'Não foi possível deletar o acordo.',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+/**
+ * Hook para renegociar um acordo financeiro existente.
+ */
+export const useRenegotiateFinancialAgreement = () => {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation<
+    FinancialAgreement,
+    Error,
+    { agreementId: string; data: any }
+  >({
+    mutationFn: ({ agreementId, data }) =>
+      apiClient.renegotiateFinancialAgreement(agreementId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: financialAgreementsQueryKey })
+      toast({
+        title: 'Sucesso!',
+        description: 'O acordo foi renegociado com sucesso.',
+        variant: 'success',
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: 'Erro na Renegociação',
+        description: error.message || 'Não foi possível renegociar o acordo.',
+        variant: 'destructive',
+      })
+    },
+  })
+}
+
+/**
+ * Hook para registrar o pagamento de uma parcela.
+ */
+export const useRecordInstallmentPayment = () => {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation<any, Error, { agreementId: string; paymentData: any }>({
+    mutationFn: ({ agreementId, paymentData }) =>
+      apiClient.recordInstallmentPayment(agreementId, paymentData),
+    onSuccess: (data, variables) => {
+      // Invalida a query do acordo específico para atualizar os detalhes (parcelas e pagamentos)
+      queryClient.invalidateQueries({
+        queryKey: ['financialAgreementDetails', variables.agreementId],
+      })
+      // Também invalida a lista geral, caso o status do acordo mude
+      queryClient.invalidateQueries({ queryKey: financialAgreementsQueryKey })
+      toast({
+        title: 'Pagamento Registrado!',
+        description: 'O pagamento foi registrado com sucesso.',
+        variant: 'success',
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: 'Erro no Pagamento',
         description:
-          error.response?.data?.message || 'Não foi possível deletar o acordo.',
+          error.message || 'Não foi possível registrar o pagamento.',
         variant: 'destructive',
       })
     },

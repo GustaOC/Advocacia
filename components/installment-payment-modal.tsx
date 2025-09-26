@@ -1,11 +1,12 @@
-// components/installment-payment-modal.tsx
+// components/installment-payment-modal.tsx - VERSÃO CORRIGIDA
+
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // <-- Agora usa apenas este
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +37,7 @@ interface Installment {
 
 interface PaymentData {
   amount_paid: number;
-  payment_date: string;
+  payment_date?: string; // ✅ CORREÇÃO 1: Tornando a data opcional
   payment_method: string;
   payment_reference: string;
   late_fee_paid: number;
@@ -86,7 +87,6 @@ export function InstallmentPaymentModal({
     totalAmount: 0,
   });
 
-  // Calcular taxas automaticamente quando os dados mudam
   useEffect(() => {
     if (installment && agreementData && installment.status === 'overdue') {
       const dueDate = new Date(installment.due_date);
@@ -154,7 +154,6 @@ export function InstallmentPaymentModal({
   const handleSubmit = () => {
     if (!installment) return;
 
-    // Validações
     if (paymentData.amount_paid <= 0) {
       toast({ 
         title: "Valor inválido", 
@@ -248,7 +247,6 @@ export function InstallmentPaymentModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-6">
-          {/* Informações da Parcela */}
           <Card className="border-slate-200">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center justify-between text-lg">
@@ -305,7 +303,6 @@ export function InstallmentPaymentModal({
             </CardContent>
           </Card>
 
-          {/* Cálculo de Taxas (se em atraso) */}
           {isOverdue && (
             <Card className="border-orange-200">
               <CardHeader className="pb-4">
@@ -338,7 +335,6 @@ export function InstallmentPaymentModal({
             </Card>
           )}
 
-          {/* Formulário de Pagamento */}
           <Card className="border-slate-200">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center text-lg">
@@ -369,7 +365,7 @@ export function InstallmentPaymentModal({
                   </Label>
                   <Input 
                     type="date" 
-                    value={paymentData.payment_date} 
+                    value={paymentData.payment_date || ''} 
                     onChange={e => handleChange('payment_date', e.target.value)}
                     className="h-11"
                   />
@@ -440,7 +436,6 @@ export function InstallmentPaymentModal({
 
               <Separator />
 
-              {/* Campos de Taxas (editáveis) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
@@ -497,7 +492,6 @@ export function InstallmentPaymentModal({
             </CardContent>
           </Card>
 
-          {/* Resumo do Pagamento */}
           <Card className="border-green-200 bg-green-50">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center text-lg text-green-800">
@@ -538,7 +532,6 @@ export function InstallmentPaymentModal({
             </CardContent>
           </Card>
 
-          {/* Alertas */}
           {paymentData.amount_paid < installment.amount && (
             <Alert>
               <Info className="h-4 w-4" />
@@ -595,10 +588,3 @@ export function InstallmentPaymentModal({
   );
 }
 
-function Label({ children, className = "", ...props }: any) {
-  return (
-    <label className={`block text-sm font-medium text-slate-700 ${className}`} {...props}>
-      {children}
-    </label>
-  );
-}
