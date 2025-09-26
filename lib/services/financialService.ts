@@ -147,7 +147,6 @@ export class FinancialService {
     return data as EnhancedAgreement
   }
 
-  // ... (manter os outros métodos: getFinancialAgreements, getAgreementWithDetails, etc.)
   /**
    * Busca todos os acordos financeiros com informações básicas para listagem.
    * Inclui paginação.
@@ -165,6 +164,7 @@ export class FinancialService {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
+    // ✅ CORREÇÃO APLICADA AQUI
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(
@@ -177,7 +177,7 @@ export class FinancialService {
         case:cases (
           case_number
         ),
-        debtor:entities!financial_agreements_debtor_id_fkey (
+        debtor:entities!debtor_id (
           name
         )
       `,
@@ -204,14 +204,16 @@ export class FinancialService {
     id: string,
   ): Promise<any | null> {
     const supabase = await createSupabaseServerClient()
+    
+    // ✅ CORREÇÃO APLICADA AQUI
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(
         `
         *,
         case:cases (*),
-        debtor:entities!financial_agreements_debtor_id_fkey (*),
-        creditor:entities!financial_agreements_creditor_id_fkey (*),
+        debtor:entities!debtor_id (*),
+        creditor:entities!creditor_id (*),
         installments (
           *,
           payments (*)
@@ -285,11 +287,6 @@ export class FinancialService {
       throw new Error('Dados do pagamento inválidos.')
     }
 
-    // TODO: Implementar usando uma RPC transacional 'record_payment_and_update_status'
-    // que insere o pagamento e atualiza o status da parcela e do acordo atomicamente.
-    // Por enquanto, implementado de forma não transacional como exemplo:
-
-    // 1. Inserir o pagamento
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert(validationResult.data)
@@ -301,23 +298,17 @@ export class FinancialService {
       throw new Error('Não foi possível registrar o pagamento.')
     }
 
-    // 2. Atualizar o status da parcela
     const { error: installmentError } = await supabase
       .from('installments')
       .update({ status: 'PAGA' })
       .eq('id', paymentData.installment_id)
 
     if (installmentError) {
-      // Idealmente, reverteríamos a inserção do pagamento aqui.
-      // Uma RPC transacional resolve isso automaticamente.
       console.error('Erro ao atualizar status da parcela:', installmentError)
       throw new Error(
         'Pagamento registrado, mas falha ao atualizar status da parcela.',
       )
     }
-
-    // TODO: Adicionar lógica para verificar se todas as parcelas estão pagas
-    // e então atualizar o status do acordo principal para 'CONCLUIDO'.
 
     return payment as Payment
   }

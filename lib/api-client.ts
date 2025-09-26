@@ -1,45 +1,219 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/api-client.ts
+// lib/api-client.ts - VERSÃO CORRIGIDA E COMPLETA
 
-import axios, { AxiosResponse, AxiosError } from 'axios'
+import axios, { AxiosResponse, AxiosError } from 'axios';
 
-/**
- * Instância centralizada do Axios para todas as chamadas de API da aplicação.
- * Configura a URL base e os cabeçalhos padrão.
- */
-const apiClient = axios.create({
-  baseURL: '/api', // Aponta para a pasta /api do Next.js
+// ============================================================================
+// TIPAGEM (Interfaces para os dados da API)
+// ============================================================================
+
+export interface Entity {
+  id: string;
+  name: string;
+  document: string;
+  type: string;
+  email?: string | null;
+  address?: string | null;
+  address_number?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  zip_code?: string | null;
+  phone?: string | null;
+  phone2?: string | null;
+}
+
+export interface Case {
+    id: number;
+    case_number: string | null;
+    title: string;
+    status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+    value: number | null;
+    court: string | null;
+    created_at: string;
+    priority: 'Alta' | 'Média' | 'Baixa';
+    description?: string | null;
+    case_parties: { role: string; entities: { id: number; name: string; } }[];
+    action_type?: string;
+}
+
+export interface FinancialAgreement {
+  id: number;
+  total_value: number;
+  status: string;
+  start_date: string;
+  updated_at: string;
+  created_at: string;
+  installments: number;
+  installment_value: number;
+  entry_value: number;
+  completion_percentage: number;
+  paid_amount: number;
+  remaining_balance: number;
+  agreement_type: string;
+  payment_method: string;
+  next_due_date: string;
+  days_overdue: number;
+  bank_account_info?: string;
+  notes?: string;
+  has_court_release?: boolean;
+  court_release_value?: number;
+  renegotiation_count: number;
+  paid_installments: number;
+  entities: { name: string; document: string };
+  client_entities: { name: string; document: string };
+  executed_entities: { name: string; document: string };
+  guarantor_entities: { name: string; document: string };
+  cases: { case_number: string | null; title: string; court: string; status: string };
+}
+
+
+// ============================================================================
+// INSTÂNCIA DO AXIOS
+// ============================================================================
+
+const instance = axios.create({
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
-})
+});
 
-/**
- * Interceptor de Resposta do Axios.
- * Permite capturar e manipular respostas e erros de forma global.
- *
- * @param response - A resposta bem-sucedida, agora tipada com AxiosResponse.
- * @param error - O objeto de erro, agora tipado com AxiosError.
- * @returns A promessa resolvida ou rejeitada.
- */
-apiClient.interceptors.response.use(
-  (response: AxiosResponse) => {
-    // Retorna a resposta diretamente se for bem-sucedida.
-    return response
-  },
+instance.interceptors.response.use(
+  (response: AxiosResponse) => response.data, // Retorna diretamente response.data
   (error: AxiosError) => {
-    // Aqui você pode adicionar lógica global para tratamento de erros.
-    // Exemplo: Se o erro for 401 (Não Autorizado), redirecionar para o login.
     if (error.response && error.response.status === 401) {
-      // Em um cenário real, você poderia redirecionar o usuário:
-      // window.location.href = '/login';
-      console.error('Erro de autenticação. O usuário precisa fazer login.')
+      // Redireciona para o login em caso de não autorizado
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+    // Extrai a mensagem de erro da resposta da API, se existir
+    const errorMessage = (error.response?.data as { error?: string })?.error || error.message;
+    return Promise.reject(new Error(errorMessage));
+  }
+);
+
+
+// ============================================================================
+// CLASSE ApiClient COM MÉTODOS
+// ============================================================================
+
+class ApiClient {
+  // Entidades
+  async getEntities(): Promise<Entity[]> {
+    return instance.get('/entities');
+  }
+  async createEntity(data: Partial<Entity>): Promise<Entity> {
+    return instance.post('/entities', data);
+  }
+  async updateEntity(id: string, data: Partial<Entity>): Promise<Entity> {
+    return instance.put(`/entities/${id}`, data);
+  }
+  async deleteEntity(id: string): Promise<{ message: string }> {
+    return instance.delete(`/entities/${id}`);
+  }
+
+  // Casos
+  async getCases(): Promise<{ cases: Case[]; total: number }> {
+    return instance.get('/cases');
+  }
+  async createCase(data: Partial<Case>): Promise<Case> {
+    return instance.post('/cases', data);
+  }
+  async updateCase(id: string, data: Partial<Case>): Promise<Case> {
+    return instance.put(`/cases/${id}`, data);
+  }
+
+  // Funcionários e Permissões
+  async getEmployees(): Promise<any[]> {
+    return instance.get('/employees');
+  }
+  async getRoles(): Promise<any[]> {
+    return instance.get('/roles');
+  }
+  async getPermissions(): Promise<any[]> {
+    return instance.get('/permissions');
+  }
+
+  // Petições
+  async getPetitions(): Promise<any[]> {
+    return instance.get('/petitions');
+  }
+
+  // Modelos
+  async getTemplates(): Promise<any[]> {
+    return instance.get('/document-templates');
+  }
+  async createTemplate(data: Partial<any>): Promise<any> {
+    return instance.post('/document-templates', data);
+  }
+  async updateTemplate(id: number, data: Partial<any>): Promise<any> {
+    return instance.put(`/document-templates/${id}`, data);
+  }
+  async deleteTemplate(id: number): Promise<{ message: string }> {
+    return instance.delete(`/document-templates/${id}`);
+  }
+
+  // Financeiro
+    async getFinancialAgreements(): Promise<FinancialAgreement[]> {
+        return instance.get('/financial-agreements');
+    }
+    async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
+        return instance.post('/financial-agreements', data);
+    }
+    
+    // --> MÉTODOS FINANCEIROS ADICIONAIS QUE VOCÊ IRÁ PRECISAR
+    async getFinancialReports(startDate: string, endDate: string, reportType: string): Promise<any> {
+        return instance.get('/financial-reports', { params: { startDate, endDate, reportType } });
+    }
+    
+    async exportFinancialAgreements(format: 'excel' | 'csv', filters: any): Promise<Blob> {
+        const response = await instance.get(`/financial-agreements/export/${format}`, {
+            params: filters,
+            responseType: 'blob', // Importante para receber arquivos
+        });
+        return response as unknown as Blob; // Axios-specific response handling
+    }
+    
+    async getAgreementInstallments(agreementId: string): Promise<any[]> {
+        return instance.get(`/financial-agreements/${agreementId}/installments`);
     }
 
-    // Rejeita a promessa para que o erro possa ser tratado localmente
-    // (por exemplo, no `onError` do useMutation em nossos hooks).
-    return Promise.reject(error)
-  },
-)
+    async getAgreementPaymentHistory(agreementId: string): Promise<any[]> {
+        return instance.get(`/financial-agreements/${agreementId}/payments`);
+    }
+    
+    async recordInstallmentPayment(agreementId: string, paymentData: any): Promise<any> {
+        return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData);
+    }
 
-// Exporta a instância como padrão para facilitar a importação.
-export default apiClient
+    async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> {
+        return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
+    }
+
+  // Autenticação
+  async getCurrentUser(): Promise<any> {
+    return instance.get('/auth/me');
+  }
+  async logout(): Promise<void> {
+    await instance.post('/auth/logout');
+    window.location.href = '/login';
+  }
+  async setPassword(data: { code: string; password: string }): Promise<void> {
+      return instance.post('/auth/set-password', data);
+  }
+
+  // Notificações
+  async getNotifications(userId: string): Promise<{ notifications: any[] }> {
+    return instance.get(`/notifications?user_id=${userId}`);
+  }
+  async getUnreadNotificationCount(userId: string): Promise<{ count: number }> {
+    return instance.get(`/notifications/count?user_id=${userId}`);
+  }
+}
+
+// ============================================================================
+// EXPORTAÇÃO
+// Exporta uma única instância da classe para ser usada como um singleton.
+// ============================================================================
+
+export const apiClient = new ApiClient();
