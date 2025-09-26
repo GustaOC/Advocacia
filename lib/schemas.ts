@@ -1,147 +1,300 @@
-import { z } from 'zod';
+// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/schemas.ts
+
+import { z } from 'zod'
 
 // ============================================================================
-// BASE SCHEMAS (Entidades, Casos, etc.)
+// ENUMS E TIPOS FINANCEIROS CENTRALIZADOS
+// Usar enums garante consistência e previne erros de digitação em todo o sistema.
 // ============================================================================
 
-export const EntitySchema = z.object({
-  name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres.").max(255),
-  document: z.string().max(20).optional().nullable(),
-  email: z.string().email("Email inválido.").optional().nullable(),
-  address: z.string().max(500).optional().nullable(),
-  address_number: z.string().max(20).optional().nullable(),
-  neighborhood: z.string().max(100).optional().nullable(),
-  city: z.string().max(100).optional().nullable(),
-  zip_code: z.string().max(20).optional().nullable(),
-  phone: z.string().max(20).optional().nullable(),
-  phone2: z.string().max(20).optional().nullable(),
-  type: z.string().min(1, "O tipo é obrigatório."),
-});
+export const AgreementStatus = z.enum([
+  'ATIVO',
+  'INADIMPLENTE',
+  'PAUSADO',
+  'CONCLUIDO',
+  'CANCELADO',
+])
+export type AgreementStatusType = z.infer<typeof AgreementStatus>
 
-export const CaseSchema = z.object({
-  case_number: z.string().max(100).optional().nullable(),
-  title: z.string().min(3, "O título (Observação) é obrigatório.").max(255),
-  description: z.string().optional().nullable(),
-  status: z.enum(['Em andamento', 'Acordo', 'Extinto', 'Pago']).default('Em andamento'),
-  status_reason: z.string().optional().nullable(),
-  court: z.string().max(255).optional().nullable(),
-  priority: z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
-  client_entity_id: z.number({ required_error: "Você deve selecionar um cliente." }).int().positive(),
-  executed_entity_id: z.number({ required_error: "Você deve selecionar um executado." }).int().positive(),
-  payment_date: z.string().optional().nullable(),
-  final_value: z.number().optional().nullable(),
-  agreement_type: z.enum(['Judicial', 'Extrajudicial', 'Em Audiência', 'Pela Loja']).optional().nullable(),
-  agreement_value: z.number().optional().nullable(),
-  installments: z.number().int().optional().nullable(),
-  down_payment: z.number().optional().nullable(),
-  installment_due_date: z.string().optional().nullable(),
-});
+export const InstallmentStatus = z.enum([
+  'PENDENTE',
+  'PAGA',
+  'ATRASADA',
+  'RENEGOCIADA',
+  'CANCELADA',
+])
+export type InstallmentStatusType = z.infer<typeof InstallmentStatus>
+
+export const AgreementType = z.enum([
+  'ENTRADA_PARCELADO',
+  'SOMENTE_PARCELADO',
+  'A_VISTA',
+])
+export type AgreementTypeType = z.infer<typeof AgreementType>
+
+export const PaymentMethod = z.enum([
+  'BOLETO',
+  'CARTAO_CREDITO',
+  'DEBITO',
+  'PIX',
+  'TRANSFERENCIA',
+  'DINHEIRO',
+])
+export type PaymentMethodType = z.infer<typeof PaymentMethod>
 
 // ============================================================================
-// FINANCIAL SCHEMAS (O CORAÇÃO DA NOSSA ATUALIZAÇÃO)
+// SCHEMAS FINANCEIROS
+// Schemas robustos com coerção de tipos, validações detalhadas e mensagens de erro em português.
 // ============================================================================
 
 /**
- * Define a estrutura de uma única parcela.
- * Essencial para validar pagamentos e calcular juros de forma isolada.
+ * Schema para uma única parcela de um acordo financeiro.
  */
 export const InstallmentSchema = z.object({
-  id: z.string().uuid().optional(), // ID da parcela no banco de dados
-  agreement_id: z.number().int().positive(),
-  installment_number: z.number().int().positive("O número da parcela deve ser um inteiro positivo."),
-  value: z.number().positive("O valor da parcela deve ser maior que zero."),
-  due_date: z.string().refine((date) => !isNaN(Date.parse(date)), "Data de vencimento inválida."),
-  status: z.enum(['PENDING', 'PAID', 'PARTIALLY_PAID', 'OVERDUE']).default('PENDING'),
-  paid_value: z.number().min(0).default(0),
-  payment_date: z.string().optional().nullable(),
-});
+  id: z.string().optional(),
+  agreement_id: z.string().optional(),
+  installment_number: z.coerce
+    .number({
+      required_error: 'O número da parcela é obrigatório.',
+      invalid_type_error: 'O número da parcela deve ser um número.',
+    })
+    .int()
+    .positive('O número da parcela deve ser positivo.'),
+  amount: z.coerce
+    .number({
+      required_error: 'O valor da parcela é obrigatório.',
+      invalid_type_error: 'O valor da parcela deve ser um número.',
+    })
+    .positive('O valor da parcela deve ser maior que zero.'),
+  due_date: z.coerce.date({
+    required_error: 'A data de vencimento é obrigatória.',
+    invalid_type_error: 'Forneça uma data de vencimento válida.',
+  }),
+  status: InstallmentStatus.default('PENDENTE'),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+})
+export type Installment = z.infer<typeof InstallmentSchema>
 
 /**
- * Schema para registrar um pagamento em uma parcela.
+ * Schema principal para Acordos Financeiros.
+ * Inclui validações complexas entre campos.
+ */
+export const EnhancedAgreementSchema = z
+  .object({
+    id: z.string().optional(),
+    case_id: z.string({ required_error: 'O processo é obrigatório.' }),
+    debtor_id: z.string({ required_error: 'O devedor é obrigatório.' }),
+    creditor_id: z.string({ required_error: 'O credor é obrigatório.' }),
+    total_amount: z.coerce
+      .number({
+        required_error: 'O valor total é obrigatório.',
+        invalid_type_error: 'O valor total deve ser um número.',
+      })
+      .positive('O valor total do acordo deve ser maior que zero.'),
+    down_payment: z.coerce
+      .number({ invalid_type_error: 'O valor da entrada deve ser um número.' })
+      .min(0, 'O valor da entrada não pode ser negativo.')
+      .default(0)
+      .optional(),
+    number_of_installments: z.coerce
+      .number({
+        required_error: 'O número de parcelas é obrigatório.',
+        invalid_type_error: 'O número de parcelas deve ser um número.',
+      })
+      .int()
+      .min(1, 'O acordo deve ter pelo menos uma parcela.'),
+    start_date: z.coerce.date({
+      required_error: 'A data de início é obrigatória.',
+      invalid_type_error: 'Forneça uma data de início válida.',
+    }),
+    end_date: z.coerce.date({
+      required_error: 'A data final é obrigatória.',
+      invalid_type_error: 'Forneça uma data final válida.',
+    }),
+    status: AgreementStatus.default('ATIVO'),
+    agreement_type: AgreementType.default('SOMENTE_PARCELADO'),
+    notes: z.string().optional().nullable(),
+    installments: z.array(InstallmentSchema).optional(),
+  })
+  .refine((data) => data.end_date > data.start_date, {
+    message: 'A data final deve ser posterior à data de início.',
+    path: ['end_date'],
+  })
+  .refine(
+    (data) => (data.down_payment ?? 0) <= data.total_amount,
+    {
+      message: 'O valor da entrada não pode ser maior que o valor total.',
+      path: ['down_payment'],
+    },
+  )
+  .superRefine((data, ctx) => {
+    // CORREÇÃO APLICADA AQUI:
+    // Adicionada uma verificação explícita para a existência da primeira parcela
+    // para satisfazer a análise estrita de tipos do TypeScript.
+    if (data.installments && data.installments.length > 0) {
+      const firstInstallment = data.installments[0]
+      if (firstInstallment && firstInstallment.due_date < data.start_date) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'A data da primeira parcela não pode ser anterior ao início do acordo.',
+          path: ['installments', 0, 'due_date'],
+        })
+      }
+    }
+  })
+export type EnhancedAgreement = z.infer<typeof EnhancedAgreementSchema>
+
+/**
+ * Schema para registro de pagamento de uma parcela.
  */
 export const PaymentSchema = z.object({
-    installment_id: z.string().uuid("O ID da parcela é obrigatório."),
-    agreement_id: z.number().int().positive("O ID do acordo é obrigatório."),
-    paid_amount: z.number().positive("O valor pago deve ser maior que zero."),
-    payment_date: z.string().refine((date) => !isNaN(Date.parse(date)), "Data de pagamento inválida."),
-    method: z.enum(['bank_transfer', 'pix', 'check', 'cash', 'credit_card', 'debit_card']),
-    late_fees: z.number().min(0).default(0),
-    interest: z.number().min(0).default(0),
-    notes: z.string().optional().nullable(),
-});
-
-/**
- * Schema aprimorado para Acordos Financeiros.
- * Mantém todos os seus campos, mas com validações mais estritas.
- */
-export const EnhancedAgreementSchema = z.object({
-  case_id: z.number().int().positive("O ID do caso é obrigatório."),
-  client_entity_id: z.number().int().positive("O ID da entidade cliente é obrigatório."),
-  executed_entity_id: z.number().int().positive().optional().nullable(),
-  agreement_type: z.enum(['Judicial', 'Extrajudicial', 'Em Audiência', 'Pela Loja'], {
-    required_error: "O tipo de acordo é obrigatório."
+  id: z.string().optional(),
+  installment_id: z.string({
+    required_error: 'A identificação da parcela é obrigatória.',
   }),
-  total_value: z.number().positive("O valor do acordo deve ser positivo."),
-  entry_value: z.number().min(0, "O valor de entrada não pode ser negativo.").default(0),
-  installments: z.number().int().min(1, "O número de parcelas deve ser pelo menos 1.").max(120, "Máximo de 120 parcelas."),
-  installment_value: z.number().positive("O valor da parcela deve ser positivo."),
-  first_due_date: z.string().refine((date) => !isNaN(Date.parse(date)), "Data de vencimento inválida."),
-  installment_interval: z.enum(['monthly', 'biweekly', 'weekly', 'custom']).default('monthly'),
-  status: z.enum(['active', 'completed', 'cancelled', 'defaulted', 'renegotiated']).default('active'),
-  
-  has_court_release: z.boolean().default(false),
-  court_release_value: z.number().positive("O valor do alvará deve ser positivo.").optional().nullable(),
-  court_release_received: z.boolean().default(false),
-  
-  payment_method: z.enum(['bank_transfer', 'pix', 'check', 'cash', 'credit_card', 'debit_card']).default('pix'),
-  bank_account_info: z.string().max(500).optional().nullable(),
-  
-  guarantor_entity_id: z.number().int().positive().optional().nullable(),
-  late_payment_fee: z.number().min(0, "A multa não pode ser negativa.").max(100).default(2), // %
-  late_payment_daily_interest: z.number().min(0, "O juro diário não pode ser negativo.").max(1).default(0.033), // %
-  
-  contract_signed_date: z.string().refine((date) => !isNaN(Date.parse(date)), "Data de assinatura inválida.").optional().nullable(),
-  renegotiation_count: z.number().int().min(0).default(0),
-  
-  notes: z.string().max(1000).optional().nullable(),
-});
-
-export const EnhancedAgreementUpdateSchema = EnhancedAgreementSchema.partial();
-
+  amount_paid: z.coerce
+    .number({
+      required_error: 'O valor pago é obrigatório.',
+      invalid_type_error: 'O valor pago deve ser um número.',
+    })
+    .positive('O valor pago deve ser maior que zero.'),
+  payment_date: z.coerce.date({
+    required_error: 'A data do pagamento é obrigatória.',
+    invalid_type_error: 'Forneça uma data de pagamento válida.',
+  }),
+  payment_method: PaymentMethod,
+  notes: z.string().optional().nullable(),
+})
+export type Payment = z.infer<typeof PaymentSchema>
 
 /**
- * Schema para renegociação de acordo.
+ * Schema para a renegociação de um acordo financeiro.
  */
 export const RenegotiationSchema = z.object({
-  new_total_value: z.number().positive("O novo valor deve ser positivo.").optional(),
-  new_installments: z.number().int().min(1).max(120).optional(),
-  new_first_due_date: z.string().refine((date) => !isNaN(Date.parse(date)), "Nova data de vencimento inválida."),
-  new_entry_value: z.number().min(0).default(0).optional(),
-  renegotiation_reason: z.string().min(10, "Motivo da renegociação deve ter pelo menos 10 caracteres.").max(500),
-  discount_applied: z.number().min(0).max(100).default(0), // %
-  additional_fees: z.number().min(0).default(0), 
-});
+  agreement_id: z.string(),
+  new_total_amount: z.coerce
+    .number()
+    .positive('O novo valor total deve ser positivo.'),
+  new_number_of_installments: z.coerce
+    .number()
+    .int()
+    .positive('O novo número de parcelas deve ser pelo menos 1.'),
+  new_start_date: z.coerce.date(),
+  reason: z.string().min(10, 'A justificativa é obrigatória.'),
+})
+export type Renegotiation = z.infer<typeof RenegotiationSchema>
 
+/**
+ * Schema para geração de relatórios financeiros.
+ */
+export const FinancialReportSchema = z
+  .object({
+    report_type: z.enum(['RECEITA', 'INADIMPLENCIA', 'FLUXO_DE_CAIXA']),
+    start_date: z.coerce.date(),
+    end_date: z.coerce.date(),
+    creditor_id: z.string().optional(),
+  })
+  .refine((data) => data.end_date >= data.start_date, {
+    message: 'A data final deve ser igual ou posterior à data de início.',
+    path: ['end_date'],
+  })
+export type FinancialReport = z.infer<typeof FinancialReportSchema>
+
+/**
+ * Schema para regras de notificação de pagamentos.
+ */
+export const NotificationRuleSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'O nome da regra é obrigatório.'),
+  days_before_due: z.coerce
+    .number()
+    .int()
+    .positive('O número de dias deve ser um inteiro positivo.'),
+  message_template: z.string().min(10, 'O modelo da mensagem é obrigatório.'),
+  is_active: z.boolean().default(true),
+})
+export type NotificationRule = z.infer<typeof NotificationRuleSchema>
 
 // ============================================================================
-// OUTROS SCHEMAS (Documentos, Petições, etc.)
+// OUTROS SCHEMAS DO SISTEMA (Mantidos para compatibilidade)
 // ============================================================================
+
+export const EmployeeSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nome é obrigatório'),
+  email: z.string().email('Email inválido'),
+  role: z.string().min(1, 'Cargo é obrigatório'),
+  phone: z.string().optional(),
+})
+
+export const RoleSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nome do cargo é obrigatório'),
+  permissions: z.array(z.string()),
+})
+
+export const CaseSchema = z.object({
+  id: z.string().optional(),
+  case_number: z.string().min(1, 'Número do processo é obrigatório'),
+  debtor_id: z.string().min(1, 'Devedor é obrigatório'),
+  creditor_id: z.string().min(1, 'Credor é obrigatório'),
+  status: z.enum([
+    'Em Andamento',
+    'Finalizado',
+    'Arquivado',
+    'Acordo',
+    'Suspenso',
+  ]),
+  lawyer_id: z.string().optional(),
+})
+
+export const EntitySchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nome é obrigatório'),
+  document: z.string().min(1, 'Documento é obrigatório'),
+  type: z.enum(['Pessoa Física', 'Pessoa Jurídica']),
+  contact_info: z.object({
+    email: z.string().email('Email inválido').optional(),
+    phone: z.string().optional(),
+    address: z.string().optional(),
+  }),
+})
+
+export const DocumentTemplateSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nome do modelo é obrigatório'),
+  content: z.string().min(1, 'Conteúdo é obrigatório'),
+})
 
 export const PetitionSchema = z.object({
-  case_id: z.number().int().positive("O ID do caso é obrigatório."),
-  title: z.string().min(3, "O título é obrigatório.").max(255),
-  description: z.string().optional().nullable(),
-  file_path: z.string().min(1, "O caminho do arquivo é obrigatório."),
-  deadline: z.string().optional().nullable(),
-  status: z.enum(['pending', 'under_review', 'approved', 'corrections_needed', 'rejected']).default('pending'),
-  created_by_employee_id: z.string().uuid("ID do criador inválido."),
-  assigned_to_employee_id: z.string().uuid("ID do responsável inválido."),
-});
+  id: z.string().optional(),
+  case_id: z.string().min(1, 'Processo é obrigatório'),
+  title: z.string().min(1, 'Título é obrigatório'),
+  content: z.string().min(1, 'Conteúdo é obrigatório'),
+  status: z.enum(['Em elaboração', 'Revisão', 'Protocolado']),
+})
 
-export const DocumentUploadSchema = z.object({
-  case_id: z.preprocess(
-    (val) => Number(val),
-    z.number().int().positive("O ID do caso é obrigatório.")
-  ),
-  description: z.string().optional(),
-});
+export const SystemSettingsSchema = z.object({
+  officeName: z.string().optional(),
+  logoUrl: z.string().url().optional(),
+  defaultLanguage: z.string().optional(),
+})
+
+export const UserProfileSchema = z.object({
+  name: z.string().min(1, 'Nome é obrigatório'),
+  email: z.string().email('Email inválido'),
+  phone: z.string().optional(),
+})
+
+export const ChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Senha atual é obrigatória'),
+    newPassword: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'As senhas não coincidem',
+    path: ['confirmPassword'],
+  })

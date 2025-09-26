@@ -1,257 +1,118 @@
-// app/api/financial-agreements/[id]/route.ts - VERSÃO EXPANDIDA
-import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
+// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/app/api/financial-agreements/[id]/route.ts
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
+import { NextRequest, NextResponse } from 'next/server'
+import { FinancialService } from '@/lib/services/financialService'
+import { z } from 'zod'
 
-// GET: Obter um acordo financeiro específico com todos os detalhes expandidos
-export async function GET(req: NextRequest, { params }: RouteParams) {
+// Schema para validar os parâmetros da URL
+const paramsSchema = z.object({
+  id: z.string().uuid({ message: 'O ID fornecido é inválido.' }),
+})
+
+/**
+ * Rota para buscar os detalhes de um acordo financeiro específico.
+ * @param req NextRequest
+ * @param params Contém o ID do acordo.
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
   try {
-    await requirePermission("financial_view");
-    const agreement = await financialService.getFinancialAgreementById(params.id);
+    const validation = paramsSchema.safeParse(params)
+    if (!validation.success) {
+      return NextResponse.json(
+        { message: 'ID do acordo inválido.' },
+        { status: 400 },
+      )
+    }
+
+    const agreement = await FinancialService.getAgreementWithDetails(
+      validation.data.id,
+    )
 
     if (!agreement) {
-      return NextResponse.json({ error: "Acordo não encontrado." }, { status: 404 });
-    }
-    
-    return NextResponse.json(agreement);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// PUT: Atualizar um acordo financeiro
-export async function PUT(req: NextRequest, { params }: RouteParams) {
-  try {
-    await requirePermission("financial_edit");
-    const body = await req.json();
-    const updatedAgreement = await financialService.updateFinancialAgreement(params.id, body);
-    return NextResponse.json(updatedAgreement);
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Dados inválidos.", issues: error.errors },
-        { status: 400 }
-      );
+        { message: 'Acordo não encontrado.' },
+        { status: 404 },
+      )
     }
+
+    return NextResponse.json(agreement)
+  } catch (error) {
+    console.error(`Falha ao buscar acordo ${params.id}:`, error)
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+      { message: 'Erro no servidor ao buscar detalhes do acordo.' },
+      { status: 500 },
+    )
   }
 }
 
-// DELETE: Cancelar um acordo financeiro
-export async function DELETE(req: NextRequest, { params }: RouteParams) {
+/**
+ * Rota para atualizar parcialmente um acordo financeiro.
+ * @param req NextRequest
+ * @param params Contém o ID do acordo.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
   try {
-    await requirePermission("financial_delete");
-    await financialService.cancelFinancialAgreement(params.id);
-    return NextResponse.json({ message: "Acordo cancelado com sucesso." });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// app/api/financial-agreements/[id]/installments/route.ts - NOVA ROTA PARA PARCELAS
-import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
-
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
-// GET: Obter todas as parcelas de um acordo
-export async function GET(req: NextRequest, { params }: RouteParams) {
-  try {
-    await requirePermission("financial_view");
-    const installments = await financialService.getAgreementInstallments(params.id);
-    return NextResponse.json(installments);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// app/api/financial-agreements/[id]/renegotiate/route.ts - NOVA ROTA PARA RENEGOCIAÇÃO
-import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
-
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
-// POST: Renegociar um acordo financeiro
-export async function POST(req: NextRequest, { params }: RouteParams) {
-  try {
-    await requirePermission("financial_edit");
-    const body = await req.json();
-    const renegotiatedAgreement = await financialService.renegotiateFinancialAgreement(params.id, body);
-    return NextResponse.json(renegotiatedAgreement);
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
+    const validation = paramsSchema.safeParse(params)
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Dados inválidos para renegociação.", issues: error.errors },
-        { status: 400 }
-      );
+        { message: 'ID do acordo inválido.' },
+        { status: 400 },
+      )
     }
+
+    const body = await req.json()
+    // TODO: Adicionar validação Zod para os campos do body, se necessário.
+
+    const updatedAgreement = await FinancialService.updateFinancialAgreement(
+      validation.data.id,
+      body,
+    )
+
+    return NextResponse.json(updatedAgreement)
+  } catch (error) {
+    console.error(`Falha ao atualizar acordo ${params.id}:`, error)
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+      { message: 'Erro no servidor ao atualizar o acordo.' },
+      { status: 500 },
+    )
   }
 }
 
-// app/api/financial-agreements/[id]/payments/route.ts - NOVA ROTA PARA PAGAMENTOS
-import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
-
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
-// POST: Registrar pagamento de parcela
-export async function POST(req: NextRequest, { params }: RouteParams) {
+/**
+ * Rota para deletar um acordo financeiro.
+ * @param req NextRequest
+ * @param params Contém o ID do acordo.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
   try {
-    await requirePermission("financial_edit");
-    const body = await req.json();
-    const { installmentId, ...paymentData } = body;
-    
-    if (!installmentId) {
+    const validation = paramsSchema.safeParse(params)
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "ID da parcela é obrigatório." },
-        { status: 400 }
-      );
+        { message: 'ID do acordo inválido.' },
+        { status: 400 },
+      )
     }
-    
-    await financialService.recordInstallmentPayment(installmentId, paymentData);
-    return NextResponse.json({ message: "Pagamento registrado com sucesso." });
-  } catch (error: any) {
+
+    await FinancialService.deleteFinancialAgreement(validation.data.id)
+
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// GET: Obter histórico de pagamentos de um acordo
-export async function GET(req: NextRequest, { params }: RouteParams) {
-  try {
-    await requirePermission("financial_view");
-    const paymentHistory = await financialService.getAgreementPaymentHistory(params.id);
-    return NextResponse.json(paymentHistory);
-  } catch (error: any) {
+      { message: 'Acordo deletado com sucesso.' },
+      { status: 200 },
+    )
+  } catch (error) {
+    console.error(`Falha ao deletar acordo ${params.id}:`, error)
     return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// app/api/financial-agreements/reports/route.ts - NOVA ROTA PARA RELATÓRIOS
-import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
-
-// GET: Gerar relatórios financeiros
-export async function GET(req: NextRequest) {
-  try {
-    await requirePermission("financial_view");
-    
-    const searchParams = req.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const reportType = searchParams.get('type') || 'general';
-    
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: "Período de data é obrigatório (startDate e endDate)." },
-        { status: 400 }
-      );
-    }
-    
-    const reportData = await financialService.getFinancialReports(startDate, endDate, reportType);
-    return NextResponse.json(reportData);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// app/api/financial-agreements/overdue/route.ts - NOVA ROTA PARA ACORDOS EM ATRASO
-import { NextResponse, type NextRequest } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import * as financialService from "@/lib/services/financialService";
-
-// GET: Obter acordos com parcelas em atraso
-export async function GET(req: NextRequest) {
-  try {
-    await requirePermission("financial_view");
-    
-    const searchParams = req.nextUrl.searchParams;
-    const daysOverdue = parseInt(searchParams.get('days') || '0');
-    
-    const overdueAgreements = await financialService.getOverdueAgreements(daysOverdue);
-    return NextResponse.json(overdueAgreements);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
-  }
-}
-
-// POST: Enviar lembretes para acordos em atraso
-export async function POST(req: NextRequest) {
-  try {
-    await requirePermission("financial_edit");
-    
-    const body = await req.json();
-    const { agreementIds, messageTemplate, sendMethod } = body;
-    
-    if (!agreementIds || !Array.isArray(agreementIds) || agreementIds.length === 0) {
-      return NextResponse.json(
-        { error: "Lista de IDs de acordos é obrigatória." },
-        { status: 400 }
-      );
-    }
-    
-    const result = await financialService.sendOverdueReminders(
-      agreementIds, 
-      messageTemplate, 
-      sendMethod
-    );
-    
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.message === "FORBIDDEN" ? 403 : 500 }
-    );
+      { message: 'Erro no servidor ao deletar o acordo.' },
+      { status: 500 },
+    )
   }
 }

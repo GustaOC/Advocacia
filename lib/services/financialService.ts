@@ -1,347 +1,344 @@
-// lib/services/financialService.ts - VERSÃO COMPLETA E OTIMIZADA
-import { createAdminClient } from "@/lib/supabase/server";
-import { EnhancedAgreementSchema, EnhancedAgreementUpdateSchema, RenegotiationSchema, PaymentSchema } from "@/lib/schemas";
-import { z } from "zod";
+// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/services/financialService.ts
+
+import { createSupabaseServerClient } from '../supabase/server'
+import {
+  EnhancedAgreement,
+  EnhancedAgreementSchema,
+  Installment,
+  InstallmentSchema,
+  Payment,
+  PaymentSchema,
+} from '../schemas'
+import { z } from 'zod'
 
 /**
- * Calcula dados dinâmicos de um acordo (parcelas pagas, em atraso, etc.)
- * a partir dos dados já buscados, sem fazer novas consultas ao banco.
- * @param agreement - O objeto do acordo, já contendo suas parcelas.
+ * Classe auxiliar dedicada a realizar cálculos financeiros.
+ * Mantém a lógica de cálculo separada das interações com o banco de dados.
  */
-function calculateAgreementMetrics(agreement: any) {
-  const installments = agreement.agreement_installments || [];
-  const now = new Date();
-  
-  const paidInstallments = installments.filter((i: any) => i.status === 'PAID');
-  const partiallyPaidInstallments = installments.filter((i: any) => i.status === 'PARTIALLY_PAID');
-  const overdueInstallments = installments.filter((i: any) => i.status === 'PENDING' && new Date(i.due_date) < now);
+class FinancialCalculator {
+  /**
+   * Calcula e gera um array de parcelas com base nos parâmetros de um acordo.
+   * @param totalAmount - O valor total do acordo.
+   * @param downPayment - O valor da entrada.
+   * @param numberOfInstallments - O número de parcelas.
+   * @param startDate - A data de início do acordo, usada como base para a primeira parcela.
+   * @returns Um array de objetos de parcela, pronto para ser inserido no banco.
+   */
+  static calculateInstallments(
+    totalAmount: number,
+    downPayment: number,
+    numberOfInstallments: number,
+    startDate: Date,
+  ): Omit<Installment, 'id' | 'agreement_id'>[] {
+    const amountToFinance = totalAmount - downPayment
+    if (amountToFinance < 0) {
+      throw new Error('O valor financiado não pode ser negativo.')
+    }
+    if (numberOfInstallments <= 0) {
+      throw new Error('O número de parcelas deve ser positivo.')
+    }
 
-  const totalPaidAmount = installments.reduce((sum: number, i: any) => sum + (i.paid_value || 0), 0);
-  const overdueAmount = overdueInstallments.reduce((sum: number, i: any) => sum + i.value, 0);
+    // Arredonda para 2 casas decimais para evitar problemas com ponto flutuante
+    const installmentAmount = parseFloat(
+      (amountToFinance / numberOfInstallments).toFixed(2),
+    )
+    const installments: Omit<Installment, 'id' | 'agreement_id'>[] = []
+    let accumulatedAmount = 0
 
-  const nextInstallment = installments
-    .filter((i: any) => ['PENDING', 'OVERDUE', 'PARTIALLY_PAID'].includes(i.status))
-    .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0];
-    
-  const nextDueDate = nextInstallment ? nextInstallment.due_date : null;
-  
-  const daysOverdue = nextDueDate && new Date(nextDueDate) < now 
-    ? Math.floor((now.getTime() - new Date(nextDueDate).getTime()) / (1000 * 3600 * 24))
-    : 0;
+    for (let i = 1; i <= numberOfInstallments; i++) {
+      const dueDate = new Date(startDate)
+      // Adiciona 'i' meses à data de início para o vencimento. Ex: 1ª parcela vence em 1 mês.
+      dueDate.setMonth(dueDate.getMonth() + i)
 
-  const completionPercentage = agreement.total_value > 0 
-    ? Math.min(100, Math.round((totalPaidAmount / agreement.total_value) * 100))
-    : 0;
+      let currentInstallmentAmount = installmentAmount
+      accumulatedAmount += installmentAmount
 
-  const remainingBalance = agreement.total_value - totalPaidAmount;
+      // Lógica de ajuste para a última parcela
+      // Garante que a soma das parcelas seja exatamente o valor financiado
+      if (i === numberOfInstallments) {
+        const difference = amountToFinance - accumulatedAmount
+        currentInstallmentAmount += parseFloat(difference.toFixed(2))
+      }
 
-  return {
-    paid_installments: paidInstallments.length,
-    partially_paid_installments: partiallyPaidInstallments.length,
-    overdue_installments: overdueInstallments.length,
-    next_due_date: nextDueDate,
-    remaining_balance: remainingBalance,
-    paid_amount: totalPaidAmount,
-    overdue_amount: overdueAmount,
-    days_overdue: daysOverdue,
-    completion_percentage: completionPercentage,
-  };
+      installments.push({
+        installment_number: i,
+        amount: parseFloat(currentInstallmentAmount.toFixed(2)),
+        due_date: dueDate,
+        status: 'PENDENTE',
+      })
+    }
+
+    return installments
+  }
 }
 
 /**
- * Busca todos os acordos financeiros com informações expandidas.
- * Otimizado para fazer uma única consulta principal.
+ * Classe de serviço para gerenciar todas as operações de lógica de negócios
+ * relacionadas a acordos financeiros, parcelas e pagamentos.
  */
-export async function getFinancialAgreements() {
-  const supabase = createAdminClient();
-  
-  const { data: agreements, error } = await supabase
-    .from("financial_agreements")
-    .select(`
-      *,
-      cases (id, case_number, title),
-      client_entities:entities!client_entity_id (id, name),
-      executed_entities:entities!executed_entity_id (id, name),
-      agreement_installments (id, installment_number, due_date, value, status, paid_value, payment_date)
-    `)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("Erro ao buscar acordos financeiros:", error);
-    throw new Error("Não foi possível buscar os acordos financeiros.");
+export class FinancialService {
+  /**
+   * Gera um plano de parcelamento para um acordo.
+   * Este método serve como um ponto de acesso público à lógica de cálculo.
+   * @param agreementData - Dados parciais do acordo contendo os valores para o cálculo.
+   * @returns Um array de objetos de parcela.
+   */
+  static generateInstallmentPlan(
+    agreementData: Pick<
+      EnhancedAgreement,
+      'total_amount' | 'down_payment' | 'number_of_installments' | 'start_date'
+    >,
+  ): Omit<Installment, 'id' | 'agreement_id'>[] {
+    return FinancialCalculator.calculateInstallments(
+      agreementData.total_amount,
+      agreementData.down_payment ?? 0,
+      agreementData.number_of_installments,
+      agreementData.start_date,
+    )
   }
 
-  // Calcula métricas para cada acordo sem novas chamadas ao DB
-  return (agreements || []).map(agreement => ({
-    ...agreement,
-    ...calculateAgreementMetrics(agreement),
-  }));
-}
+  /**
+   * Cria um novo acordo financeiro e suas parcelas de forma transacional.
+   * Se as parcelas não forem fornecidas, elas são calculadas automaticamente.
+   * @param agreementData - Os dados do acordo, validados pelo schema Zod.
+   * @returns O acordo recém-criado.
+   * @throws Lança um erro se a validação dos dados falhar ou se a operação no banco de dados falhar.
+   */
+  static async createFinancialAgreement(
+    agreementData: EnhancedAgreement,
+  ): Promise<EnhancedAgreement> {
+    const supabase = await createSupabaseServerClient()
 
-/**
- * Busca um acordo financeiro específico pelo ID com detalhes completos.
- */
-export async function getFinancialAgreementById(id: string) {
-    const supabase = createAdminClient();
-    const numericId = parseInt(id, 10);
-    if (isNaN(numericId)) throw new Error("ID do acordo inválido.");
+    // 1. Validação rigorosa dos dados de entrada
+    const validationResult = EnhancedAgreementSchema.safeParse(agreementData)
+    if (!validationResult.success) {
+      console.error(
+        'Erro de validação ao criar acordo:',
+        validationResult.error.flatten(),
+      )
+      throw new Error('Dados do acordo inválidos.')
+    }
 
-    const { data: agreement, error } = await supabase
-        .from("financial_agreements")
-        .select(`
-            *,
-            cases (*),
-            client_entities:entities!client_entity_id (*),
-            executed_entities:entities!executed_entity_id (*),
-            guarantor_entities:entities!guarantor_entity_id (*),
-            agreement_installments (*)
-        `)
-        .eq("id", numericId)
-        .single();
+    const validatedData = validationResult.data
+
+    // 2. Geração automática de parcelas se não forem fornecidas
+    if (!validatedData.installments || validatedData.installments.length === 0) {
+      validatedData.installments = this.generateInstallmentPlan(validatedData)
+    }
+
+    const { installments, ...agreement } = validatedData
+
+    // 3. Chama a função PostgreSQL para garantir a atomicidade
+    const { data, error } = await supabase.rpc(
+      'create_agreement_with_installments',
+      {
+        agreement_data: agreement,
+        installments_data: installments || [],
+      },
+    )
 
     if (error) {
-        if (error.code === 'PGRST116') return null; // Retorna nulo se não encontrar, erro padrão do Supabase
-        console.error(`Erro ao buscar acordo ${id}:`, error);
-        throw new Error("Não foi possível buscar o acordo.");
+      console.error('Erro na RPC ao criar acordo financeiro:', error)
+      throw new Error(
+        'Não foi possível criar o acordo. A operação foi revertida.',
+      )
     }
 
-    return {
-        ...agreement,
-        ...calculateAgreementMetrics(agreement),
-    };
-}
-
-
-/**
- * Cria um novo acordo financeiro e suas parcelas.
- */
-export async function createFinancialAgreement(agreementData: unknown) {
-  // 1. Validação dos dados com o Zod schema
-  const parsedData = EnhancedAgreementSchema.parse(agreementData);
-  const supabase = createAdminClient();
-
-  // 2. Insere o acordo no banco de dados
-  const { data: agreement, error } = await supabase
-    .from("financial_agreements")
-    .insert(parsedData)
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Erro ao criar acordo financeiro:", error);
-    throw new Error(`Erro ao criar acordo: ${error.message}`);
+    return data as EnhancedAgreement
   }
 
-  // 3. Cria as parcelas automaticamente com base nos dados do acordo
-  await createAgreementInstallments(agreement.id, agreement);
-  return agreement;
-}
+  // ... (manter os outros métodos: getFinancialAgreements, getAgreementWithDetails, etc.)
+  /**
+   * Busca todos os acordos financeiros com informações básicas para listagem.
+   * Inclui paginação.
+   *
+   * @param page - O número da página para a paginação.
+   * @param pageSize - O número de itens por página.
+   * @returns Uma lista de acordos financeiros.
+   * @throws Lança um erro se a consulta ao banco de dados falhar.
+   */
+  static async getFinancialAgreements(
+    page = 1,
+    pageSize = 10,
+  ): Promise<any[]> {
+    const supabase = await createSupabaseServerClient()
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
 
-/**
- * Gera e salva as parcelas de um acordo no banco.
- */
-async function createAgreementInstallments(agreementId: number, agreement: z.infer<typeof EnhancedAgreementSchema>) {
-  const supabase = createAdminClient();
-  const installmentsToCreate = [];
-  const firstDueDate = new Date(agreement.first_due_date);
-
-  for (let i = 0; i < agreement.installments; i++) {
-    const dueDate = new Date(firstDueDate);
-    // Adiciona o fuso horário local para evitar problemas de "off-by-one day"
-    dueDate.setMinutes(dueDate.getMinutes() + dueDate.getTimezoneOffset());
-    
-    switch (agreement.installment_interval) {
-      case 'monthly': dueDate.setMonth(dueDate.getMonth() + i); break;
-      case 'biweekly': dueDate.setDate(dueDate.getDate() + (i * 14)); break;
-      case 'weekly': dueDate.setDate(dueDate.getDate() + (i * 7)); break;
-      // 'custom' e default caem aqui, tratando como mensal por padrão
-      default: dueDate.setMonth(dueDate.getMonth() + i);
-    }
-    
-    installmentsToCreate.push({
-      agreement_id: agreementId,
-      installment_number: i + 1,
-      due_date: dueDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
-      value: agreement.installment_value,
-      status: 'PENDING'
-    });
-  }
-
-  const { error } = await supabase.from("agreement_installments").insert(installmentsToCreate);
-  if (error) {
-    console.error("Erro crítico ao criar parcelas. Revertendo acordo:", error);
-    // Transação de reversão: se as parcelas falharem, o acordo é removido.
-    await supabase.from("financial_agreements").delete().eq("id", agreementId);
-    throw new Error("Falha ao gerar parcelas. O acordo foi desfeito para garantir a consistência dos dados.");
-  }
-}
-
-/**
- * Atualiza um acordo financeiro.
- */
-export async function updateFinancialAgreement(id: string, agreementData: unknown) {
-  const parsedData = EnhancedAgreementUpdateSchema.parse(agreementData);
-  const supabase = createAdminClient();
-  const numericId = parseInt(id, 10);
-
-  const { data: updatedAgreement, error } = await supabase
-    .from("financial_agreements")
-    .update({ ...parsedData, updated_at: new Date().toISOString() })
-    .eq("id", numericId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error(`Erro ao atualizar acordo ${id}:`, error);
-    throw new Error(`Erro ao atualizar acordo: ${error.message}`);
-  }
-  
-  return updatedAgreement;
-}
-
-/**
- * Registra um pagamento para uma parcela específica.
- */
-export async function registerPayment(paymentData: unknown) {
-    const parsedData = PaymentSchema.parse(paymentData);
-    const supabase = createAdminClient();
-
-    // 1. Busca a parcela para verificar o estado atual
-    const { data: installment, error: fetchError } = await supabase
-        .from("agreement_installments")
-        .select("id, value, paid_value, status")
-        .eq("id", parsedData.installment_id)
-        .single();
-
-    if (fetchError || !installment) {
-        throw new Error("Parcela não encontrada.");
-    }
-
-    if (installment.status === 'PAID') {
-        throw new Error("Esta parcela já foi quitada.");
-    }
-    
-    const newPaidValue = (installment.paid_value || 0) + parsedData.paid_amount;
-    const remainingValue = installment.value - newPaidValue;
-    
-    // 2. Determina o novo status da parcela
-    const newStatus = remainingValue <= 0.01 ? 'PAID' : 'PARTIALLY_PAID'; // Tolerância para arredondamento
-
-    // 3. Atualiza a parcela
-    const { error: updateError } = await supabase
-        .from("agreement_installments")
-        .update({
-            paid_value: newPaidValue,
-            status: newStatus,
-            payment_date: parsedData.payment_date,
-        })
-        .eq("id", parsedData.installment_id);
-
-    if (updateError) {
-        throw new Error("Erro ao registrar o pagamento na parcela.");
-    }
-
-    // 4. Verifica se todas as parcelas do acordo foram pagas
-    const { data: pendingInstallments, error: pendingError } = await supabase
-        .from("agreement_installments")
-        .select("id")
-        .eq("agreement_id", parsedData.agreement_id)
-        .in("status", ['PENDING', 'PARTIALLY_PAID', 'OVERDUE']);
-
-    if (pendingError) {
-        console.error("Erro ao verificar status do acordo:", pendingError);
-        // O pagamento foi registrado, mas a verificação falhou. Não lançar erro.
-        return { message: "Pagamento registrado com sucesso." };
-    }
-    
-    // 5. Se não houver mais parcelas pendentes, atualiza o acordo para 'COMPLETED'
-    if (pendingInstallments.length === 0) {
-        await supabase
-            .from("financial_agreements")
-            .update({ status: 'completed' })
-            .eq("id", parsedData.agreement_id);
-    }
-    
-    return { message: "Pagamento registrado com sucesso." };
-}
-
-/**
- * Renegocia um acordo financeiro.
- */
-export async function renegotiateAgreement(agreementId: string, renegotiationData: unknown) {
-    const parsedData = RenegotiationSchema.parse(renegotiationData);
-    const supabase = createAdminClient();
-    const numericId = parseInt(agreementId, 10);
-
-    // 1. Busca o acordo original
-    const { data: originalAgreement, error: fetchError } = await supabase
-        .from("financial_agreements")
-        .select("*, agreement_installments(*)")
-        .eq("id", numericId)
-        .single();
-
-    if (fetchError || !originalAgreement) {
-        throw new Error("Acordo original não encontrado para renegociação.");
-    }
-
-    // 2. Cancela todas as parcelas pendentes do acordo antigo
-    const pendingInstallmentIds = originalAgreement.agreement_installments
-        .filter((i: any) => i.status !== 'PAID')
-        .map((i: any) => i.id);
-
-    if (pendingInstallmentIds.length > 0) {
-        await supabase
-            .from("agreement_installments")
-            .update({ status: 'CANCELLED' })
-            .in('id', pendingInstallmentIds);
-    }
-
-    // 3. Atualiza o acordo principal com os novos dados e incrementa o contador
-    const updatedAgreementData = {
-        total_value: parsedData.new_total_value || originalAgreement.total_value,
-        installments: parsedData.new_installments || originalAgreement.installments,
-        first_due_date: parsedData.new_first_due_date,
-        entry_value: parsedData.new_entry_value || 0,
-        // Calcula o novo valor da parcela
-        installment_value: ( (parsedData.new_total_value || originalAgreement.total_value) - (parsedData.new_entry_value || 0) ) / (parsedData.new_installments || originalAgreement.installments),
-        status: 'renegotiated', // ou 'active' se preferir
-        renegotiation_count: (originalAgreement.renegotiation_count || 0) + 1,
-        updated_at: new Date().toISOString(),
-    };
-
-    const { data: renegotiatedAgreement, error: updateError } = await supabase
-        .from("financial_agreements")
-        .update(updatedAgreementData)
-        .eq("id", numericId)
-        .select()
-        .single();
-
-    if (updateError || !renegotiatedAgreement) {
-        throw new Error("Falha ao atualizar o acordo durante a renegociação.");
-    }
-    
-    // 4. Cria as novas parcelas para o acordo renegociado
-    await createAgreementInstallments(numericId, renegotiatedAgreement as any);
-
-    return renegotiatedAgreement;
-}
-
-/**
- * Deleta um acordo financeiro e todas as suas parcelas.
- * Use com cuidado extremo.
- */
-export async function deleteFinancialAgreement(id: string) {
-    const supabase = createAdminClient();
-    const numericId = parseInt(id, 10);
-
-    // Deleta primeiro as parcelas associadas (devido à foreign key constraint)
-    await supabase.from("agreement_installments").delete().eq("agreement_id", numericId);
-    
-    const { error } = await supabase.from("financial_agreements").delete().eq("id", numericId);
+    const { data, error } = await supabase
+      .from('financial_agreements')
+      .select(
+        `
+        id,
+        total_amount,
+        status,
+        start_date,
+        number_of_installments,
+        case:cases (
+          case_number
+        ),
+        debtor:entities!financial_agreements_debtor_id_fkey (
+          name
+        )
+      `,
+      )
+      .range(from, to)
+      .order('start_date', { ascending: false })
 
     if (error) {
-        console.error(`Erro ao deletar acordo ${id}:`, error);
-        throw new Error("Não foi possível deletar o acordo.");
+      console.error('Erro ao buscar acordos financeiros:', error)
+      throw new Error('Não foi possível buscar os acordos.')
     }
-    return { message: "Acordo deletado com sucesso." };
+
+    return data
+  }
+
+  /**
+   * Busca um único acordo financeiro pelo seu ID com todos os detalhes.
+   *
+   * @param id - O UUID do acordo a ser buscado.
+   * @returns O acordo financeiro com suas parcelas e pagamentos.
+   * @throws Lança um erro se o acordo não for encontrado ou se a consulta falhar.
+   */
+  static async getAgreementWithDetails(
+    id: string,
+  ): Promise<any | null> {
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase
+      .from('financial_agreements')
+      .select(
+        `
+        *,
+        case:cases (*),
+        debtor:entities!financial_agreements_debtor_id_fkey (*),
+        creditor:entities!financial_agreements_creditor_id_fkey (*),
+        installments (
+          *,
+          payments (*)
+        )
+      `,
+      )
+      .eq('id', id)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Código para 'not found'
+        return null
+      }
+      console.error(`Erro ao buscar detalhes do acordo ${id}:`, error)
+      throw new Error('Não foi possível buscar os detalhes do acordo.')
+    }
+
+    return data
+  }
+
+  /**
+   * Atualiza um acordo financeiro existente.
+   *
+   * @param id - O UUID do acordo a ser atualizado.
+   * @param updates - Um objeto com os campos a serem atualizados.
+   * @returns O acordo atualizado.
+   * @throws Lança um erro se a atualização falhar.
+   */
+  static async updateFinancialAgreement(
+    id: string,
+    updates: Partial<EnhancedAgreement>,
+  ): Promise<EnhancedAgreement> {
+    const supabase = await createSupabaseServerClient()
+
+    // Impede a atualização de campos sensíveis ou relacionamentos por este método
+    const { installments, case_id, debtor_id, creditor_id, ...safeUpdates } = updates
+
+    const { data, error } = await supabase
+      .from('financial_agreements')
+      .update(safeUpdates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(`Erro ao atualizar o acordo ${id}:`, error)
+      throw new Error('Não foi possível atualizar o acordo.')
+    }
+
+    return data as EnhancedAgreement
+  }
+
+  /**
+   * Registra um pagamento para uma parcela específica.
+   * Esta operação também deve ser transacional para garantir consistência.
+   *
+   * @param paymentData - Os dados do pagamento.
+   * @returns O registro do pagamento criado.
+   * @throws Lança um erro se a operação falhar.
+   */
+  static async recordPayment(paymentData: Payment): Promise<Payment> {
+    const supabase = await createSupabaseServerClient()
+
+    const validationResult = PaymentSchema.safeParse(paymentData)
+    if (!validationResult.success) {
+      console.error(
+        'Erro de validação ao registrar pagamento:',
+        validationResult.error.flatten(),
+      )
+      throw new Error('Dados do pagamento inválidos.')
+    }
+
+    // TODO: Implementar usando uma RPC transacional 'record_payment_and_update_status'
+    // que insere o pagamento e atualiza o status da parcela e do acordo atomicamente.
+    // Por enquanto, implementado de forma não transacional como exemplo:
+
+    // 1. Inserir o pagamento
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .insert(validationResult.data)
+      .select()
+      .single()
+
+    if (paymentError) {
+      console.error('Erro ao inserir pagamento:', paymentError)
+      throw new Error('Não foi possível registrar o pagamento.')
+    }
+
+    // 2. Atualizar o status da parcela
+    const { error: installmentError } = await supabase
+      .from('installments')
+      .update({ status: 'PAGA' })
+      .eq('id', paymentData.installment_id)
+
+    if (installmentError) {
+      // Idealmente, reverteríamos a inserção do pagamento aqui.
+      // Uma RPC transacional resolve isso automaticamente.
+      console.error('Erro ao atualizar status da parcela:', installmentError)
+      throw new Error(
+        'Pagamento registrado, mas falha ao atualizar status da parcela.',
+      )
+    }
+
+    // TODO: Adicionar lógica para verificar se todas as parcelas estão pagas
+    // e então atualizar o status do acordo principal para 'CONCLUIDO'.
+
+    return payment as Payment
+  }
+
+  /**
+   * Deleta um acordo financeiro e todas as suas dependências (parcelas, pagamentos).
+   * Requer `ON DELETE CASCADE` configurado nas chaves estrangeiras do banco de dados.
+   *
+   * @param id - O UUID do acordo a ser deletado.
+   * @returns Verdadeiro se a exclusão for bem-sucedida.
+   * @throws Lança um erro se a exclusão falhar.
+   */
+  static async deleteFinancialAgreement(id: string): Promise<boolean> {
+    const supabase = await createSupabaseServerClient()
+    const { error } = await supabase.from('financial_agreements').delete().eq('id', id)
+
+    if (error) {
+      console.error(`Erro ao deletar o acordo ${id}:`, error)
+      throw new Error('Não foi possível deletar o acordo.')
+    }
+
+    return true
+  }
 }
