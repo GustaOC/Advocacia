@@ -83,7 +83,8 @@ function HeroModern() {
         <AnimatedSection delay={0.2} className="relative hidden lg:flex justify-center items-center">
           <div className="relative">
             {/* Círculo decorativo */}
-            <div className="absolute -inset-8 bg-gradient-to-r from-accent/30 to-accent/10 rounded-full blur-3xl"></div>
+            {/* Círculo decorativo */}
+            <div className="absolute -inset-8 bg-gradient-to-r from-blue-400/30 to-blue-200/10 rounded-full blur-3xl"></div>
             
             {/* Container da imagem */}
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white/20 backdrop-blur-sm">

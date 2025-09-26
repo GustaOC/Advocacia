@@ -23,16 +23,16 @@ export default function AnimatedSection({ children, className, delay = 0 }: Anim
   return (
     <div ref={ref} className={className}>
       <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 75 },
-          visible: { opacity: 1, y: 0 },
-        }}
-        initial="hidden"
-        animate={mainControls}
-        transition={{ duration: 0.5, delay: delay }}
-      >
-        {children}
-      </motion.div>
+  variants={{
+    hidden: { opacity: 0, y: 50 },
+    visible: { opacity: 1, y: 0 },
+  }}
+  initial="hidden"
+  animate={mainControls}
+  transition={{ duration: 0.8, ease: "easeOut", delay: delay }}
+>
+  {children}
+</motion.div>
     </div>
   )
 }
