@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO FINAL CORRIGIDA
+// components/financial-module.tsx - VERSÃO 100% CORRIGIDA
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
@@ -15,7 +15,6 @@ import {
   Plus, DollarSign, Send, Loader2, AlertCircle, RefreshCw, TrendingUp, Receipt, CheckCircle,
   FileText, Calendar, CreditCard, Search, Eye, Edit, Trash2, Users, Scale, Store,
   FileSignature, Handshake, Clock, ChevronDown, ChevronRight, Calculator,
-  // ✅ CORREÇÃO APLICADA AQUI: Ícones ausentes foram adicionados.
   Phone, 
   Mail 
 } from "lucide-react";
@@ -38,7 +37,7 @@ interface OverdueInstallment {
   total_agreement_value: number; client_contact?: { phone?: string; email?: string; };
 }
 
-// ===== DADOS MOCK (Mantidos como no original) =====
+// ===== DADOS MOCK =====
 const mockAlvaras: Alvara[] = [
     { id: 1, case_id: 2, case_number: '002/2024', value: 8500, received: true, issue_date: '2024-08-15', received_date: '2024-09-01', creditor_name: 'João Silva', court: '1ª Vara Cível' },
     { id: 2, case_id: 4, case_number: '004/2024', value: 12300, received: false, issue_date: '2024-09-10', creditor_name: 'Maria Santos', court: '2ª Vara Cível' },
@@ -53,10 +52,12 @@ const mockOverdueInstallments: OverdueInstallment[] = [
 
 // ===== UTILIDADES =====
 const calculateInstallmentInfo = (agreement: FinancialAgreement) => {
-  const totalValue = agreement.total_value || 0;
-  const entryValue = agreement.entry_value || 0;
+  const totalValue = agreement.total_amount || 0;
+  const entryValue = agreement.down_payment || 0;
   const remainingValue = totalValue - entryValue;
-  const installmentValue = agreement.installments > 0 ? remainingValue / agreement.installments : 0;
+  // CORREÇÃO: Usando o nome correto do campo
+  const numInstallments = agreement.number_of_installments || 0;
+  const installmentValue = numInstallments > 0 ? remainingValue / numInstallments : 0;
   
   const nextDueDate = new Date();
   nextDueDate.setDate(nextDueDate.getDate() + 30);
@@ -78,9 +79,10 @@ const formatDate = (dateString: string | null | undefined) => {
 // ===== COMPONENTE DE ESTATÍSTICAS =====
 function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   const stats = useMemo(() => {
-    const totalValue = agreements.reduce((sum, a) => sum + (a.total_value || 0), 0);
+    const totalValue = agreements.reduce((sum, a) => sum + (a.total_amount || 0), 0);
     const activeAgreements = agreements.filter(a => a.status === 'active').length;
-    const totalInstallments = agreements.reduce((sum, a) => sum + a.installments, 0);
+    // CORREÇÃO: Usando o nome correto do campo
+    const totalInstallments = agreements.reduce((sum, a) => sum + (a.number_of_installments || 0), 0);
     const overdueAgreements = agreements.filter(a => a.status === 'defaulted').length;
 
     return [
@@ -172,8 +174,9 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
             </div>
             <div className="flex items-center space-x-3">
               <div className="text-right">
-                <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_value)}</p>
-                <p className="text-sm text-slate-500">{agreement.installments || 0}x de {formatCurrency(installmentValue)}</p>
+                <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_amount)}</p>
+                {/* CORREÇÃO: Usando o nome correto do campo */}
+                <p className="text-sm text-slate-500">{agreement.number_of_installments || 0}x de {formatCurrency(installmentValue)}</p>
               </div>
               {getStatusBadge(agreement.status)}
             </div>
@@ -187,9 +190,10 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                 <h5 className="font-semibold text-slate-700 flex items-center"><FileText className="h-4 w-4 mr-2" />Informações do Acordo</h5>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-slate-600">Tipo:</span><div>{renderAgreementTypeIcon(agreement.agreement_type)}</div></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Valor de Entrada:</span><span className="font-medium">{formatCurrency(agreement.entry_value || 0)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Valor Restante:</span><span className="font-medium">{formatCurrency((agreement.total_value || 0) - (agreement.entry_value || 0))}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Nº de Parcelas:</span><span className="font-medium">{agreement.installments || 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Valor de Entrada:</span><span className="font-medium">{formatCurrency(agreement.down_payment || 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Valor Restante:</span><span className="font-medium">{formatCurrency((agreement.total_amount || 0) - (agreement.down_payment || 0))}</span></div>
+                  {/* CORREÇÃO: Usando o nome correto do campo */}
+                  <div className="flex justify-between"><span className="text-slate-600">Nº de Parcelas:</span><span className="font-medium">{agreement.number_of_installments || 'N/A'}</span></div>
                 </div>
               </div>
               <div className="space-y-3">
@@ -209,11 +213,17 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                     <p className="font-medium">{agreement.entities?.name || 'N/A'}</p>
                     {agreement.entities?.document && <p className="text-xs text-slate-500">{agreement.entities.document}</p>}
                   </div>
-                  {agreement.executed_entities && (
+                  {/* CORREÇÃO: Exibindo a parte executada */}
+                  {agreement.executed_entities ? (
                     <div>
                       <span className="text-slate-600">Executado:</span>
                       <p className="font-medium">{agreement.executed_entities.name}</p>
                       {agreement.executed_entities.document && <p className="text-xs text-slate-500">{agreement.executed_entities.document}</p>}
+                    </div>
+                  ) : (
+                     <div>
+                      <span className="text-slate-600">Executado:</span>
+                      <p className="font-medium text-slate-400">Não informado</p>
                     </div>
                   )}
                 </div>
@@ -238,6 +248,10 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
     </Card>
   );
 }
+
+// O restante do arquivo (Tabs, etc.) permanece o mesmo.
+// Colei apenas as partes modificadas para clareza, mas o arquivo completo
+// deve ser substituído. O código abaixo é a continuação do arquivo.
 
 // ===== ABA DE ACORDOS =====
 function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgreement[], onSendMessage: (agreement: FinancialAgreement) => void }) {
@@ -311,7 +325,7 @@ function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgr
         <div className="mb-4 text-sm text-slate-600 bg-white p-3 rounded-lg border">
           <div className="flex items-center justify-between">
             <span>Mostrando {filteredAgreements.length} de {agreements.length} acordos</span>
-            <span className="font-semibold">Valor Total: {formatCurrency(filteredAgreements.reduce((sum, a) => sum + (a.total_value || 0), 0))}</span>
+            <span className="font-semibold">Valor Total: {formatCurrency(filteredAgreements.reduce((sum, a) => sum + (a.total_amount || 0), 0))}</span>
           </div>
         </div>
 

@@ -235,23 +235,33 @@ export const RoleSchema = z.object({
   permissions: z.array(z.string()),
 })
 
+// *** CORREÇÃO APLICADA AQUI ***
+// O CaseSchema foi completado com todos os campos do formulário para garantir
+// que os dados não se percam durante a validação nas atualizações.
 export const CaseSchema = z.object({
-  // CORREÇÃO: O ID é um número no banco de dados, não uma string.
-  id: z.number().optional(), 
-  
-  // CORREÇÃO: Permite que o número do processo seja nulo.
-  case_number: z.string().min(1, 'Número do processo é obrigatório').nullable(), 
-  
+  id: z.number().optional(),
+  title: z.string().min(1, 'Título é obrigatório').optional(),
+  case_number: z.string().min(1, 'Número do processo é obrigatório').nullable(),
   debtor_id: z.string().min(1, 'Devedor é obrigatório'),
   creditor_id: z.string().min(1, 'Credor é obrigatório'),
   status: z.enum([
-    'Em Andamento',
-    'Finalizado',
-    'Arquivado',
-    'Acordo',
-    'Suspenso',
+    'Em andamento', 
+    'Acordo', 
+    'Extinto', 
+    'Pago'
   ]),
-  lawyer_id: z.string().optional(),
+  lawyer_id: z.string().optional().nullable(),
+  
+  // Campos financeiros e outros, adicionados como opcionais para validação
+  agreement_type: z.string().optional().nullable(),
+  agreement_value: z.coerce.number().optional().nullable(),
+  down_payment: z.coerce.number().optional().nullable(),
+  installments: z.coerce.number().int().optional().nullable(),
+  installment_due_date: z.string().optional().nullable(),
+  priority: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  value: z.coerce.number().optional().nullable(),
+  action_type: z.string().optional().nullable(),
 })
 
 export const EntitySchema = z.object({

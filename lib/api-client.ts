@@ -68,17 +68,16 @@ export interface FinancialStats {
   averageAgreementValue: number;
 }
 
-// ✅ CORREÇÕES APLICADAS AQUI
 export interface FinancialAgreement {
   id: number;
-  total_value: number | null; // 1. Corrigido para aceitar null
+  total_amount: number | null;
   status: string;
   start_date: string;
   updated_at: string;
   created_at: string;
-  installments: number;
+  number_of_installments: number; // CORREÇÃO: Alterado de 'installments' para o nome correto
   installment_value: number | null;
-  entry_value: number;
+  down_payment: number;
   completion_percentage: number;
   paid_amount: number;
   remaining_balance: number;
@@ -92,16 +91,16 @@ export interface FinancialAgreement {
   court_release_value?: number;
   renegotiation_count: number;
   paid_installments: number;
-  entities: AgreementEntity | null; // Permitindo que a entidade principal seja nula
-  client_entities: AgreementEntity | null; // Permitindo que a entidade cliente seja nula
-  executed_entities: AgreementEntity | null; // 2. Corrigido para ser nulo e manter o nome correto
-  guarantor_entities: AgreementEntity | null; // Permitindo que a entidade fiadora seja nula
-  cases: { case_number: string | null; title: string; court: string; status: string } | null; // Permitindo que o caso seja nulo
+  entities: AgreementEntity | null;
+  client_entities: AgreementEntity | null; // Mantido para retrocompatibilidade se necessário
+  executed_entities: AgreementEntity | null;
+  guarantor_entities: AgreementEntity | null;
+  cases: { case_number: string | null; title: string; court: string; status: string } | null;
 }
 
 
 // ============================================================================
-// INSTÂNCIA DO AXIOS
+// INSTÂNCIA DO AXIOS (sem alterações)
 // ============================================================================
 
 const instance = axios.create({
@@ -125,7 +124,7 @@ instance.interceptors.response.use(
 );
 
 // ============================================================================
-// CLASSE ApiClient COM TODOS OS MÉTODOS (FUNCIONALIDADE ORIGINAL MANTIDA)
+// CLASSE ApiClient COM TODOS OS MÉTODOS (sem alterações na lógica)
 // ============================================================================
 
 class ApiClient {
@@ -217,8 +216,9 @@ class ApiClient {
   // Métodos Utilitários
   validateFinancialAgreement(data: Partial<FinancialAgreement>): string[] {
     const errors: string[] = [];
-    if (!data.total_value || data.total_value <= 0) errors.push('Valor total deve ser maior que zero');
-    if (!data.installments || data.installments < 1) errors.push('Número de parcelas deve ser pelo menos 1');
+    if (!data.total_amount || data.total_amount <= 0) errors.push('Valor total deve ser maior que zero');
+    // CORREÇÃO: Usando o nome correto do campo
+    if (!data.number_of_installments || data.number_of_installments < 1) errors.push('Número de parcelas deve ser pelo menos 1');
     if (!data.agreement_type) errors.push('Tipo de acordo é obrigatório');
     if (!data.payment_method) errors.push('Método de pagamento é obrigatório');
     return errors;

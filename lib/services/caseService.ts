@@ -1,4 +1,4 @@
-// lib/services/caseService.ts - VERSÃO COMPLETA E CORRIGIDA
+// lib/services/caseService.ts - VERSÃO FINAL E ROBUSTA
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -105,7 +105,7 @@ export async function createCase(caseData: unknown, user: AuthUser) {
             debtor_id: client_entity_id,
             agreement_type: newCase.agreement_type, 
             total_amount: newCase.agreement_value,
-            down_payment: newCase.down_payment || 0, 
+            down_payment: newCase.down_payment || 0,
             number_of_installments: newCase.installments || 1,
             start_date: newCase.installment_due_date || new Date().toISOString(),
             status: 'active' as const, 
@@ -143,10 +143,31 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         throw new Error("Não foi possível encontrar o caso para atualização.");
     }
 
+    // *** CORREÇÃO APLICADA AQUI ***
+    // Define explicitamente quais campos pertencem à tabela 'cases'.
+    // Todos os outros campos do 'CaseSchema' serão ignorados durante o update.
+    const caseFields: (keyof typeof parsedData)[] = [
+      'title', 'case_number', 'status', 'lawyer_id', 'priority', 'description',
+      'agreement_type', 'agreement_value', 'down_payment', 'installments', 'installment_due_date'
+    ];
+    
+    const caseUpdateData: Partial<typeof parsedData> = {};
+    for (const key of caseFields) {
+      if (key in parsedData) {
+        // @ts-ignore
+        caseUpdateData[key] = parsedData[key];
+      }
+    }
+
     const { data: updatedCase, error: updateError } = await supabase
-        .from("cases").update(parsedData).eq("id", id).select('*').single();
+        .from("cases")
+        .update(caseUpdateData) // Usamos o objeto filtrado para a atualização
+        .eq("id", id)
+        .select('*')
+        .single();
 
     if (updateError) {
+        console.error("Erro do Supabase ao atualizar o caso:", updateError);
         throw new Error("Não foi possível atualizar o caso.");
     }
     
@@ -186,7 +207,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             console.log(`Atualizando acordo existente para o caso ${id}`);
             const { error } = await supabase
                 .from('financial_agreements')
-                .update({ ...agreementPayload, status: 'active' }) // Reativa caso esteja cancelado
+                .update({ ...agreementPayload, status: 'active' })
                 .eq('id', existingAgreement.id);
             if (error) console.error(`Erro ao ATUALIZAR acordo para o caso ${id}:`, error);
         } else {
@@ -197,8 +218,8 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             if (error) console.error(`Erro ao CRIAR acordo para o caso ${id}:`, error);
         }
     } else if (statusChanged && currentCase.status === 'Acordo' && existingAgreement) {
-        console.log(`Cancelando acordo para o caso ${id} pois o status mudou para ${updatedCase.status}`);
-        await supabase.from('financial_agreements').update({ status: 'cancelled' }).eq('id', existingAgreement.id);
+        console.log(`Excluindo acordo para o caso ${id} pois o status mudou de 'Acordo' para '${updatedCase.status}'`);
+        await supabase.from('financial_agreements').delete().eq('id', existingAgreement.id);
     }
     
     await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
