@@ -1,46 +1,48 @@
-// lib/services/auditService.ts
-import { createAdminClient } from "@/lib/supabase/server";
-import { AuthUser } from "@/lib/auth";
+// lib/services/auditService.ts - VERSÃO ATUALIZADA
 
-// Definindo os tipos de ação para padronização
-export type AuditAction = 
-  // Entidades
-  | 'ENTITY_CREATE' | 'ENTITY_UPDATE' | 'ENTITY_DELETE'
-  // Casos
-  | 'CASE_CREATE' | 'CASE_UPDATE'
-  // Documentos
-  | 'DOCUMENT_UPLOAD' | 'DOCUMENT_DELETE'
-  // Acordos Financeiros
-  | 'AGREEMENT_CREATE' | 'AGREEMENT_UPDATE'
-  // Petições
-  | 'PETITION_CREATE' | 'PETITION_UPDATE'
-  // Funcionários
-  | 'EMPLOYEE_INVITE' | 'EMPLOYEE_UPDATE' | 'EMPLOYEE_DEACTIVATE';
+import { createAdminClient } from '../supabase/server'
+import { AuthUser } from '../auth'
 
+export type AuditAction =
+  | 'USER_LOGIN'
+  | 'USER_LOGOUT'
+  | 'CASE_CREATE'
+  | 'CASE_UPDATE'
+  | 'CASE_DELETE'
+  | 'ENTITY_CREATE'
+  | 'ENTITY_UPDATE'
+  | 'ENTITY_DELETE'
+  | 'DOCUMENT_UPLOAD'
+  | 'DOCUMENT_DELETE'
+  | 'PETITION_CREATE'
+  | 'PETITION_UPDATE'
+  | 'TEMPLATE_CREATE'
+  | 'TEMPLATE_UPDATE'
+  | 'TEMPLATE_DELETE'
+  | 'USER_PASSWORD_CHANGE'
+  | 'USER_PROFILE_UPDATE'
+  // *** CORREÇÃO APLICADA AQUI ***
+  // Adicionada a nova ação para registrar o pagamento de parcelas.
+  | 'PAYMENT_RECORDED'
 
-/**
- * Registra um evento de auditoria no banco de dados.
- * @param action - O tipo de ação realizada.
- * @param user - O objeto do usuário que realizou a ação.
- * @param details - Um objeto JSON com detalhes relevantes sobre a ação.
- */
-export async function logAudit(action: AuditAction, user: AuthUser, details: Record<string, any>) {
+export async function logAudit(
+  action: AuditAction,
+  user: AuthUser,
+  details: Record<string, any>,
+) {
   try {
-    const supabase = createAdminClient();
-    const { error } = await supabase
-      .from('audit_logs')
-      .insert({
-        action,
-        user_id: user.id,
-        user_email: user.email,
-        details,
-      });
+    const supabase = createAdminClient()
+    const { error } = await supabase.from('audit_logs').insert({
+      user_id: user.id,
+      user_email: user.email,
+      action,
+      details,
+    })
 
     if (error) {
-      console.error(`[AuditService] Falha ao registrar log de auditoria para a ação "${action}":`, error.message);
+      console.error('Error logging audit event:', error)
     }
-  } catch (error) {
-    // Logamos o erro, mas não interrompemos a operação principal se o log falhar.
-    console.error(`[AuditService] Erro inesperado ao tentar registrar log de auditoria:`, error);
+  } catch (err) {
+    console.error('Failed to log audit event:', err)
   }
 }

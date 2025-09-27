@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO COMPLETA E CORRIGIDA
+// lib/api-client.ts - VERSÃO COMPLETA E ATUALIZADA
 
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
@@ -27,7 +27,7 @@ export interface Case {
     title: string;
     status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
     value: number | null;
-    court: string | null;
+    // 'court' foi removido para alinhar com o banco de dados
     created_at: string;
     priority: 'Alta' | 'Média' | 'Baixa';
     description?: string | null;
@@ -75,7 +75,7 @@ export interface FinancialAgreement {
   start_date: string;
   updated_at: string;
   created_at: string;
-  number_of_installments: number; // CORREÇÃO: Alterado de 'installments' para o nome correto
+  number_of_installments: number;
   installment_value: number | null;
   down_payment: number;
   completion_percentage: number;
@@ -92,10 +92,22 @@ export interface FinancialAgreement {
   renegotiation_count: number;
   paid_installments: number;
   entities: AgreementEntity | null;
-  client_entities: AgreementEntity | null; // Mantido para retrocompatibilidade se necessário
+  client_entities: AgreementEntity | null;
   executed_entities: AgreementEntity | null;
   guarantor_entities: AgreementEntity | null;
-  cases: { case_number: string | null; title: string; court: string; status: string } | null;
+  // CORREÇÃO: Removido o campo 'court' que não existe no BD.
+  cases: { case_number: string | null; title: string; status: string } | null;
+}
+
+// *** NOVA INTERFACE ADICIONADA ***
+// Define a estrutura de uma parcela para o frontend.
+export interface Installment {
+  id: string;
+  agreement_id: number;
+  installment_number: number;
+  amount: number;
+  due_date: string;
+  status: 'PENDENTE' | 'PAGA' | 'ATRASADA' | 'RENEGOCIADA' | 'CANCELADA';
 }
 
 
@@ -124,7 +136,7 @@ instance.interceptors.response.use(
 );
 
 // ============================================================================
-// CLASSE ApiClient COM TODOS OS MÉTODOS (sem alterações na lógica)
+// CLASSE ApiClient COM TODOS OS MÉTODOS
 // ============================================================================
 
 class ApiClient {
@@ -195,10 +207,16 @@ class ApiClient {
     });
     return response as unknown as Blob;
   }
+  
+  // *** MÉTODOS ATUALIZADOS E CORRIGIDOS ***
+  async getAgreementInstallments(agreementId: number): Promise<Installment[]> { 
+    return instance.get(`/financial-agreements/${agreementId}/installments`); 
+  }
 
-  async getAgreementInstallments(agreementId: string): Promise<any[]> { return instance.get(`/financial-agreements/${agreementId}/installments`); }
-  async getAgreementPaymentHistory(agreementId: string): Promise<any[]> { return instance.get(`/financial-agreements/${agreementId}/payments`); }
-  async recordInstallmentPayment(agreementId: string, paymentData: any): Promise<any> { return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData); }
+  async recordInstallmentPayment(installmentId: string, paymentData: { amount_paid: number; payment_date: string; payment_method: string; notes?: string; }): Promise<any> { 
+    return instance.post(`/installments/${installmentId}/pay`, paymentData); 
+  }
+  
   async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> { return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data); }
   
   // Métodos de Autenticação
@@ -217,7 +235,6 @@ class ApiClient {
   validateFinancialAgreement(data: Partial<FinancialAgreement>): string[] {
     const errors: string[] = [];
     if (!data.total_amount || data.total_amount <= 0) errors.push('Valor total deve ser maior que zero');
-    // CORREÇÃO: Usando o nome correto do campo
     if (!data.number_of_installments || data.number_of_installments < 1) errors.push('Número de parcelas deve ser pelo menos 1');
     if (!data.agreement_type) errors.push('Tipo de acordo é obrigatório');
     if (!data.payment_method) errors.push('Método de pagamento é obrigatório');

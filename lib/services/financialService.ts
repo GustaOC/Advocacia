@@ -1,35 +1,31 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/services/financialService.ts - VERSÃO COMPLETA E CORRIGIDA
+// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/services/financialService.ts
 
-import { createSupabaseServerClient } from '../supabase/server'
+import { createAdminClient, createSupabaseServerClient } from '../supabase/server'
 import {
   EnhancedAgreement,
   EnhancedAgreementSchema,
   Installment,
-  InstallmentSchema,
   Payment,
   PaymentSchema,
 } from '../schemas'
 import { z } from 'zod'
+import { AuthUser } from '@/lib/auth'
+import { logAudit } from './auditService'
+
 
 /**
  * Classe auxiliar dedicada a realizar cálculos financeiros.
- * Mantém a lógica de cálculo separada das interações com o banco de dados.
  */
 class FinancialCalculator {
   /**
    * Calcula e gera um array de parcelas com base nos parâmetros de um acordo.
-   * @param totalAmount - O valor total do acordo.
-   * @param downPayment - O valor da entrada.
-   * @param numberOfInstallments - O número de parcelas.
-   * @param startDate - A data de início do acordo, usada como base para a primeira parcela.
-   * @returns Um array de objetos de parcela, pronto para ser inserido no banco.
    */
   static calculateInstallments(
     totalAmount: number,
     downPayment: number,
     numberOfInstallments: number,
     startDate: Date,
-  ): Omit<Installment, 'id' | 'agreement_id'>[] {
+  ): Omit<Installment, 'id' | 'agreement_id' | 'created_at' | 'updated_at'>[] {
     const amountToFinance = totalAmount - downPayment
     if (amountToFinance < 0) {
       throw new Error('O valor financiado não pode ser negativo.')
@@ -38,23 +34,19 @@ class FinancialCalculator {
       throw new Error('O número de parcelas deve ser positivo.')
     }
 
-    // Arredonda para 2 casas decimais para evitar problemas com ponto flutuante
     const installmentAmount = parseFloat(
       (amountToFinance / numberOfInstallments).toFixed(2),
     )
-    const installments: Omit<Installment, 'id' | 'agreement_id'>[] = []
+    const installments: Omit<Installment, 'id' | 'agreement_id' | 'created_at' | 'updated_at'>[] = []
     let accumulatedAmount = 0
 
     for (let i = 1; i <= numberOfInstallments; i++) {
       const dueDate = new Date(startDate)
-      // Adiciona 'i' meses à data de início para o vencimento. Ex: 1ª parcela vence em 1 mês.
       dueDate.setMonth(dueDate.getMonth() + i)
 
       let currentInstallmentAmount = installmentAmount
       accumulatedAmount += installmentAmount
 
-      // Lógica de ajuste para a última parcela
-      // Garante que a soma das parcelas seja exatamente o valor financiado
       if (i === numberOfInstallments) {
         const difference = amountToFinance - accumulatedAmount
         currentInstallmentAmount += parseFloat(difference.toFixed(2))
@@ -63,6 +55,8 @@ class FinancialCalculator {
       installments.push({
         installment_number: i,
         amount: parseFloat(currentInstallmentAmount.toFixed(2)),
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Revertido para o tipo correto `Date`, conforme o schema.
         due_date: dueDate,
         status: 'PENDENTE',
       })
@@ -79,16 +73,13 @@ class FinancialCalculator {
 export class FinancialService {
   /**
    * Gera um plano de parcelamento para um acordo.
-   * Este método serve como um ponto de acesso público à lógica de cálculo.
-   * @param agreementData - Dados parciais do acordo contendo os valores para o cálculo.
-   * @returns Um array de objetos de parcela.
    */
   static generateInstallmentPlan(
     agreementData: Pick<
       EnhancedAgreement,
       'total_amount' | 'down_payment' | 'number_of_installments' | 'start_date'
     >,
-  ): Omit<Installment, 'id' | 'agreement_id'>[] {
+  ): Omit<Installment, 'id' | 'agreement_id' | 'created_at' | 'updated_at'>[] {
     return FinancialCalculator.calculateInstallments(
       agreementData.total_amount,
       agreementData.down_payment ?? 0,
@@ -99,17 +90,12 @@ export class FinancialService {
 
   /**
    * Cria um novo acordo financeiro e suas parcelas de forma transacional.
-   * Se as parcelas não forem fornecidas, elas são calculadas automaticamente.
-   * @param agreementData - Os dados do acordo, validados pelo schema Zod.
-   * @returns O acordo recém-criado.
-   * @throws Lança um erro se a validação dos dados falhar ou se a operação no banco de dados falhar.
    */
   static async createFinancialAgreement(
     agreementData: EnhancedAgreement,
   ): Promise<EnhancedAgreement> {
     const supabase = await createSupabaseServerClient()
 
-    // 1. Validação rigorosa dos dados de entrada
     const validationResult = EnhancedAgreementSchema.safeParse(agreementData)
     if (!validationResult.success) {
       console.error(
@@ -121,14 +107,12 @@ export class FinancialService {
 
     const validatedData = validationResult.data
 
-    // 2. Geração automática de parcelas se não forem fornecidas
     if (!validatedData.installments || validatedData.installments.length === 0) {
       validatedData.installments = this.generateInstallmentPlan(validatedData)
     }
 
     const { installments, ...agreement } = validatedData
 
-    // 3. Chama a função PostgreSQL para garantir a atomicidade
     const { data, error } = await supabase.rpc(
       'create_agreement_with_installments',
       {
@@ -149,12 +133,6 @@ export class FinancialService {
 
   /**
    * Busca todos os acordos financeiros com informações essenciais para a listagem.
-   * A consulta foi reestruturada para ser mais robusta e evitar erros no frontend
-   * quando um relacionamento (como cliente ou processo) não é encontrado.
-   *
-   * @param page - O número da página para a paginação.
-   * @param pageSize - O número de itens por página.
-   * @returns Uma lista de acordos financeiros com dados associados.
    */
   static async getFinancialAgreements(
     page = 1,
@@ -164,11 +142,6 @@ export class FinancialService {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
-    // ✅ CORREÇÃO APLICADA AQUI:
-    // Esta consulta foi modificada para ser mais resiliente. Em vez de selecionar
-    // campos específicos que podem falhar, ela busca os objetos relacionados inteiros.
-    // O Supabase irá retornar 'null' para um relacionamento se ele não existir,
-    // o que previne o erro 'cannot read properties of undefined' no frontend.
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(
@@ -203,18 +176,12 @@ export class FinancialService {
 
   /**
    * Busca um único acordo financeiro pelo seu ID com todos os detalhes.
-   *
-   * @param id - O UUID do acordo a ser buscado.
-   * @returns O acordo financeiro com suas parcelas e pagamentos.
-   * @throws Lança um erro se o acordo não for encontrado ou se a consulta falhar.
    */
   static async getAgreementWithDetails(
     id: string,
   ): Promise<any | null> {
     const supabase = await createSupabaseServerClient()
     
-    // Esta consulta já estava bem estruturada, usando o padrão que aplicamos acima.
-    // Nenhuma correção foi necessária aqui.
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(
@@ -234,7 +201,6 @@ export class FinancialService {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // Código para 'not found'
         return null
       }
       console.error(`Erro ao buscar detalhes do acordo ${id}:`, error)
@@ -246,19 +212,12 @@ export class FinancialService {
 
   /**
    * Atualiza um acordo financeiro existente.
-   *
-   * @param id - O UUID do acordo a ser atualizado.
-   * @param updates - Um objeto com os campos a serem atualizados.
-   * @returns O acordo atualizado.
-   * @throws Lança um erro se a atualização falhar.
    */
   static async updateFinancialAgreement(
     id: string,
     updates: Partial<EnhancedAgreement>,
   ): Promise<EnhancedAgreement> {
     const supabase = await createSupabaseServerClient()
-
-    // Impede a atualização de campos sensíveis ou relacionamentos por este método
     const { installments, case_id, debtor_id, creditor_id, ...safeUpdates } = updates
 
     const { data, error } = await supabase
@@ -278,11 +237,6 @@ export class FinancialService {
 
   /**
    * Registra um pagamento para uma parcela específica.
-   * Esta operação também deve ser transacional para garantir consistência.
-   *
-   * @param paymentData - Os dados do pagamento.
-   * @returns O registro do pagamento criado.
-   * @throws Lança um erro se a operação falhar.
    */
   static async recordPayment(paymentData: Payment): Promise<Payment> {
     const supabase = await createSupabaseServerClient()
@@ -323,12 +277,7 @@ export class FinancialService {
   }
 
   /**
-   * Deleta um acordo financeiro e todas as suas dependências (parcelas, pagamentos).
-   * Requer `ON DELETE CASCADE` configurado nas chaves estrangeiras do banco de dados.
-   *
-   * @param id - O UUID do acordo a ser deletado.
-   * @returns Verdadeiro se a exclusão for bem-sucedida.
-   * @throws Lança um erro se a exclusão falhar.
+   * Deleta um acordo financeiro.
    */
   static async deleteFinancialAgreement(id: string): Promise<boolean> {
     const supabase = await createSupabaseServerClient()
@@ -340,5 +289,73 @@ export class FinancialService {
     }
 
     return true
+  }
+
+  // ============================================================================
+  // === NOVAS FUNÇÕES ADICIONADAS PARA GESTÃO DE PARCELAS ======================
+  // ============================================================================
+
+  /**
+   * Busca todas as parcelas associadas a um acordo específico.
+   */
+  static async getInstallmentsByAgreementId(agreementId: number): Promise<Installment[]> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('financial_installments')
+      .select('*')
+      .eq('agreement_id', agreementId)
+      .order('installment_number', { ascending: true });
+
+    if (error) {
+      console.error(`Erro ao buscar parcelas para o acordo ${agreementId}:`, error);
+      throw new Error('Não foi possível buscar as parcelas.');
+    }
+    // Garante que o tipo de retorno corresponda a `Installment[]`
+    return (data || []).map(item => ({...item, due_date: new Date(item.due_date)}));
+  }
+
+  /**
+   * Registra o pagamento de uma parcela e atualiza seu status.
+   */
+  static async recordPaymentForInstallment(paymentData: z.infer<typeof PaymentSchema>, user: AuthUser) {
+    const supabase = createAdminClient();
+    const { installment_id, amount_paid, payment_date, payment_method, notes } = paymentData;
+
+    const { data: newPayment, error: paymentError } = await supabase
+      .from('financial_payments')
+      .insert({
+        installment_id,
+        amount_paid,
+        payment_date,
+        payment_method,
+        notes,
+        recorded_by_user_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (paymentError) {
+      console.error('Erro ao registrar pagamento:', paymentError);
+      throw new Error('Não foi possível registrar o pagamento.');
+    }
+
+    const { error: updateError } = await supabase
+      .from('financial_installments')
+      .update({ status: 'PAGA' })
+      .eq('id', installment_id);
+
+    if (updateError) {
+      await supabase.from('financial_payments').delete().eq('id', newPayment.id);
+      console.error('Erro ao atualizar status da parcela (pagamento desfeito):', updateError);
+      throw new Error('O pagamento foi registrado, mas falhou ao atualizar a parcela. A operação foi desfeita.');
+    }
+
+    await logAudit('PAYMENT_RECORDED', user, {
+      paymentId: newPayment.id,
+      installmentId: installment_id,
+      amount: amount_paid,
+    });
+
+    return newPayment;
   }
 }
