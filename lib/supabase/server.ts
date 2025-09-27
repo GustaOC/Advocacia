@@ -46,3 +46,9 @@ export function createAdminClient() {
   if (!url || !serviceKey) throw new Error("Missing Supabase envs: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
   return createSupabaseAdmin(url, serviceKey, { auth: { persistSession: false } });
 }
+
+/**
+ * ALIAS PARA COMPATIBILIDADE: 
+ * Exporta a mesma função com o nome que o código estava esperando
+ */
+export const getSupabaseAdmin = createAdminClient;

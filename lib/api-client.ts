@@ -110,6 +110,24 @@ export interface Installment {
   status: 'PENDENTE' | 'PAGA' | 'ATRASADA' | 'RENEGOCIADA' | 'CANCELADA';
 }
 
+// *** NOVA INTERFACE ADICIONADA PARA A NOVA FUNCIONALIDADE ***
+export interface MonthlyInstallment {
+  id: number;
+  due_date: string;
+  amount: number;
+  status: 'PENDENTE' | 'PAGA' | 'ATRASADA';
+  agreement: {
+    id: number;
+    cases: {
+      case_number: string | null;
+      title: string;
+    } | null;
+    debtor: {
+      name: string;
+    } | null;
+  } | null;
+}
+
 
 // ============================================================================
 // INSTÂNCIA DO AXIOS (sem alterações)
@@ -139,7 +157,7 @@ instance.interceptors.response.use(
 // CLASSE ApiClient COM TODOS OS MÉTODOS
 // ============================================================================
 
-class ApiClient {
+export class ApiClient {
   // Entidades
   async getEntities(): Promise<Entity[]> { return instance.get('/entities'); }
   async createEntity(data: Partial<Entity>): Promise<Entity> { return instance.post('/entities', data); }
@@ -218,6 +236,11 @@ class ApiClient {
   }
   
   async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> { return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data); }
+
+  // *** NOVO MÉTODO ADICIONADO ***
+  async getInstallmentsByMonth(year: number, month: number): Promise<MonthlyInstallment[]> {
+    return instance.get(`/installments/by-month`, { params: { year, month } });
+  }
   
   // Métodos de Autenticação
   async getCurrentUser(): Promise<any> { return instance.get('/auth/me'); }
@@ -249,7 +272,7 @@ class ApiClient {
 }
 
 // ============================================================================
-// EXPORTAÇÃO
+// EXPORTAÇÃO CORRIGIDA
 // ============================================================================
 
 export const apiClient = new ApiClient();

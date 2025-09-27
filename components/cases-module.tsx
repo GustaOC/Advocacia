@@ -12,29 +12,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, Upload, AlertTriangle, Clock, LayoutGrid, List, Star, TrendingUp, DollarSign, Calendar, FileSignature, Handshake, Store, Scale } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, type Entity, type Case } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-// Interfaces
-interface Entity {
-  id: number;
-  name: string;
-  type: string; 
-}
-
-interface Case {
-  id: number;
-  case_number: string | null;
-  title: string;
-  status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
-  status_reason: string | null;
-  value: number | null;
-  court: string | null;
-  created_at: string;
-  priority: 'Alta' | 'Média' | 'Baixa';
-  description?: string | null;
-  case_parties: { role: string; entities: { id: number; name: string; } }[];
+// Interface estendida para adicionar campos que faltam na interface do api-client
+interface ExtendedCase extends Case {
+  status_reason?: string | null;
+  court?: string | null;
   client_entity_id?: number;
   executed_entity_id?: number;
   payment_date?: string | null;
@@ -52,7 +37,7 @@ interface CasesModuleProps {
 }
 
 // Componente de estatísticas (sem alterações)
-function CasesStats({ cases }: { cases: Case[] }) {
+function CasesStats({ cases }: { cases: ExtendedCase[] }) {
   const stats = [
     { label: "Total de Casos", value: cases.length.toString(), icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50", trend: "+5%" },
     { label: "Em Andamento", value: cases.filter(c => c.status === 'Em andamento').length.toString(), icon: Clock, color: "text-orange-600", bg: "bg-orange-50", trend: "+2%" },
@@ -98,14 +83,14 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [currentCase, setCurrentCase] = useState<Partial<Case>>({});
-    const [selectedCaseForView, setSelectedCaseForView] = useState<Case | null>(null);
+    const [currentCase, setCurrentCase] = useState<Partial<ExtendedCase>>({});
+    const [selectedCaseForView, setSelectedCaseForView] = useState<ExtendedCase | null>(null);
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState<File | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     
-    const [draggedCase, setDraggedCase] = useState<Case | null>(null);
+    const [draggedCase, setDraggedCase] = useState<ExtendedCase | null>(null);
 
     const { data: casesData, isLoading: isLoadingCases } = useQuery({
         queryKey: ['cases'],
@@ -116,17 +101,19 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         queryFn: () => apiClient.getEntities(),
     });
 
-    const cases: Case[] = casesData?.cases ?? [];
+    const cases: ExtendedCase[] = (casesData?.cases ?? []) as ExtendedCase[];
     const allEntities: Entity[] = entitiesData ?? [];
     const isLoading = isLoadingCases || isLoadingEntities;
 
-    const getEntityName = (id: number | undefined) => {
+    const getEntityName = (id: number | string | undefined) => {
         if (!id) return 'Não selecionado';
-        return allEntities.find(e => e.id === id)?.name || `ID ${id} não encontrado`;
+        // Converte para string para comparação, já que Entity.id é string
+        const entityId = String(id);
+        return allEntities.find(e => e.id === entityId)?.name || `ID ${id} não encontrado`;
     }
 
     const saveCaseMutation = useMutation({
-        mutationFn: (caseData: Partial<Case>) => {
+        mutationFn: (caseData: Partial<ExtendedCase>) => {
             const dataToSave = {
                 ...caseData,
                 value: caseData.value ? parseFloat(String(caseData.value)) : null,
@@ -151,7 +138,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     });
 
     const updateCaseStatusMutation = useMutation({
-        mutationFn: ({ caseId, status }: { caseId: number; status: Case['status'] }) => apiClient.updateCase(String(caseId), { status }),
+        mutationFn: ({ caseId, status }: { caseId: number; status: ExtendedCase['status'] }) => apiClient.updateCase(String(caseId), { status }),
         onSuccess: () => {
             toast({ title: "Status Atualizado!", description: "O status do caso foi alterado." });
             queryClient.invalidateQueries({ queryKey: ['cases'] });
@@ -163,7 +150,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         },
     });
 
-    const openEditModal = (caseItem: Case) => {
+    const openEditModal = (caseItem: ExtendedCase) => {
         setIsEditMode(true);
         const client = caseItem.case_parties.find(p => p.role === 'Cliente');
         const executed = caseItem.case_parties.find(p => p.role === 'Executado');
@@ -185,7 +172,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         setIsModalOpen(true);
     };
 
-    const openViewModal = (caseItem: Case) => {
+    const openViewModal = (caseItem: ExtendedCase) => {
         setSelectedCaseForView(caseItem);
         setIsViewModalOpen(true);
     };
@@ -212,7 +199,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         });
     }, [cases, searchTerm, filterStatus, filterPriority]);
 
-    const getStatusBadge = (status: Case['status']) => {
+    const getStatusBadge = (status: ExtendedCase['status']) => {
         const statusMap = {
             'Em andamento': 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg',
             'Acordo': 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg',
@@ -236,9 +223,9 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         );
     };
 
-    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, caseItem: Case) => setDraggedCase(caseItem);
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, caseItem: ExtendedCase) => setDraggedCase(caseItem);
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>, status: Case['status']) => {
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, status: ExtendedCase['status']) => {
         e.preventDefault();
         if (draggedCase && draggedCase.status !== status) {
             updateCaseStatusMutation.mutate({ caseId: draggedCase.id, status });
@@ -414,18 +401,18 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                             <div className="space-y-2"><Label htmlFor="value">Valor da Causa</Label><Input id="value" type="number" value={currentCase.value ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, value: parseFloat(e.target.value) })} placeholder="0,00" /></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2"><Label>Cliente *</Label><Select value={String(currentCase.client_entity_id || '')} onValueChange={(value) => setCurrentCase({ ...currentCase, client_entity_id: Number(value) })} disabled={isEditMode}><SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger><SelectContent>{allEntities.filter(e => e.type === 'Cliente').map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}</SelectContent></Select></div>
-                            <div className="space-y-2"><Label>Executado *</Label><Select value={String(currentCase.executed_entity_id || '')} onValueChange={(value) => setCurrentCase({ ...currentCase, executed_entity_id: Number(value) })} disabled={isEditMode}><SelectTrigger><SelectValue placeholder="Selecione o executado" /></SelectTrigger><SelectContent>{allEntities.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}</SelectContent></Select></div>
+                            <div className="space-y-2"><Label>Cliente *</Label><Select value={String(currentCase.client_entity_id || '')} onValueChange={(value) => setCurrentCase({ ...currentCase, client_entity_id: Number(value) })} disabled={isEditMode}><SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger><SelectContent>{allEntities.filter(e => e.type === 'Cliente').map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
+                            <div className="space-y-2"><Label>Executado *</Label><Select value={String(currentCase.executed_entity_id || '')} onValueChange={(value) => setCurrentCase({ ...currentCase, executed_entity_id: Number(value) })} disabled={isEditMode}><SelectTrigger><SelectValue placeholder="Selecione o executado" /></SelectTrigger><SelectContent>{allEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2"><Label htmlFor="priority">Prioridade</Label><Select value={currentCase.priority} onValueChange={(value: 'Alta' | 'Média' | 'Baixa') => setCurrentCase({ ...currentCase, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Alta">Alta</SelectItem><SelectItem value="Média">Média</SelectItem><SelectItem value="Baixa">Baixa</SelectItem></SelectContent></Select></div>
-                            <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={currentCase.status} onValueChange={(value: Case['status']) => setCurrentCase({ ...currentCase, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Em andamento">Em andamento</SelectItem><SelectItem value="Acordo">Acordo</SelectItem><SelectItem value="Extinto">Extinto</SelectItem><SelectItem value="Pago">Pago</SelectItem></SelectContent></Select></div>
+                            <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={currentCase.status} onValueChange={(value: ExtendedCase['status']) => setCurrentCase({ ...currentCase, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Em andamento">Em andamento</SelectItem><SelectItem value="Acordo">Acordo</SelectItem><SelectItem value="Extinto">Extinto</SelectItem><SelectItem value="Pago">Pago</SelectItem></SelectContent></Select></div>
                         </div>
                         {currentCase.status === 'Acordo' && (
                             <div className="border-t border-dashed pt-6 mt-2 space-y-6">
                                 <h4 className="font-semibold text-lg flex items-center text-slate-800"><DollarSign className="mr-2 h-5 w-5 text-yellow-600"/> Detalhes do Acordo</h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2"><Label>Tipo de Acordo</Label><Select value={currentCase.agreement_type || ''} onValueChange={(value) => setCurrentCase({ ...currentCase, agreement_type: value as Case['agreement_type'] })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent><SelectItem value="Judicial">Judicial</SelectItem><SelectItem value="Extrajudicial">Extrajudicial</SelectItem><SelectItem value="Em Audiência">Em Audiência</SelectItem><SelectItem value="Pela Loja">Pela Loja</SelectItem></SelectContent></Select></div>
+                                    <div className="space-y-2"><Label>Tipo de Acordo</Label><Select value={currentCase.agreement_type || ''} onValueChange={(value) => setCurrentCase({ ...currentCase, agreement_type: value as ExtendedCase['agreement_type'] })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent><SelectItem value="Judicial">Judicial</SelectItem><SelectItem value="Extrajudicial">Extrajudicial</SelectItem><SelectItem value="Em Audiência">Em Audiência</SelectItem><SelectItem value="Pela Loja">Pela Loja</SelectItem></SelectContent></Select></div>
                                     <div className="space-y-2"><Label>Valor do Acordo</Label><Input type="number" placeholder="5000,00" value={currentCase.agreement_value ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, agreement_value: parseFloat(e.target.value) })} /></div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4">

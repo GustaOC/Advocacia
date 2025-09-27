@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO 100% CORRIGIDA
+// components/financial-module.tsx - VERSÃO UNIFICADA COMPLETA
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
@@ -11,16 +11,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Plus, DollarSign, Send, Loader2, AlertCircle, RefreshCw, TrendingUp, Receipt, CheckCircle,
   FileText, Calendar, CreditCard, Search, Eye, Edit, Trash2, Users, Scale, Store,
   FileSignature, Handshake, Clock, ChevronDown, ChevronRight, Calculator,
-  Phone, 
-  Mail 
+  Phone, Mail, Banknote
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiClient, type FinancialAgreement } from "@/lib/api-client";
-import { useQuery } from "@tanstack/react-query";
+import { apiClient, type FinancialAgreement, type MonthlyInstallment } from "@/lib/api-client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ===== TIPOS E INTERFACES =====
 interface Alvara {
@@ -73,7 +73,7 @@ const formatCurrency = (value: number | null | undefined) => {
 
 const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return 'Data não informada';
-  return new Date(dateString).toLocaleDateString('pt-BR');
+  return new Date(dateString).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 };
 
 // ===== COMPONENTE DE ESTATÍSTICAS =====
@@ -249,9 +249,125 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
   );
 }
 
-// O restante do arquivo (Tabs, etc.) permanece o mesmo.
-// Colei apenas as partes modificadas para clareza, mas o arquivo completo
-// deve ser substituído. O código abaixo é a continuação do arquivo.
+// ===== NOVA ABA: PARCELAS DO MÊS =====
+function MonthlyInstallmentsTab() {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+    const [selectedDate, setSelectedDate] = useState({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+    });
+
+    const { data: installments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[], Error>({
+        queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month],
+        queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
+        placeholderData: (prev) => prev,
+    });
+    
+    // Hook de mutação para marcar parcela como paga
+    const payInstallmentMutation = useMutation({
+        mutationFn: (installmentId: number) => apiClient.recordInstallmentPayment(String(installmentId), {
+          amount_paid: installments.find(i => i.id === installmentId)?.amount ?? 0,
+          payment_date: new Date().toISOString(),
+          payment_method: 'pix', // Exemplo
+        }),
+        onSuccess: () => {
+            toast({ title: "Sucesso!", description: "Parcela marcada como paga." });
+            queryClient.invalidateQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
+        },
+        onError: (err: Error) => {
+            toast({ title: "Erro", description: err.message, variant: "destructive" });
+        }
+    });
+
+    const { totalToReceive, totalReceived } = useMemo(() => {
+        return installments.reduce((acc, installment) => {
+            if (installment.status === 'PAGA') {
+                acc.totalReceived += installment.amount;
+            } else {
+                acc.totalToReceive += installment.amount;
+            }
+            return acc;
+        }, { totalToReceive: 0, totalReceived: 0 });
+    }, [installments]);
+
+    const handleDateChange = (type: 'month' | 'year', value: string) => {
+        setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) }));
+    };
+
+    const getStatusBadge = (status: MonthlyInstallment['status']) => {
+        const variants = {
+            'PAGA': { label: 'Paga', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+            'PENDENTE': { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+            'ATRASADA': { label: 'Atrasada', className: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
+        };
+        const config = variants[status] || variants.PENDENTE;
+        const Icon = config.icon;
+        return (
+            <Badge className={`${config.className} flex items-center gap-1 font-semibold`}>
+                <Icon className="h-3 w-3" />
+                {config.label}
+            </Badge>
+        );
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total a Receber no Mês</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(totalToReceive)}</p></div><DollarSign className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
+                <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total Recebido no Mês</p><p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p></div><CheckCircle className="h-8 w-8 text-green-600" /></div></CardContent></Card>
+                <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Balanço do Mês</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived - totalToReceive)}</p></div><TrendingUp className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                    <Label>Mês:</Label>
+                    <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
+                        <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => <SelectItem key={i + 1} value={String(i + 1)}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Label>Ano:</Label>
+                    <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
+                        <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: 5 }, (_, i) => <SelectItem key={i} value={String(new Date().getFullYear() - i)}>{new Date().getFullYear() - i}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <Card className="border-0 shadow-lg">
+                <CardContent>
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Vencimento</TableHead><TableHead>Cliente</TableHead><TableHead>Processo</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {isLoading && <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>}
+                            {!isLoading && installments.map((inst) => (
+                                <TableRow key={inst.id}>
+                                    <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
+                                    <TableCell className="font-medium">{inst.agreement?.debtor?.name || 'N/A'}</TableCell>
+                                    <TableCell>{inst.agreement?.cases?.case_number || 'N/A'}</TableCell>
+                                    <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
+                                    <TableCell>{getStatusBadge(inst.status)}</TableCell>
+                                    <TableCell className="text-right">
+                                        {inst.status !== 'PAGA' && (
+                                            <Button size="sm" onClick={() => payInstallmentMutation.mutate(inst.id)} disabled={payInstallmentMutation.isPending}>
+                                                <Banknote className="h-4 w-4 mr-2" />
+                                                Dar Baixa
+                                            </Button>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
 
 // ===== ABA DE ACORDOS =====
 function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgreement[], onSendMessage: (agreement: FinancialAgreement) => void }) {
@@ -665,14 +781,16 @@ export function FinancialModule() {
 
       <FinancialStats agreements={safeAgreements} />
       
-      <Tabs defaultValue="acordos" className="space-y-6">
-        <TabsList className="grid grid-cols-4 w-full">
+      <Tabs defaultValue="monthly_installments" className="space-y-6">
+        <TabsList className="grid grid-cols-5 w-full">
+          <TabsTrigger value="monthly_installments" className="flex items-center space-x-2"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
           <TabsTrigger value="acordos" className="flex items-center space-x-2"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2">{safeAgreements.length}</Badge></TabsTrigger>
           <TabsTrigger value="alvaras" className="flex items-center space-x-2"><Receipt className="h-4 w-4" /><span>Alvarás</span><Badge variant="secondary" className="ml-2">{alvaras.length}</Badge></TabsTrigger>
           <TabsTrigger value="atraso" className="flex items-center space-x-2"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2">{overdueInstallments.length}</Badge></TabsTrigger>
           <TabsTrigger value="despesas" className="flex items-center space-x-2"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2">{expenses.length}</Badge></TabsTrigger>
         </TabsList>
 
+        <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
         <TabsContent value="acordos"><AgreementsTab agreements={safeAgreements} onSendMessage={handleSendMessage} /></TabsContent>
         <TabsContent value="alvaras"><AlvarasTab alvaras={alvaras} onMarkAsReceived={handleMarkAsReceived} /></TabsContent>
         <TabsContent value="atraso"><OverdueTab overdueInstallments={overdueInstallments} onSendMessage={handleSendOverdueMessage} /></TabsContent>

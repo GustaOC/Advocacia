@@ -313,6 +313,37 @@ export class FinancialService {
     // Garante que o tipo de retorno corresponda a `Installment[]`
     return (data || []).map(item => ({...item, due_date: new Date(item.due_date)}));
   }
+  
+  /**
+   * Busca todas as parcelas com vencimento em um mês e ano específicos.
+   */
+  static async getInstallmentsByMonthYear(year: number, month: number) {
+    const supabase = createAdminClient();
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    const { data, error } = await supabase
+      .from('financial_installments')
+      .select(`
+        *,
+        agreement:financial_agreements (
+          id,
+          cases (case_number, title),
+          debtor:entities!debtor_id (name)
+        )
+      `)
+      .gte('due_date', startDate.toISOString())
+      .lte('due_date', endDate.toISOString())
+      .order('due_date', { ascending: true });
+
+    if (error) {
+      console.error(`Erro ao buscar parcelas para ${month}/${year}:`, error);
+      throw new Error('Não foi possível buscar as parcelas do mês.');
+    }
+
+    return data;
+  }
+
 
   /**
    * Registra o pagamento de uma parcela e atualiza seu status.

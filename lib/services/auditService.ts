@@ -16,13 +16,12 @@ export type AuditAction =
   | 'DOCUMENT_DELETE'
   | 'PETITION_CREATE'
   | 'PETITION_UPDATE'
+  | 'PETITION_DELETE'  // ✅ ADICIONADO
   | 'TEMPLATE_CREATE'
   | 'TEMPLATE_UPDATE'
   | 'TEMPLATE_DELETE'
   | 'USER_PASSWORD_CHANGE'
   | 'USER_PROFILE_UPDATE'
-  // *** CORREÇÃO APLICADA AQUI ***
-  // Adicionada a nova ação para registrar o pagamento de parcelas.
   | 'PAYMENT_RECORDED'
 
 export async function logAudit(

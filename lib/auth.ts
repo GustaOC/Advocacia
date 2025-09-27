@@ -118,3 +118,9 @@ export function clearAuthCache(userId: string) {
     console.log(`[Auth] Cache limpo para o usuário: ${userId}`);
   }
 }
+
+/**
+ * ALIAS PARA COMPATIBILIDADE: 
+ * Exporta a mesma função com o nome que o código estava esperando
+ */
+export const getCurrentUser = getSessionUser;
