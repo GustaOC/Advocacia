@@ -35,6 +35,43 @@ export interface Case {
     action_type?: string;
 }
 
+// ✅ CORREÇÃO: A tipagem para as entidades aninhadas foi expandida
+interface AgreementEntity {
+  name: string;
+  document: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+// ✅ MELHORADO: Interface para filtros de acordos financeiros
+export interface FinancialAgreementFilters {
+  status?: string;
+  agreementType?: string;
+  clientId?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
+// ✅ MELHORADO: Interface para resposta paginada
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// ✅ MELHORADO: Interface para estatísticas financeiras
+export interface FinancialStats {
+  totalAgreements: number;
+  totalValue: number;
+  paidAmount: number;
+  overdueAmount: number;
+  completionRate: number;
+  averageAgreementValue: number;
+}
+
 export interface FinancialAgreement {
   id: number;
   total_value: number;
@@ -43,14 +80,14 @@ export interface FinancialAgreement {
   updated_at: string;
   created_at: string;
   installments: number;
-  installment_value: number;
+  installment_value: number | null;
   entry_value: number;
   completion_percentage: number;
   paid_amount: number;
   remaining_balance: number;
   agreement_type: string;
   payment_method: string;
-  next_due_date: string;
+  next_due_date: string | null;
   days_overdue: number;
   bank_account_info?: string;
   notes?: string;
@@ -58,13 +95,12 @@ export interface FinancialAgreement {
   court_release_value?: number;
   renegotiation_count: number;
   paid_installments: number;
-  entities: { name: string; document: string };
-  client_entities: { name: string; document: string };
-  executed_entities: { name: string; document: string };
-  guarantor_entities: { name: string; document: string };
+  entities: AgreementEntity;
+  client_entities: AgreementEntity;
+  executed_entities: AgreementEntity;
+  guarantor_entities: AgreementEntity;
   cases: { case_number: string | null; title: string; court: string; status: string };
 }
-
 
 // ============================================================================
 // INSTÂNCIA DO AXIOS
@@ -89,7 +125,6 @@ instance.interceptors.response.use(
     return Promise.reject(new Error(errorMessage));
   }
 );
-
 
 // ============================================================================
 // CLASSE ApiClient COM TODOS OS MÉTODOS
@@ -151,67 +186,198 @@ class ApiClient {
     return instance.delete(`/document-templates/${id}`);
   }
 
-  // Financeiro
-  async getFinancialAgreements(): Promise<FinancialAgreement[]> {
-      return instance.get('/financial-agreements');
+  // ============================================================================
+  // MÉTODOS FINANCEIROS MELHORADOS
+  // ============================================================================
+
+  // ✅ MELHORADO: Método principal com suporte a paginação e filtros
+  async getFinancialAgreements(
+    page?: number, 
+    pageSize?: number, 
+    filters?: FinancialAgreementFilters
+  ): Promise<FinancialAgreement[]> {
+    const params: any = {};
+    
+    if (page !== undefined) params.page = page;
+    if (pageSize !== undefined) params.pageSize = pageSize;
+    if (filters?.status) params.status = filters.status;
+    if (filters?.agreementType) params.agreementType = filters.agreementType;
+    if (filters?.clientId) params.clientId = filters.clientId;
+    if (filters?.startDate) params.startDate = filters.startDate;
+    if (filters?.endDate) params.endDate = filters.endDate;
+    if (filters?.search) params.search = filters.search;
+
+    return instance.get('/financial-agreements', { params });
   }
-  async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
-      return instance.post('/financial-agreements', data);
+
+  // ✅ NOVO: Método para buscar acordos paginados (futuro suporte da API)
+  async getFinancialAgreementsPaginated(
+    page: number = 1, 
+    pageSize: number = 10, 
+    filters?: FinancialAgreementFilters
+  ): Promise<PaginatedResponse<FinancialAgreement>> {
+    const params = { page, pageSize, ...filters };
+    return instance.get('/financial-agreements/paginated', { params });
+  }
+
+  // ✅ NOVO: Método para estatísticas financeiras
+  async getFinancialStats(): Promise<FinancialStats> {
+    return instance.get('/financial-agreements/stats');
+  }
+
+  // ✅ NOVO: Método para acordos em atraso
+  async getOverdueAgreements(): Promise<FinancialAgreement[]> {
+    return instance.get('/financial-agreements/overdue');
+  }
+
+  // ✅ MELHORADO: Métodos existentes com melhor tipagem
+  async createFinancialAgreement(data: Partial<FinancialAgreement>): Promise<FinancialAgreement> {
+    return instance.post('/financial-agreements', data);
   }
   
-  // ✅ MÉTODOS FINANCEIROS ADICIONADOS PARA CORRIGIR OS ERROS
   async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> {
     return instance.get(`/financial-agreements/${id}`);
   }
+
   async updateFinancialAgreement(id: string, data: Partial<FinancialAgreement>): Promise<FinancialAgreement> {
     return instance.put(`/financial-agreements/${id}`, data);
   }
+
   async deleteFinancialAgreement(id: string): Promise<boolean> {
     return instance.delete(`/financial-agreements/${id}`);
   }
   
-  // --> Outros métodos que você já tinha ou irá precisar
-  async getFinancialReports(startDate: string, endDate: string, reportType: string): Promise<any> {
-      return instance.get('/financial-reports', { params: { startDate, endDate, reportType } });
-  }
-  async exportFinancialAgreements(format: 'excel' | 'csv', filters: any): Promise<Blob> {
-      const response = await instance.get(`/financial-agreements/export/${format}`, {
-          params: filters,
-          responseType: 'blob',
-      });
-      return response as unknown as Blob;
-  }
-  async getAgreementInstallments(agreementId: string): Promise<any[]> {
-      return instance.get(`/financial-agreements/${agreementId}/installments`);
-  }
-  async getAgreementPaymentHistory(agreementId: string): Promise<any[]> {
-      return instance.get(`/financial-agreements/${agreementId}/payments`);
-  }
-  async recordInstallmentPayment(agreementId: string, paymentData: any): Promise<any> {
-      return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData);
-  }
-  async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> {
-      return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
+  // ✅ MELHORADO: Relatórios com melhor tipagem
+  async getFinancialReports(
+    startDate: string, 
+    endDate: string, 
+    reportType: string
+  ): Promise<any> {
+    return instance.get('/financial-reports', { 
+      params: { startDate, endDate, reportType } 
+    });
   }
 
-  // Autenticação
+  // ✅ MELHORADO: Exportação com melhor tratamento
+  async exportFinancialAgreements(
+    format: 'excel' | 'csv', 
+    filters: FinancialAgreementFilters
+  ): Promise<Blob> {
+    const response = await instance.get(`/financial-agreements/export/${format}`, {
+      params: filters,
+      responseType: 'blob',
+    });
+    return response as unknown as Blob;
+  }
+
+  // ✅ MELHORADO: Parcelas e pagamentos com melhor tipagem
+  async getAgreementInstallments(agreementId: string): Promise<any[]> {
+    return instance.get(`/financial-agreements/${agreementId}/installments`);
+  }
+
+  async getAgreementPaymentHistory(agreementId: string): Promise<any[]> {
+    return instance.get(`/financial-agreements/${agreementId}/payments`);
+  }
+
+  async recordInstallmentPayment(
+    agreementId: string, 
+    paymentData: {
+      installmentId: string;
+      amount: number;
+      paymentDate: string;
+      paymentMethod: string;
+      reference?: string;
+      notes?: string;
+    }
+  ): Promise<any> {
+    return instance.post(`/financial-agreements/${agreementId}/payments`, paymentData);
+  }
+
+  async renegotiateFinancialAgreement(
+    agreementId: string, 
+    data: {
+      newTotalAmount: number;
+      newInstallments: number;
+      newStartDate: string;
+      reason: string;
+      notes?: string;
+    }
+  ): Promise<FinancialAgreement> {
+    return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
+  }
+
+  // ============================================================================
+  // MÉTODOS DE AUTENTICAÇÃO
+  // ============================================================================
+
   async getCurrentUser(): Promise<any> {
     return instance.get('/auth/me');
   }
+
   async logout(): Promise<void> {
     await instance.post('/auth/logout');
-    window.location.href = '/login';
-  }
-  async setPassword(data: { code: string; password: string }): Promise<void> {
-      return instance.post('/auth/set-password', data);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 
-  // Notificações
+  async setPassword(data: { code: string; password: string }): Promise<void> {
+    return instance.post('/auth/set-password', data);
+  }
+
+  // ============================================================================
+  // MÉTODOS DE NOTIFICAÇÕES
+  // ============================================================================
+
   async getNotifications(userId: string): Promise<{ notifications: any[] }> {
     return instance.get(`/notifications?user_id=${userId}`);
   }
+
   async getUnreadNotificationCount(userId: string): Promise<{ count: number }> {
     return instance.get(`/notifications/count?user_id=${userId}`);
+  }
+
+  // ============================================================================
+  // MÉTODOS UTILITÁRIOS
+  // ============================================================================
+
+  // ✅ NOVO: Método para validar dados antes de enviar
+  validateFinancialAgreement(data: Partial<FinancialAgreement>): string[] {
+    const errors: string[] = [];
+    
+    if (!data.total_value || data.total_value <= 0) {
+      errors.push('Valor total deve ser maior que zero');
+    }
+    
+    if (!data.installments || data.installments < 1) {
+      errors.push('Número de parcelas deve ser pelo menos 1');
+    }
+    
+    if (!data.agreement_type) {
+      errors.push('Tipo de acordo é obrigatório');
+    }
+    
+    if (!data.payment_method) {
+      errors.push('Método de pagamento é obrigatório');
+    }
+    
+    return errors;
+  }
+
+  // ✅ NOVO: Método para calcular informações do acordo
+  calculateAgreementInfo(data: {
+    totalValue: number;
+    entryValue: number;
+    installments: number;
+  }) {
+    const remainingValue = data.totalValue - data.entryValue;
+    const installmentValue = data.installments > 0 ? remainingValue / data.installments : 0;
+    
+    return {
+      remainingValue,
+      installmentValue,
+      entryPercentage: (data.entryValue / data.totalValue) * 100,
+    };
   }
 }
 

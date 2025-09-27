@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ApiClient } from '@/lib/api-client'
+import { apiClient } from '@/lib/api-client'
 import { Role, Permission } from '@/lib/auth'
 
 export function RoleManagement() {
   const [roles, setRoles] = useState<Role[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
-  const apiClient = new ApiClient()
 
   useEffect(() => {
     const fetchRolesAndPermissions = async () => {
@@ -23,7 +22,7 @@ export function RoleManagement() {
 
   return (
     <div>
-      {/* ... */}
+      {/* O conteúdo do seu componente de gerenciamento de papéis viria aqui. */}
     </div>
   )
 }

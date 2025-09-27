@@ -9,7 +9,7 @@ export default function HeroButtons() {
     <div className="flex flex-col sm:flex-row gap-4 pt-4">
       <Button 
         size="lg" 
-        variant="primary" 
+        variant="default" 
         onClick={() => window.open('https://wa.me/5567996449627', '_blank')}
       >
         <MessageCircle className="mr-2 h-5 w-5" /> Agendar Consulta

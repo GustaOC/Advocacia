@@ -11,25 +11,80 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { 
+import {
   BarChart3, Download, FileText, Calendar, Filter, TrendingUp,
   DollarSign, Users, Target, AlertTriangle, CheckCircle, Clock,
   PieChart, Activity, Printer, Mail, RefreshCw, Eye, Settings,
   ArrowUpRight, ArrowDownRight, Percent, Building, CreditCard,
   Receipt, FileBarChart, Table, LineChart, Loader2
 } from "lucide-react";
-import { 
-  BarChart, Bar, LineChart as RechartsLineChart, Line, PieChart as RechartsPieChart, 
+import {
+  BarChart, Bar, LineChart as RechartsLineChart, Line, PieChart as RechartsPieChart,
   Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  AreaChart, Area 
+  AreaChart, Area
 } from 'recharts';
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 
+// Interfaces para tipagem dos dados
+interface ReportSummary {
+  total_agreements: number;
+  total_value: number;
+  paid_amount: number;
+  overdue_amount: number;
+  completion_rate: number;
+}
+
+interface AgreementByStatus {
+  status: string;
+  count: number;
+  total_value: number;
+  percentage: number;
+}
+
+interface MonthlyPayment {
+  month: string;
+  payments_count: number;
+  total_paid: number;
+}
+
+interface AgreementType {
+    type: string;
+    count: number;
+    value: number;
+    avg_value: number;
+}
+
+interface ClientPerformance {
+    client_name: string;
+    agreements_count: number;
+    total_value: number;
+    payment_rate: number;
+    avg_delay: number;
+}
+
+interface OverdueAnalysis {
+    total_overdue: number;
+    overdue_count: number;
+    average_days_overdue: number;
+    recovery_rate: number;
+    high_risk_count: number;
+}
+
+interface ReportData {
+  summary: ReportSummary;
+  agreements_by_status: AgreementByStatus[];
+  monthly_payments: MonthlyPayment[];
+  agreement_types: AgreementType[];
+  client_performance: ClientPerformance[];
+  overdue_analysis: OverdueAnalysis;
+}
+
+// ✅ CORREÇÃO 1: Permite que as datas sejam 'undefined' para consistência de tipo.
 interface ReportFilters {
-  startDate: string;
-  endDate: string;
+  startDate: string | undefined;
+  endDate: string | undefined;
   reportType: 'general' | 'agreements' | 'payments' | 'overdue' | 'clients';
   clientIds?: number[];
   status?: string[];
@@ -45,7 +100,7 @@ interface FinancialReportsComponentProps {
 
 export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialReportsComponentProps) {
   const { toast } = useToast();
-  
+
   const [filters, setFilters] = useState<ReportFilters>({
     startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -59,9 +114,9 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Query para buscar dados do relatório
-  const { data: reportData, isLoading, refetch } = useQuery({
+  const { data: reportData, isLoading, refetch } = useQuery<ReportData>({
     queryKey: ['financialReports', filters.startDate, filters.endDate, filters.reportType],
-    queryFn: () => apiClient.getFinancialReports(filters.startDate, filters.endDate, filters.reportType),
+    queryFn: () => apiClient.getFinancialReports(filters.startDate!, filters.endDate!, filters.reportType),
     enabled: !!filters.startDate && !!filters.endDate,
   });
 
@@ -72,7 +127,7 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
   });
 
   // Dados mock para demonstração
-  const mockReportData = useMemo(() => ({
+  const mockReportData = useMemo((): ReportData => ({
     summary: {
       total_agreements: 156,
       total_value: 2450000,
@@ -126,11 +181,28 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
     return `${value.toFixed(1)}%`;
   };
 
-  const formatMonth = (monthString: string) => {
-    const [year, month] = monthString.split('-');
+  // ✅ CORREÇÃO 2: Função formatMonth com tipagem e verificações robustas
+  const formatMonth = (monthString: string | undefined) => {
+    if (!monthString) return '';
+    const parts = monthString.split('-');
+    if (parts.length !== 2) return monthString; // retorna o valor original se não conseguir fazer o split
+    
+    const [year, month] = parts;
+    if (!year || !month) return monthString;
+    
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    return `${months[parseInt(month) - 1]}/${year}`;
+    const monthIndex = parseInt(month) - 1;
+    
+    if (monthIndex < 0 || monthIndex >= months.length) return monthString;
+    
+    return `${months[monthIndex]}/${year}`;
   };
+
+  // ✅ CORREÇÃO 3: Criada variável bestMonth usando useMemo para evitar undefined
+  const bestMonth = useMemo(() => {
+    if (!data.monthly_payments || data.monthly_payments.length === 0) return null;
+    return data.monthly_payments.reduce((max, m) => m.total_paid > max.total_paid ? m : max);
+  }, [data.monthly_payments]);
 
   const handleFilterChange = (field: keyof ReportFilters, value: any) => {
     setFilters(prev => ({ ...prev, [field]: value }));
@@ -140,9 +212,14 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
     refetch();
   };
 
+  // ✅ CORREÇÃO 4: Adicionada verificação para garantir que as datas existam antes da exportação
   const handleExportReport = async (format: 'excel' | 'pdf' | 'csv') => {
     setIsGenerating(true);
     try {
+      if (!filters.startDate || !filters.endDate) {
+        throw new Error("As datas de início e fim são obrigatórias para exportar.");
+      }
+      
       if (format === 'excel' || format === 'csv') {
         const blob = await apiClient.exportFinancialAgreements(format, {
           startDate: filters.startDate,
@@ -150,7 +227,7 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
           status: filters.status?.[0],
           clientIds: selectedClients,
         });
-        
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -159,14 +236,13 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         toast({ title: "Sucesso!", description: `Relatório exportado em ${format.toUpperCase()}` });
       } else {
-        // PDF export logic would go here
         toast({ title: "Em desenvolvimento", description: "Exportação em PDF será implementada em breve" });
       }
-    } catch (error) {
-      toast({ title: "Erro", description: "Falha ao exportar relatório", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message || "Falha ao exportar relatório", variant: "destructive" });
     } finally {
       setIsGenerating(false);
     }
@@ -209,17 +285,17 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Data Inicial</Label>
-              <Input 
-                type="date" 
-                value={filters.startDate}
+              <Input
+                type="date"
+                value={filters.startDate || ''}
                 onChange={(e) => handleFilterChange('startDate', e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label>Data Final</Label>
-              <Input 
-                type="date" 
-                value={filters.endDate}
+              <Input
+                type="date"
+                value={filters.endDate || ''}
                 onChange={(e) => handleFilterChange('endDate', e.target.value)}
               />
             </div>
@@ -253,8 +329,8 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
             <h4 className="font-semibold text-slate-800">Opções de Conteúdo</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="includeCharts" 
+                <Checkbox
+                  id="includeCharts"
                   checked={filters.includeCharts}
                   onCheckedChange={(checked) => handleFilterChange('includeCharts', checked)}
                 />
@@ -264,8 +340,8 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="includeTables" 
+                <Checkbox
+                  id="includeTables"
                   checked={filters.includeTables}
                   onCheckedChange={(checked) => handleFilterChange('includeTables', checked)}
                 />
@@ -275,8 +351,8 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="includeClientAnalysis" 
+                <Checkbox
+                  id="includeClientAnalysis"
                   checked={filters.includeClientAnalysis}
                   onCheckedChange={(checked) => handleFilterChange('includeClientAnalysis', checked)}
                 />
@@ -359,9 +435,9 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                       cy="50%"
                       outerRadius={100}
                       dataKey="count"
-                      label={({ status, percentage }) => `${status}: ${percentage}%`}
+                      label={({ status, percentage }: AgreementByStatus) => `${status}: ${percentage}%`}
                     >
-                      {data.agreements_by_status.map((entry, index) => (
+                      {data.agreements_by_status.map((_, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -416,7 +492,7 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                       </tr>
                     </thead>
                     <tbody>
-                      {data.agreement_types.map((type, index) => (
+                      {data.agreement_types.map((type: AgreementType, index: number) => (
                         <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
@@ -455,29 +531,29 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
               <ResponsiveContainer width="100%" height={400}>
                 <AreaChart data={data.monthly_payments}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" tickFormatter={formatMonth} />
+                  <XAxis dataKey="month" tickFormatter={(value: string | undefined) => formatMonth(value)} />
                   <YAxis />
-                  <Tooltip 
-                    labelFormatter={(value) => `Mês: ${formatMonth(value)}`}
+                  <Tooltip
+                    labelFormatter={(value: string) => `Mês: ${formatMonth(value)}`}
                     formatter={(value: number, name: string) => [
                       name === 'total_paid' ? formatCurrency(value) : value,
                       name === 'total_paid' ? 'Valor Pago' : 'Qtd Pagamentos'
                     ]}
                   />
                   <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="total_paid" 
-                    stroke="#3B82F6" 
-                    fill="#3B82F6" 
+                  <Area
+                    type="monotone"
+                    dataKey="total_paid"
+                    stroke="#3B82F6"
+                    fill="#3B82F6"
                     fillOpacity={0.6}
                     name="Valor Pago"
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="payments_count" 
-                    stroke="#10B981" 
-                    fill="#10B981" 
+                  <Area
+                    type="monotone"
+                    dataKey="payments_count"
+                    stroke="#10B981"
+                    fill="#10B981"
                     fillOpacity={0.6}
                     name="Qtd Pagamentos"
                     yAxisId="right"
@@ -497,13 +573,14 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-600">Valor Médio Mensal</span>
                     <span className="font-semibold text-lg">
-                      {formatCurrency(data.monthly_payments.reduce((sum, m) => sum + m.total_paid, 0) / data.monthly_payments.length)}
+                      {formatCurrency(data.monthly_payments.reduce((sum: number, m: MonthlyPayment) => sum + m.total_paid, 0) / data.monthly_payments.length)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-600">Melhor Mês</span>
                     <span className="font-semibold text-green-600">
-                      {formatMonth(data.monthly_payments.reduce((max, m) => m.total_paid > max.total_paid ? m : max).month)}
+                      {/* ✅ CORREÇÃO 3: Verificação para garantir que bestMonth não seja nulo */}
+                      {bestMonth ? formatMonth(bestMonth.month) : 'N/A'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -566,7 +643,7 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
         {/* Aba Status */}
         <TabsContent value="status" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {data.agreements_by_status.map((status, index) => (
+            {data.agreements_by_status.map((status: AgreementByStatus, index: number) => (
               <Card key={index} className="border-l-4" style={{ borderLeftColor: COLORS[index % COLORS.length] }}>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
@@ -591,9 +668,9 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                       <span className="font-semibold">{formatCurrency(status.total_value / status.count)}</span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-2">
-                      <div 
+                      <div
                         className="h-2 rounded-full transition-all"
-                        style={{ 
+                        style={{
                           width: `${status.percentage}%`,
                           backgroundColor: COLORS[index % COLORS.length]
                         }}
@@ -630,13 +707,13 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                       </tr>
                     </thead>
                     <tbody>
-                      {data.client_performance.map((client, index) => (
+                      {data.client_performance.map((client: ClientPerformance, index: number) => (
                         <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                                 <span className="text-blue-600 font-semibold text-xs">
-                                  {client.client_name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                                  {client.client_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
                                 </span>
                               </div>
                               <span className="font-medium text-slate-900">{client.client_name}</span>
@@ -647,7 +724,7 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <div className="flex-1 bg-slate-200 rounded-full h-2 w-16">
-                                <div 
+                                <div
                                   className="bg-green-500 h-2 rounded-full transition-all"
                                   style={{ width: `${client.payment_rate}%` }}
                                 ></div>
@@ -661,15 +738,15 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                             </span>
                           </td>
                           <td className="p-4">
-                            <Badge 
+                            <Badge
                               variant={
                                 client.payment_rate >= 95 ? 'default' :
-                                client.payment_rate >= 85 ? 'secondary' : 'destructive'
+                                  client.payment_rate >= 85 ? 'secondary' : 'destructive'
                               }
                               className="font-medium"
                             >
                               {client.payment_rate >= 95 ? 'Excelente' :
-                               client.payment_rate >= 85 ? 'Bom' : 'Atenção'}
+                                client.payment_rate >= 85 ? 'Bom' : 'Atenção'}
                             </Badge>
                           </td>
                         </tr>
@@ -772,13 +849,5 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function Label({ children, ...props }: any) {
-  return (
-    <label className="block text-sm font-medium text-slate-700" {...props}>
-      {children}
-    </label>
   );
 }

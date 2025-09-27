@@ -1,14 +1,17 @@
 // components/financial-agreement-details-modal.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// ✅ CORREÇÃO 1: Importando o componente Progress.
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+// ✅ CORREÇÃO 3: Importando o componente Label corretamente.
+import { Label } from "@/components/ui/label";
 import { 
   DollarSign, Calendar, Users, Gavel, CreditCard, Phone, Mail, 
   MapPin, FileText, Clock, CheckCircle, AlertTriangle, TrendingUp,
@@ -245,7 +248,8 @@ export function FinancialAgreementDetailsModal({
                       <div className="text-center p-4 bg-purple-50 rounded-lg">
                         <p className="text-sm text-purple-600 font-medium">Por Parcela</p>
                         <p className="text-xl font-bold text-purple-800">
-                          {formatCurrency(agreement.installment_value)}
+                          {/* ✅ CORREÇÃO 2: Adicionado fallback para o caso de o valor ser nulo. */}
+                          {formatCurrency(agreement.installment_value ?? 0)}
                         </p>
                       </div>
                     </div>
@@ -256,19 +260,20 @@ export function FinancialAgreementDetailsModal({
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-slate-600">Progresso do Acordo</span>
                         <span className="text-sm font-bold text-slate-900">
-                          {Math.round(agreement.completion_percentage || 0)}%
+                          {Math.round(agreement.completion_percentage ?? 0)}%
                         </span>
                       </div>
+                      {/* ✅ CORREÇÃO 2: Adicionado fallback para o caso de o valor ser nulo. */}
                       <Progress 
-                        value={agreement.completion_percentage || 0} 
+                        value={agreement.completion_percentage ?? 0} 
                         className="h-3" 
                       />
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>
-                          {formatCurrency(agreement.paid_amount || 0)} recebido
+                          {formatCurrency(agreement.paid_amount ?? 0)} recebido
                         </span>
                         <span>
-                          {formatCurrency(agreement.remaining_balance || 0)} restante
+                          {formatCurrency(agreement.remaining_balance ?? 0)} restante
                         </span>
                       </div>
                     </div>
@@ -360,7 +365,7 @@ export function FinancialAgreementDetailsModal({
                         Parcelas
                       </Label>
                       <p className="text-base font-medium text-slate-900">
-                        {agreement.paid_installments || 0} de {agreement.installments} pagas
+                        {agreement.paid_installments ?? 0} de {agreement.installments} pagas
                       </p>
                     </div>
                     
@@ -580,7 +585,7 @@ export function FinancialAgreementDetailsModal({
                       Cronograma de Parcelas
                     </div>
                     <Badge variant="outline" className="font-semibold">
-                      {installments?.length || 0} parcelas
+                      {installments?.length ?? 0} parcelas
                     </Badge>
                   </CardTitle>
                 </CardHeader>
@@ -647,7 +652,7 @@ export function FinancialAgreementDetailsModal({
                                     {formatDate(installment.paid_date)}
                                   </p>
                                   <p className="text-xs text-slate-600">
-                                    {formatCurrency(installment.amount_paid || installment.amount)}
+                                    {formatCurrency(installment.amount_paid ?? installment.amount)}
                                   </p>
                                 </div>
                               ) : (
@@ -817,13 +822,5 @@ export function FinancialAgreementDetailsModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Label({ children, className = "", ...props }: any) {
-  return (
-    <label className={`block text-sm font-medium text-slate-700 ${className}`} {...props}>
-      {children}
-    </label>
   );
 }

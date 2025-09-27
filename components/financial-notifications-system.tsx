@@ -69,7 +69,6 @@ const useDeleteNotificationRule = () => {
     }
 }
 
-
 export function FinancialNotificationsSystem() {
   const [isFormVisible, setFormVisible] = useState(false)
   const { data: rules, isLoading } = useGetNotificationRules()
@@ -84,6 +83,7 @@ export function FinancialNotificationsSystem() {
     reset,
   } = useForm<NotificationRule>({
     resolver: zodResolver(NotificationRuleSchema),
+    // ✅ Este defaultValues agora é a única fonte do valor inicial, o que é o correto.
     defaultValues: {
       name: '',
       days_before_due: 3,
