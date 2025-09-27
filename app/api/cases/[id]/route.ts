@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid case ID' }, { status: 400 })
   }
 
-  const caseData = await getCaseById(caseId, user)
+  const caseData = await getCaseById(String(caseId)) // O service espera uma string, então convertemos de volta.
   if (!caseData) {
     return NextResponse.json({ error: 'Case not found' }, { status: 404 })
   }

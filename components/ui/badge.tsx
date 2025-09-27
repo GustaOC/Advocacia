@@ -1,5 +1,3 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/components/ui/badge.tsx
-
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 
@@ -17,9 +15,9 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
         outline: 'text-foreground',
-        // ADICIONADA A NOVA VARIANTE 'SUCCESS'
+        // ✅ CORREÇÃO: Adicionada a variante "success" para feedbacks visuais positivos.
         success:
-          'border-transparent bg-green-500 text-primary-foreground hover:bg-green-500/80',
+          'border-transparent bg-green-500 text-white hover:bg-green-500/80',
       },
     },
     defaultVariants: {

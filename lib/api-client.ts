@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO CORRIGIDA E COMPLETA
+// lib/api-client.ts - VERSÃO COMPLETA E CORRIGIDA
 
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
@@ -35,7 +35,6 @@ export interface Case {
     action_type?: string;
 }
 
-// ✅ CORREÇÃO: A tipagem para as entidades aninhadas foi expandida
 interface AgreementEntity {
   name: string;
   document: string;
@@ -43,7 +42,6 @@ interface AgreementEntity {
   phone?: string | null;
 }
 
-// ✅ MELHORADO: Interface para filtros de acordos financeiros
 export interface FinancialAgreementFilters {
   status?: string;
   agreementType?: string;
@@ -53,7 +51,6 @@ export interface FinancialAgreementFilters {
   search?: string;
 }
 
-// ✅ MELHORADO: Interface para resposta paginada
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -62,7 +59,6 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-// ✅ MELHORADO: Interface para estatísticas financeiras
 export interface FinancialStats {
   totalAgreements: number;
   totalValue: number;
@@ -171,6 +167,14 @@ class ApiClient {
   async getPetitions(): Promise<any[]> {
     return instance.get('/petitions');
   }
+  // ✅ FUNÇÃO ADICIONADA
+  async createPetition(data: Partial<any>): Promise<any> {
+    return instance.post('/petitions', data);
+  }
+  // ✅ FUNÇÃO ADICIONADA
+  async updatePetition(id: string, data: Partial<any>): Promise<any> {
+    return instance.put(`/petitions/${id}`, data);
+  }
 
   // Modelos
   async getTemplates(): Promise<any[]> {
@@ -190,7 +194,6 @@ class ApiClient {
   // MÉTODOS FINANCEIROS MELHORADOS
   // ============================================================================
 
-  // ✅ MELHORADO: Método principal com suporte a paginação e filtros
   async getFinancialAgreements(
     page?: number, 
     pageSize?: number, 
@@ -210,7 +213,6 @@ class ApiClient {
     return instance.get('/financial-agreements', { params });
   }
 
-  // ✅ NOVO: Método para buscar acordos paginados (futuro suporte da API)
   async getFinancialAgreementsPaginated(
     page: number = 1, 
     pageSize: number = 10, 
@@ -220,17 +222,14 @@ class ApiClient {
     return instance.get('/financial-agreements/paginated', { params });
   }
 
-  // ✅ NOVO: Método para estatísticas financeiras
   async getFinancialStats(): Promise<FinancialStats> {
     return instance.get('/financial-agreements/stats');
   }
 
-  // ✅ NOVO: Método para acordos em atraso
   async getOverdueAgreements(): Promise<FinancialAgreement[]> {
     return instance.get('/financial-agreements/overdue');
   }
 
-  // ✅ MELHORADO: Métodos existentes com melhor tipagem
   async createFinancialAgreement(data: Partial<FinancialAgreement>): Promise<FinancialAgreement> {
     return instance.post('/financial-agreements', data);
   }
@@ -247,7 +246,6 @@ class ApiClient {
     return instance.delete(`/financial-agreements/${id}`);
   }
   
-  // ✅ MELHORADO: Relatórios com melhor tipagem
   async getFinancialReports(
     startDate: string, 
     endDate: string, 
@@ -258,7 +256,6 @@ class ApiClient {
     });
   }
 
-  // ✅ MELHORADO: Exportação com melhor tratamento
   async exportFinancialAgreements(
     format: 'excel' | 'csv', 
     filters: FinancialAgreementFilters
@@ -270,7 +267,6 @@ class ApiClient {
     return response as unknown as Blob;
   }
 
-  // ✅ MELHORADO: Parcelas e pagamentos com melhor tipagem
   async getAgreementInstallments(agreementId: string): Promise<any[]> {
     return instance.get(`/financial-agreements/${agreementId}/installments`);
   }
@@ -341,7 +337,6 @@ class ApiClient {
   // MÉTODOS UTILITÁRIOS
   // ============================================================================
 
-  // ✅ NOVO: Método para validar dados antes de enviar
   validateFinancialAgreement(data: Partial<FinancialAgreement>): string[] {
     const errors: string[] = [];
     
@@ -364,7 +359,6 @@ class ApiClient {
     return errors;
   }
 
-  // ✅ NOVO: Método para calcular informações do acordo
   calculateAgreementInfo(data: {
     totalValue: number;
     entryValue: number;

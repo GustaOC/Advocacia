@@ -1,4 +1,5 @@
-// middleware.ts - VERSÃO COM HEADERS DE SEGURANÇA ROBUSTOS
+// middleware.ts - VERSÃO COMPLETA E CORRIGIDA
+
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -37,7 +38,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const res = NextResponse.next();
 
-  // ==> PASSO 1: IMPLEMENTAÇÃO DOS HEADERS DE SEGURANÇA
+  // ✅ CORREÇÃO: Aplicando os Headers de Segurança diretamente no middleware
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline';
@@ -54,7 +55,6 @@ export async function middleware(req: NextRequest) {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.headers.set("Referrer-Policy", "origin-when-cross-origin");
-  // ==> FIM DO PASSO 1
 
   // Se a rota for pública, permite o acesso sem verificar a sessão
   if (isPublic(pathname)) {
