@@ -1,9 +1,5 @@
 // lib/services/processService.ts
 import { createAdminClient } from "@/lib/supabase/server";
-import { z } from "zod";
-
-// Usaremos os schemas de Caso, pois representam um processo.
-import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
 
 /**
  * Busca processos com filtros e paginação.
@@ -46,5 +42,5 @@ export async function getProcessTimeline(processId: number) {
     // Nota: A sua tabela de timeline não foi criada no último script SQL.
     // Esta função está preparada para quando ela for criada.
     // Por enquanto, retornará um array vazio.
-    return []; 
+    return [];
 }

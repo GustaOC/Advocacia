@@ -81,7 +81,6 @@ interface ReportData {
   overdue_analysis: OverdueAnalysis;
 }
 
-// ✅ CORREÇÃO 1: Permite que as datas sejam 'undefined' para consistência de tipo.
 interface ReportFilters {
   startDate: string | undefined;
   endDate: string | undefined;
@@ -181,11 +180,10 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
     return `${value.toFixed(1)}%`;
   };
 
-  // ✅ CORREÇÃO 2: Função formatMonth com tipagem e verificações robustas
   const formatMonth = (monthString: string | undefined) => {
     if (!monthString) return '';
     const parts = monthString.split('-');
-    if (parts.length !== 2) return monthString; // retorna o valor original se não conseguir fazer o split
+    if (parts.length !== 2) return monthString; 
     
     const [year, month] = parts;
     if (!year || !month) return monthString;
@@ -198,7 +196,6 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
     return `${months[monthIndex]}/${year}`;
   };
 
-  // ✅ CORREÇÃO 3: Criada variável bestMonth usando useMemo para evitar undefined
   const bestMonth = useMemo(() => {
     if (!data.monthly_payments || data.monthly_payments.length === 0) return null;
     return data.monthly_payments.reduce((max, m) => m.total_paid > max.total_paid ? m : max);
@@ -212,7 +209,6 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
     refetch();
   };
 
-  // ✅ CORREÇÃO 4: Adicionada verificação para garantir que as datas existam antes da exportação
   const handleExportReport = async (format: 'excel' | 'pdf' | 'csv') => {
     setIsGenerating(true);
     try {
@@ -225,7 +221,8 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
           startDate: filters.startDate,
           endDate: filters.endDate,
           status: filters.status?.[0],
-          clientIds: selectedClients,
+          // ✅ CORREÇÃO APLICADA AQUI
+          clientId: selectedClients.length > 0 ? String(selectedClients[0]) : undefined,
         });
 
         const url = URL.createObjectURL(blob);
@@ -579,7 +576,6 @@ export function FinancialReportsComponent({ onNavigateToAgreement }: FinancialRe
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-600">Melhor Mês</span>
                     <span className="font-semibold text-green-600">
-                      {/* ✅ CORREÇÃO 3: Verificação para garantir que bestMonth não seja nulo */}
                       {bestMonth ? formatMonth(bestMonth.month) : 'N/A'}
                     </span>
                   </div>

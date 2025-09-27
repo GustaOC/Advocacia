@@ -96,7 +96,6 @@ export function FinancialRenegotiationModal({
     return {
       newInstallmentValue,
       totalDifference: finalTotal - agreement.total_value,
-      // ✅ CORREÇÃO: Adicionado fallback para o caso de installment_value ser nulo.
       installmentDifference: newInstallmentValue - (agreement.installment_value ?? 0),
       discountAmount,
       feesAmount: additionalFees,
@@ -111,7 +110,17 @@ export function FinancialRenegotiationModal({
   const renegotiateMutation = useMutation({
     mutationFn: (data: RenegotiationData) => {
       if (!agreement) throw new Error("Acordo não encontrado");
-      return apiClient.renegotiateFinancialAgreement(String(agreement.id), data);
+
+      // ✅ CORREÇÃO: Mapeia os dados do formulário para o formato esperado pela API
+      const payload = {
+        newTotalAmount: data.new_total_value ?? agreement.total_value,
+        newInstallments: data.new_installments ?? agreement.installments,
+        newStartDate: data.new_first_due_date,
+        reason: data.renegotiation_reason,
+        notes: `Motivo: ${data.renegotiation_reason}. Desconto: ${data.discount_applied}%. Taxas: ${formatCurrency(data.additional_fees || 0)}.`,
+      };
+
+      return apiClient.renegotiateFinancialAgreement(String(agreement.id), payload);
     },
     onSuccess: () => {
       toast({
@@ -243,7 +252,6 @@ export function FinancialRenegotiationModal({
             </CardContent>
           </Card>
 
-          {/* ... (o resto do JSX permanece inalterado) ... */}
           <Card className="border-slate-200">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center text-lg">

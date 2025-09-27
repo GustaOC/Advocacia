@@ -1,9 +1,15 @@
 // lib/services/caseService.ts - VERSÃO CORRIGIDA
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { CaseSchema, CaseUpdateSchema } from "@/lib/schemas";
+import { CaseSchema } from "@/lib/schemas";
 import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
+
+// Estende o CaseSchema base para incluir os IDs das partes, que são necessários para a criação.
+const CaseCreateSchema = CaseSchema.extend({
+  client_entity_id: z.number(),
+  executed_entity_id: z.number(),
+});
 
 /**
  * Busca casos com paginação, incluindo as partes (entidades) associadas.
@@ -88,7 +94,7 @@ export async function getCaseById(id: string) {
  * Cria um novo caso e associa as partes (cliente e executado).
  */
 export async function createCase(caseData: unknown, user: AuthUser) {
-    const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseSchema.parse(caseData);
+    const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseCreateSchema.parse(caseData);
     const supabase = createAdminClient();
 
     const { data: newCase, error: caseError } = await supabase
@@ -178,7 +184,7 @@ export async function createCase(caseData: unknown, user: AuthUser) {
  * Atualiza um caso existente e sincroniza com financial_agreements quando necessário.
  */
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
-    const parsedData = CaseUpdateSchema.parse(caseData);
+    const parsedData = CaseSchema.partial().parse(caseData);
     const supabase = createAdminClient();
 
     // Buscar caso atual com as partes para obter o client_entity_id

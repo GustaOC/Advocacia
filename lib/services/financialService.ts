@@ -174,7 +174,7 @@ export class FinancialService {
         status,
         start_date,
         number_of_installments,
-        case:cases (
+        cases (
           case_number
         ),
         debtor:entities!debtor_id (
@@ -211,7 +211,7 @@ export class FinancialService {
       .select(
         `
         *,
-        case:cases (*),
+        cases (*),
         debtor:entities!debtor_id (*),
         creditor:entities!creditor_id (*),
         installments (

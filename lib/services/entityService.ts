@@ -1,7 +1,7 @@
 // lib/services/entityService.ts
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { EntitySchema, EntityUpdateSchema } from "@/lib/schemas";
+import { EntitySchema } from "@/lib/schemas";
 import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
 
@@ -80,7 +80,7 @@ export async function createEntity(entityData: unknown, user: AuthUser) {
  * @param user - O usuário que está realizando a ação.
  */
 export async function updateEntity(id: string, entityData: unknown, user: AuthUser) {
-  const parsedData = EntityUpdateSchema.parse(entityData);
+  const parsedData = EntitySchema.partial().parse(entityData);
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
