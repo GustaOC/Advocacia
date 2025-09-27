@@ -137,11 +137,13 @@ export async function createCase(caseData: unknown, user: AuthUser) {
     if (newCase.status === 'Acordo' && newCase.agreement_value && newCase.agreement_type) {
         const agreementData = {
             case_id: newCase.id, 
-            client_entity_id,
+            debtor_id: client_entity_id,
             agreement_type: newCase.agreement_type, 
-            total_value: newCase.agreement_value,
-            entry_value: newCase.down_payment || 0, 
-            installments: newCase.installments || 1,
+            total_amount: newCase.agreement_value,
+            down_payment: newCase.down_payment || 0, 
+            number_of_installments: newCase.installments || 1,
+            // ✅ CORREÇÃO: Adicionando a data de início que é obrigatória.
+            start_date: new Date().toISOString(),
             status: 'active' as const, 
             notes: `Acordo criado junto com o caso #${newCase.id}.`
         };
@@ -275,11 +277,13 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             
             const agreementData = {
                 case_id: id, 
-                client_entity_id: clientEntityId, 
+                debtor_id: clientEntityId, 
                 agreement_type: updatedCase.agreement_type,
-                total_value: Number(updatedCase.agreement_value), 
-                entry_value: Number(updatedCase.down_payment) || 0,
-                installments: Number(updatedCase.installments) || 1, 
+                total_amount: Number(updatedCase.agreement_value),
+                down_payment: Number(updatedCase.down_payment) || 0,
+                number_of_installments: Number(updatedCase.installments) || 1,
+                // ✅ CORREÇÃO: Adicionando a data de início que é obrigatória.
+                start_date: new Date().toISOString(),
                 status: 'active', 
                 notes: `Acordo gerado a partir da atualização do caso #${id}.`
             };
@@ -313,9 +317,9 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
                     .from('financial_agreements')
                     .update({
                         agreement_type: updatedCase.agreement_type, 
-                        total_value: Number(updatedCase.agreement_value),
-                        entry_value: Number(updatedCase.down_payment) || 0, 
-                        installments: Number(updatedCase.installments) || 1,
+                        total_amount: Number(updatedCase.agreement_value),
+                        down_payment: Number(updatedCase.down_payment) || 0, 
+                        number_of_installments: Number(updatedCase.installments) || 1,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', existingAgreement.id);
@@ -333,11 +337,13 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             
             const agreementData = {
                 case_id: id, 
-                client_entity_id: clientEntityId, 
+                debtor_id: clientEntityId, 
                 agreement_type: updatedCase.agreement_type,
-                total_value: Number(updatedCase.agreement_value), 
-                entry_value: Number(updatedCase.down_payment) || 0,
-                installments: Number(updatedCase.installments) || 1, 
+                total_amount: Number(updatedCase.agreement_value), 
+                down_payment: Number(updatedCase.down_payment) || 0,
+                number_of_installments: Number(updatedCase.installments) || 1,
+                // ✅ CORREÇÃO: Adicionando a data de início que é obrigatória.
+                start_date: new Date().toISOString(),
                 status: 'active', 
                 notes: `Acordo criado - caso #${id}.`
             };
@@ -379,9 +385,9 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
                 .from('financial_agreements')
                 .update({
                     agreement_type: updatedCase.agreement_type, 
-                    total_value: Number(updatedCase.agreement_value),
-                    entry_value: Number(updatedCase.down_payment) || 0, 
-                    installments: Number(updatedCase.installments) || 1,
+                    total_amount: Number(updatedCase.agreement_value),
+                    down_payment: Number(updatedCase.down_payment) || 0, 
+                    number_of_installments: Number(updatedCase.installments) || 1,
                     status: 'active', 
                     updated_at: new Date().toISOString(), 
                     notes: `Acordo reativado`

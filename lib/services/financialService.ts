@@ -1,4 +1,4 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/services/financialService.ts
+// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/lib/services/financialService.ts - VERSÃO COMPLETA E CORRIGIDA
 
 import { createSupabaseServerClient } from '../supabase/server'
 import {
@@ -148,13 +148,13 @@ export class FinancialService {
   }
 
   /**
-   * Busca todos os acordos financeiros com informações básicas para listagem.
-   * Inclui paginação.
+   * Busca todos os acordos financeiros com informações essenciais para a listagem.
+   * A consulta foi reestruturada para ser mais robusta e evitar erros no frontend
+   * quando um relacionamento (como cliente ou processo) não é encontrado.
    *
    * @param page - O número da página para a paginação.
    * @param pageSize - O número de itens por página.
-   * @returns Uma lista de acordos financeiros.
-   * @throws Lança um erro se a consulta ao banco de dados falhar.
+   * @returns Uma lista de acordos financeiros com dados associados.
    */
   static async getFinancialAgreements(
     page = 1,
@@ -164,20 +164,28 @@ export class FinancialService {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
-    // ✅ CORREÇÃO APLICADA AQUI
+    // ✅ CORREÇÃO APLICADA AQUI:
+    // Esta consulta foi modificada para ser mais resiliente. Em vez de selecionar
+    // campos específicos que podem falhar, ela busca os objetos relacionados inteiros.
+    // O Supabase irá retornar 'null' para um relacionamento se ele não existir,
+    // o que previne o erro 'cannot read properties of undefined' no frontend.
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(
         `
-        id,
-        total_amount,
-        status,
-        start_date,
-        number_of_installments,
-        cases (
-          case_number
+        *,
+        cases:case_id (
+          id,
+          case_number,
+          title
         ),
-        debtor:entities!debtor_id (
+        entities:debtor_id (
+          id,
+          name,
+          document
+        ),
+        executed_entity:creditor_id (
+          id,
           name
         )
       `,
@@ -205,7 +213,8 @@ export class FinancialService {
   ): Promise<any | null> {
     const supabase = await createSupabaseServerClient()
     
-    // ✅ CORREÇÃO APLICADA AQUI
+    // Esta consulta já estava bem estruturada, usando o padrão que aplicamos acima.
+    // Nenhuma correção foi necessária aqui.
     const { data, error } = await supabase
       .from('financial_agreements')
       .select(

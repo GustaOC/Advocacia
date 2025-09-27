@@ -236,8 +236,12 @@ export const RoleSchema = z.object({
 })
 
 export const CaseSchema = z.object({
-  id: z.string().optional(),
-  case_number: z.string().min(1, 'Número do processo é obrigatório'),
+  // CORREÇÃO: O ID é um número no banco de dados, não uma string.
+  id: z.number().optional(), 
+  
+  // CORREÇÃO: Permite que o número do processo seja nulo.
+  case_number: z.string().min(1, 'Número do processo é obrigatório').nullable(), 
+  
   debtor_id: z.string().min(1, 'Devedor é obrigatório'),
   creditor_id: z.string().min(1, 'Credor é obrigatório'),
   status: z.enum([
@@ -267,6 +271,12 @@ export const DocumentTemplateSchema = z.object({
   name: z.string().min(1, 'Nome do modelo é obrigatório'),
   content: z.string().min(1, 'Conteúdo é obrigatório'),
 })
+
+// Adicionei um schema básico para DocumentUpload, que parece estar faltando.
+export const DocumentUploadSchema = z.object({
+  case_id: z.coerce.number(),
+  description: z.string().optional(),
+});
 
 export const PetitionSchema = z.object({
   id: z.string().optional(),
