@@ -14,7 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, DollarSign, Send, Loader2, AlertCircle, RefreshCw, TrendingUp, Receipt, CheckCircle,
   FileText, Calendar, CreditCard, Search, Eye, Edit, Trash2, Users, Scale, Store,
-  FileSignature, Handshake, Clock, ChevronDown, ChevronRight, Calculator
+  FileSignature, Handshake, Clock, ChevronDown, ChevronRight, Calculator,
+  // ✅ CORREÇÃO APLICADA AQUI: Ícones ausentes foram adicionados.
+  Phone, 
+  Mail 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient, type FinancialAgreement } from "@/lib/api-client";
@@ -25,20 +28,15 @@ interface Alvara {
   id: number; case_id: number; case_number: string; value: number; received: boolean;
   issue_date: string; received_date?: string | null; creditor_name?: string; court?: string;
 }
-
 interface Expense {
   id: number; description: string; category: string; value: number; date: string;
   status: 'pending' | 'paid'; due_date?: string; payment_method?: string; notes?: string;
 }
-
 interface OverdueInstallment {
   id: number; agreement_id: number; client_name: string; case_number: string;
   installment_number: number; value: number; due_date: string; days_overdue: number;
   total_agreement_value: number; client_contact?: { phone?: string; email?: string; };
 }
-
-// ✅ REMOVIDO: A interface EnhancedFinancialAgreement não é mais necessária,
-// pois a FinancialAgreement importada de api-client.ts já está correta.
 
 // ===== DADOS MOCK (Mantidos como no original) =====
 const mockAlvaras: Alvara[] = [
@@ -123,14 +121,15 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
 }
 
 // ===== ÍCONES DE TIPO DE ACORDO =====
-function renderAgreementTypeIcon(type: string) {
+function renderAgreementTypeIcon(type: string | null | undefined) {
+  const typeStr = type || 'N/A';
   const iconMap = {
     'Judicial': { icon: Scale, color: 'text-blue-600', label: 'Judicial' },
     'Extrajudicial': { icon: FileSignature, color: 'text-green-600', label: 'Extrajudicial' },
     'Em Audiência': { icon: Handshake, color: 'text-purple-600', label: 'Em Audiência' },
     'Pela Loja': { icon: Store, color: 'text-orange-600', label: 'Pela Loja' }
   };
-  const config = iconMap[type as keyof typeof iconMap] || { icon: FileText, color: 'text-gray-600', label: type };
+  const config = iconMap[typeStr as keyof typeof iconMap] || { icon: FileText, color: 'text-gray-600', label: typeStr };
   const IconComponent = config.icon;
   return (
     <div className="flex items-center space-x-2">
@@ -142,7 +141,7 @@ function renderAgreementTypeIcon(type: string) {
 
 // ===== CARD DE DETALHES DO ACORDO =====
 function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }: {
-  agreement: FinancialAgreement & { has_alvara?: boolean }; // Usando o tipo importado diretamente
+  agreement: FinancialAgreement & { has_alvara?: boolean };
   isExpanded: boolean; onToggle: () => void;
   onSendMessage: (agreement: FinancialAgreement) => void;
 }) {
@@ -155,7 +154,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
       'defaulted': { label: 'Em Atraso', className: 'bg-red-100 text-red-800 border-red-200' },
       'cancelled': { label: 'Cancelado', className: 'bg-gray-100 text-gray-800 border-gray-200' }
     };
-    const config = variants[status as keyof typeof variants] || variants['active'];
+    const config = variants[status as keyof typeof variants] || { label: status, className: 'bg-gray-100 text-gray-800 border-gray-200' };
     return <Badge className={`${config.className} border font-semibold`}>{config.label}</Badge>;
   };
 
@@ -174,7 +173,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
             <div className="flex items-center space-x-3">
               <div className="text-right">
                 <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_value)}</p>
-                <p className="text-sm text-slate-500">{agreement.installments}x de {formatCurrency(installmentValue)}</p>
+                <p className="text-sm text-slate-500">{agreement.installments || 0}x de {formatCurrency(installmentValue)}</p>
               </div>
               {getStatusBadge(agreement.status)}
             </div>
@@ -190,7 +189,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                   <div className="flex justify-between"><span className="text-slate-600">Tipo:</span><div>{renderAgreementTypeIcon(agreement.agreement_type)}</div></div>
                   <div className="flex justify-between"><span className="text-slate-600">Valor de Entrada:</span><span className="font-medium">{formatCurrency(agreement.entry_value || 0)}</span></div>
                   <div className="flex justify-between"><span className="text-slate-600">Valor Restante:</span><span className="font-medium">{formatCurrency((agreement.total_value || 0) - (agreement.entry_value || 0))}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Nº de Parcelas:</span><span className="font-medium">{agreement.installments}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Nº de Parcelas:</span><span className="font-medium">{agreement.installments || 'N/A'}</span></div>
                 </div>
               </div>
               <div className="space-y-3">
@@ -210,7 +209,6 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                     <p className="font-medium">{agreement.entities?.name || 'N/A'}</p>
                     {agreement.entities?.document && <p className="text-xs text-slate-500">{agreement.entities.document}</p>}
                   </div>
-                  {/* ✅ CORREÇÃO: Usando 'executed_entities' com segurança */}
                   {agreement.executed_entities && (
                     <div>
                       <span className="text-slate-600">Executado:</span>
@@ -221,14 +219,12 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                 </div>
               </div>
             </div>
-
             {agreement.notes && (
               <div className="border-t pt-3 mt-3">
                 <h6 className="font-semibold text-slate-700 mb-2">Observações:</h6>
                 <p className="text-sm text-slate-600 bg-white p-3 rounded-lg border">{agreement.notes}</p>
               </div>
             )}
-
             <div className="flex justify-end space-x-2 border-t pt-3 mt-3">
               <Button size="sm" variant="outline"><Eye className="h-4 w-4 mr-1" />Visualizar</Button>
               <Button size="sm" variant="outline"><Edit className="h-4 w-4 mr-1" />Editar</Button>
@@ -260,14 +256,12 @@ function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgr
   }, []);
 
   const filteredAgreements = useMemo(() => {
-    // Adicionando dados mock `has_alvara` para fins de exibição
     const agreementsWithMockData = agreements.map(ag => ({...ag, has_alvara: Math.random() > 0.5}));
 
     return agreementsWithMockData.filter(agreement => {
       const searchMatch = 
         agreement.entities?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         agreement.cases?.case_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        // ✅ CORREÇÃO: Usando 'executed_entities' com segurança
         agreement.executed_entities?.name.toLowerCase().includes(searchTerm.toLowerCase());
       
       const statusMatch = statusFilter === "all" || agreement.status === statusFilter;
@@ -335,22 +329,237 @@ function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgr
   );
 }
 
-// ===== ABA DE ALVARÁS (mantida como original) =====
-function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAsReceived: (id: number) => void }) {
-    // ...código original mantido...
-    return <div>Conteúdo da Aba Alvarás</div>;
+// ===== ABA DE ALVARÁS =====
+function AlvarasTab({ alvaras, onMarkAsReceived }: { 
+  alvaras: Alvara[], 
+  onMarkAsReceived: (id: number) => void 
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredAlvaras = useMemo(() => {
+    return alvaras.filter(alvara => {
+      const searchMatch = 
+        alvara.case_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alvara.creditor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alvara.court?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const statusMatch = statusFilter === "all" || 
+        (statusFilter === "received" && alvara.received) ||
+        (statusFilter === "pending" && !alvara.received);
+      
+      return searchMatch && statusMatch;
+    });
+  }, [alvaras, searchTerm, statusFilter]);
+
+  const totalValue = useMemo(() => filteredAlvaras.reduce((sum, a) => sum + a.value, 0), [filteredAlvaras]);
+  const pendingValue = useMemo(() => filteredAlvaras.filter(a => !a.received).reduce((sum, a) => sum + a.value, 0), [filteredAlvaras]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total em Alvarás</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p></div><Receipt className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Pendentes de Recebimento</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingValue)}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Taxa de Recebimento</p><p className="text-2xl font-bold text-green-600">{alvaras.length > 0 ? ((alvaras.filter(a => a.received).length / alvaras.length) * 100).toFixed(1) : 0}%</p></div><TrendingUp className="h-8 w-8 text-green-600" /></div></CardContent></Card>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+          <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="received">Recebidos</SelectItem>
+            <SelectItem value="pending">Pendentes</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-4">
+        {filteredAlvaras.map((alvara) => (
+          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'}`}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-3"><h4 className="font-semibold text-slate-900">Processo {alvara.case_number}</h4><Badge variant={alvara.received ? "default" : "secondary"}>{alvara.received ? "Recebido" : "Pendente"}</Badge></div>
+                  <p className="text-sm text-slate-600"><strong>Credor:</strong> {alvara.creditor_name || 'Não informado'}</p>
+                  <p className="text-sm text-slate-600"><strong>Vara:</strong> {alvara.court || 'Não informado'}</p>
+                  <div className="flex items-center space-x-4 text-sm text-slate-600"><span><strong>Expedição:</strong> {formatDate(alvara.issue_date)}</span>{alvara.received_date && (<span><strong>Recebimento:</strong> {formatDate(alvara.received_date)}</span>)}</div>
+                </div>
+                <div className="text-right space-y-2">
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(alvara.value)}</p>
+                  {!alvara.received && (<Button size="sm" onClick={() => onMarkAsReceived(alvara.id)} className="bg-green-600 hover:bg-green-700"><CheckCircle className="h-4 w-4 mr-1" />Marcar como Recebido</Button>)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-// ===== ABA DE PARCELAS EM ATRASO (mantida como original) =====
-function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallments: OverdueInstallment[], onSendMessage: (installment: OverdueInstallment) => void }) {
-    // ...código original mantido...
-    return <div>Conteúdo da Aba Parcelas em Atraso</div>;
+// ===== ABA DE PARCELAS EM ATRASO =====
+function OverdueTab({ overdueInstallments, onSendMessage }: { 
+  overdueInstallments: OverdueInstallment[], 
+  onSendMessage: (installment: OverdueInstallment) => void 
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+
+  const filteredInstallments = useMemo(() => {
+    return overdueInstallments.filter(installment => {
+      const searchMatch = installment.client_name.toLowerCase().includes(searchTerm.toLowerCase()) || installment.case_number.toLowerCase().includes(searchTerm.toLowerCase());
+      const priorityMatch = priorityFilter === "all" || (priorityFilter === "urgent" && installment.days_overdue > 30) || (priorityFilter === "moderate" && installment.days_overdue <= 30 && installment.days_overdue > 15) || (priorityFilter === "recent" && installment.days_overdue <= 15);
+      return searchMatch && priorityMatch;
+    });
+  }, [overdueInstallments, searchTerm, priorityFilter]);
+
+  const totalOverdueValue = useMemo(() => filteredInstallments.reduce((sum, i) => sum + i.value, 0), [filteredInstallments]);
+
+  const getPriorityBadge = (daysOverdue: number) => {
+    if (daysOverdue > 30) return <Badge variant="destructive">Urgente ({daysOverdue} dias)</Badge>;
+    if (daysOverdue > 15) return <Badge variant="outline">Moderado ({daysOverdue} dias)</Badge>;
+    return <Badge variant="secondary">Recente ({daysOverdue} dias)</Badge>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Valor Total em Atraso</p><p className="text-2xl font-bold text-red-600">{formatCurrency(totalOverdueValue)}</p></div><AlertCircle className="h-8 w-8 text-red-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Parcelas em Atraso</p><p className="text-2xl font-bold text-orange-600">{filteredInstallments.length}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Atraso Médio</p><p className="text-2xl font-bold text-purple-600">{filteredInstallments.length > 0 ? Math.round(filteredInstallments.reduce((sum, i) => sum + i.days_overdue, 0) / filteredInstallments.length) : 0} dias</p></div><Calendar className="h-8 w-8 text-purple-600" /></div></CardContent></Card>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+          <Input placeholder="Buscar por cliente ou processo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="urgent">Urgente (+30 dias)</SelectItem>
+            <SelectItem value="moderate">Moderado (15-30 dias)</SelectItem>
+            <SelectItem value="recent">Recente (-15 dias)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-4">
+        {filteredInstallments.map((installment) => (
+          <Card key={installment.id} className="border-l-4 border-l-red-500">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3"><h4 className="font-semibold text-slate-900">{installment.client_name}</h4>{getPriorityBadge(installment.days_overdue)}</div>
+                  <p className="text-sm text-slate-600"><strong>Processo:</strong> {installment.case_number} | <strong> Parcela:</strong> {installment.installment_number}</p>
+                  <p className="text-sm text-slate-600"><strong>Vencimento:</strong> {formatDate(installment.due_date)}</p>
+                  {installment.client_contact && (
+                    <div className="flex items-center space-x-4 text-sm text-slate-600">
+                      {installment.client_contact.phone && (<div className="flex items-center space-x-1"><Phone className="h-4 w-4" /><span>{installment.client_contact.phone}</span></div>)}
+                      {installment.client_contact.email && (<div className="flex items-center space-x-1"><Mail className="h-4 w-4" /><span>{installment.client_contact.email}</span></div>)}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right space-y-2">
+                  <p className="text-2xl font-bold text-red-600">{formatCurrency(installment.value)}</p>
+                  <p className="text-sm text-slate-600">de {formatCurrency(installment.total_agreement_value)}</p>
+                  <Button size="sm" onClick={() => onSendMessage(installment)} className="bg-blue-600 hover:bg-blue-700"><Send className="h-4 w-4 mr-1" />Enviar Cobrança</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-// ===== ABA DE DESPESAS (mantida como original) =====
-function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expenses: Expense[], onAddExpense: () => void, onToggleExpenseStatus: (id: number) => void }) {
-    // ...código original mantido...
-    return <div>Conteúdo da Aba Despesas</div>;
+// ===== ABA DE DESPESAS =====
+function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { 
+  expenses: Expense[], 
+  onAddExpense: () => void,
+  onToggleExpenseStatus: (id: number) => void 
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(expense => {
+      const searchMatch = expense.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const categoryMatch = categoryFilter === "all" || expense.category === categoryFilter;
+      const statusMatch = statusFilter === "all" || expense.status === statusFilter;
+      return searchMatch && categoryMatch && statusMatch;
+    });
+  }, [expenses, searchTerm, categoryFilter, statusFilter]);
+
+  const totalExpenses = useMemo(() => filteredExpenses.reduce((sum, e) => sum + e.value, 0), [filteredExpenses]);
+  const paidExpenses = useMemo(() => filteredExpenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.value, 0), [filteredExpenses]);
+  const pendingExpenses = useMemo(() => filteredExpenses.filter(e => e.status === 'pending').reduce((sum, e) => sum + e.value, 0), [filteredExpenses]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total de Despesas</p><p className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses)}</p></div><CreditCard className="h-8 w-8 text-slate-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Despesas Pagas</p><p className="text-2xl font-bold text-green-600">{formatCurrency(paidExpenses)}</p></div><CheckCircle className="h-8 w-8 text-green-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Despesas Pendentes</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingExpenses)}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
+        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total de Itens</p><p className="text-2xl font-bold text-blue-600">{filteredExpenses.length}</p></div><FileText className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
+      </div>
+
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 p-4 bg-slate-50 rounded-lg">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <Input placeholder="Buscar despesas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="Fixo">Fixo</SelectItem>
+              <SelectItem value="Variável">Variável</SelectItem>
+              <SelectItem value="Software">Software</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="paid">Pago</SelectItem>
+              <SelectItem value="pending">Pendente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={onAddExpense}><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
+      </div>
+
+      <div className="space-y-4">
+        {filteredExpenses.map((expense) => (
+          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'}`}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3"><h4 className="font-semibold text-slate-900">{expense.description}</h4><Badge variant={expense.status === 'paid' ? "default" : "secondary"}>{expense.status === 'paid' ? "Pago" : "Pendente"}</Badge><Badge variant="outline">{expense.category}</Badge></div>
+                  <div className="flex items-center space-x-4 text-sm text-slate-600"><span><strong>Data:</strong> {formatDate(expense.date)}</span>{expense.due_date && (<span><strong>Vencimento:</strong> {formatDate(expense.due_date)}</span>)}{expense.payment_method && (<span><strong>Forma de Pagamento:</strong> {expense.payment_method}</span>)}</div>
+                  {expense.notes && (<p className="text-sm text-slate-600"><strong>Observações:</strong> {expense.notes}</p>)}
+                </div>
+                <div className="text-right space-y-2">
+                  <p className="text-2xl font-bold text-slate-900">{formatCurrency(expense.value)}</p>
+                  <div className="flex space-x-2"><Button size="sm" variant="outline" onClick={() => onToggleExpenseStatus(expense.id)}>{expense.status === 'paid' ? 'Marcar Pendente' : 'Marcar Pago'}</Button><Button size="sm" variant="outline"><Edit className="h-4 w-4" /></Button></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ===== COMPONENTE PRINCIPAL =====

@@ -6,7 +6,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // <-- Agora usa apenas este
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +37,7 @@ interface Installment {
 
 interface PaymentData {
   amount_paid: number;
-  payment_date?: string; // ✅ CORREÇÃO 1: Tornando a data opcional
+  payment_date: string; // ✅ CORREÇÃO: Sempre string, nunca undefined
   payment_method: string;
   payment_reference: string;
   late_fee_paid: number;
@@ -70,9 +70,14 @@ export function InstallmentPaymentModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // ✅ CORREÇÃO: Função getCurrentDate para garantir sempre string
+  const getCurrentDate = (): string => {
+    return new Date().toISOString().split('T')[0];
+  };
+
   const [paymentData, setPaymentData] = useState<PaymentData>({
     amount_paid: 0,
-    payment_date: new Date().toISOString().split('T')[0],
+    payment_date: getCurrentDate(), // ✅ CORREÇÃO: Usando função que sempre retorna string
     payment_method: 'pix',
     payment_reference: '',
     late_fee_paid: 0,
@@ -120,15 +125,31 @@ export function InstallmentPaymentModal({
   }, [installment, agreementData]);
 
   const handleChange = (field: keyof PaymentData, value: any) => {
-    setPaymentData(prev => ({ ...prev, [field]: value }));
+    // ✅ CORREÇÃO: Garantir que payment_date sempre seja string
+    if (field === 'payment_date') {
+      setPaymentData(prev => ({ 
+        ...prev, 
+        [field]: value || new Date().toISOString().split('T')[0] 
+      }));
+    } else {
+      setPaymentData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const recordPaymentMutation = useMutation({
     mutationFn: (data: PaymentData) => {
       if (!installment || !agreementData) throw new Error("Dados insuficientes");
+      
+      // ✅ CORREÇÃO: Garantir que paymentDate sempre seja string
+      const paymentDate = data.payment_date || new Date().toISOString().split('T')[0];
+      
       return apiClient.recordInstallmentPayment(String(agreementData.id), {
-        installmentId: installment.id,
-        ...data
+        installmentId: String(installment.id),
+        amount: data.amount_paid,
+        paymentDate: paymentDate, // Agora garantidamente string
+        paymentMethod: data.payment_method,
+        reference: data.payment_reference,
+        notes: data.notes
       });
     },
     onSuccess: () => {
@@ -163,7 +184,8 @@ export function InstallmentPaymentModal({
       return;
     }
 
-    if (!paymentData.payment_date) {
+    // ✅ CORREÇÃO: Validação melhorada para data
+    if (!paymentData.payment_date || paymentData.payment_date.trim() === '') {
       toast({ 
         title: "Data obrigatória", 
         description: "A data de pagamento é obrigatória.", 
@@ -365,7 +387,7 @@ export function InstallmentPaymentModal({
                   </Label>
                   <Input 
                     type="date" 
-                    value={paymentData.payment_date || ''} 
+                    value={paymentData.payment_date} 
                     onChange={e => handleChange('payment_date', e.target.value)}
                     className="h-11"
                   />
@@ -587,4 +609,3 @@ export function InstallmentPaymentModal({
     </Dialog>
   );
 }
-
