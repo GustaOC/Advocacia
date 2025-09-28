@@ -1,62 +1,243 @@
-// lib/services/petitionService.ts 
+// lib/services/petitionService.ts
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { AuthUser } from "@/lib/auth";
 
+/**
+ * Tipos auxiliares
+ */
+export type PetitionStatus = "Em elaboração" | "Revisão" | "Protocolado" | string;
+
+export interface CreatePetitionInput {
+  case_id: string;
+  title: string;
+  content?: string | null;
+  status?: PetitionStatus;
+  employee_id?: string | number | null; // opcional: se ausente, tentaremos inferir pelo usuário
+}
+
+/**
+ * Utilitário para resolver o employee_id a partir do usuário autenticado.
+ * Se não encontrar, retorna null (não quebra criação, caso a coluna permita null).
+ */
+async function resolveEmployeeIdFromUser(user: AuthUser): Promise<string | number | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, auth_user_id")
+      .eq("auth_user_id", user.id)
+      .limit(1)
+      .single();
+
+    if (error) return null;
+    return data?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lista geral de petições com possibilidade de expandir relações via cases -> entities e employees.
+ * Mantemos a seleção resiliente (não falha se relações não existirem, desde que FKs estejam corretas).
+ */
 export async function getPetitions(user: AuthUser) {
   const supabase = createAdminClient();
 
-  // ✅ CORREÇÃO: A consulta agora busca 'entities' através da tabela 'cases', que é o caminho correto do relacionamento.
-  // Isso resolve o erro "Could not find a relationship between 'petitions' and 'entities'".
   const { data, error } = await supabase
     .from("petitions")
-    .select(`
-      id,
-      created_at,
-      status,
-      file_url,
-      cases (
+    .select(
+      `
         id,
+        created_at,
+        updated_at,
         title,
-        case_number,
-        entities (
+        status,
+        case_id,
+        employee_id,
+        cases (
           id,
-          name
-        )
-      ),
-      employees (
-        id,
-        name
-      )
-    `)
+          title,
+          entity_id,
+          entities (*)
+        ),
+        employees (*)
+      `
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Erro ao buscar petições:", error.message);
-    throw new Error("Não foi possível buscar as petições.");
+    console.error("[petitionService.getPetitions] Erro:", error.message);
+    throw new Error("Não foi possível carregar as petições.");
   }
-  
-  return data;
+
+  return data ?? [];
 }
 
-export async function getPetitionById(id: number, user: AuthUser) {
+/**
+ * Busca petições por ID do caso.
+ */
+export async function getPetitionsByCase(user: AuthUser, caseId: string) {
   const supabase = createAdminClient();
+
   const { data, error } = await supabase
     .from("petitions")
-    .select(`
-      *,
-      cases(*, entities(*)),
-      employees(*)
-    `)
-    .eq('id', id)
+    .select(
+      `
+        id,
+        created_at,
+        updated_at,
+        title,
+        status,
+        case_id,
+        employee_id,
+        cases (
+          id,
+          title,
+          entity_id,
+          entities (*)
+        ),
+        employees (*)
+      `
+    )
+    .eq("case_id", caseId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[petitionService.getPetitionsByCase] Erro:", error.message);
+    throw new Error("Não foi possível carregar as petições do caso.");
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Busca petições por status.
+ */
+export async function getPetitionsByStatus(user: AuthUser, status: PetitionStatus) {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("petitions")
+    .select(
+      `
+        id,
+        created_at,
+        updated_at,
+        title,
+        status,
+        case_id,
+        employee_id,
+        cases (
+          id,
+          title,
+          entity_id,
+          entities (*)
+        ),
+        employees (*)
+      `
+    )
+    .eq("status", status)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[petitionService.getPetitionsByStatus] Erro:", error.message);
+    throw new Error("Não foi possível carregar as petições pelo status.");
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Cria uma nova petição.
+ * Caso employee_id não seja informado, tenta inferir pelo usuário autenticado.
+ */
+export async function createPetition(user: AuthUser, input: CreatePetitionInput) {
+  const supabase = createAdminClient();
+
+  const {
+    case_id,
+    title,
+    content = null,
+    status = "Em elaboração",
+    employee_id,
+  } = input;
+
+  const effectiveEmployeeId =
+    employee_id ?? (await resolveEmployeeIdFromUser(user));
+
+  const { data, error } = await supabase
+    .from("petitions")
+    .insert([
+      {
+        case_id,
+        title,
+        content,
+        status,
+        employee_id: effectiveEmployeeId,
+      },
+    ])
+    .select(
+      `
+        id,
+        created_at,
+        updated_at,
+        title,
+        status,
+        case_id,
+        employee_id,
+        cases (
+          id,
+          title,
+          entity_id,
+          entities (*)
+        ),
+        employees (*)
+      `
+    )
     .single();
 
   if (error) {
-    console.error(`Erro ao buscar petição ${id}:`, error.message);
-    return null;
+    console.error("[petitionService.createPetition] Erro:", error.message);
+    throw new Error("Não foi possível criar a petição.");
   }
 
   return data;
 }
 
-// Outras funções do serviço...
+/**
+ * Busca uma petição específica por ID.
+ */
+export async function getPetitionById(user: AuthUser, id: string) {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("petitions")
+    .select(
+      `
+        id,
+        created_at,
+        updated_at,
+        title,
+        status,
+        case_id,
+        employee_id,
+        cases (
+          id,
+          title,
+          entity_id,
+          entities (*)
+        ),
+        employees (*)
+      `
+    )
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error(`[petitionService.getPetitionById] Erro (${id}):`, error.message);
+    throw new Error("Não foi possível carregar a petição.");
+  }
+
+  return data;
+}

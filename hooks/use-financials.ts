@@ -57,7 +57,7 @@ export const useGetFinancialAgreements = (
 ) => {
   return useQuery<FinancialAgreement[], Error>({
     queryKey: [...financialAgreementsQueryKey, page, pageSize, filters],
-    queryFn: () => apiClient.getFinancialAgreements(), // ✅ CORREÇÃO: Sem parâmetros
+    queryFn: () => apiClient.getFinancialAgreements(), // ✅ Sem parâmetros
     staleTime: 1000 * 60 * 5, // Cache de 5 minutos
     placeholderData: (previousData) => previousData, // Mantém dados anteriores durante loading
     select: (data) => {
@@ -69,14 +69,15 @@ export const useGetFinancialAgreements = (
         filteredData = filteredData.filter(item => item.status === filters.status)
       }
       if (filters.agreementType) {
-        filteredData = filteredData.filter(item => item.agreement_type === filters.agreementType)
+        filteredData = filteredData.filter(item => (item as any).agreement_type === filters.agreementType)
       }
       if (filters.search) {
         const searchLower = filters.search.toLowerCase()
-        filteredData = filteredData.filter(item => 
-          item.entities.name.toLowerCase().includes(searchLower) ||
-          item.cases.case_number?.toLowerCase().includes(searchLower)
-        )
+        filteredData = filteredData.filter(item => {
+          const entityName = item.entities?.name?.toLowerCase() ?? ''
+          const caseNumber = item.cases?.case_number?.toLowerCase() ?? ''
+          return entityName.includes(searchLower) || caseNumber.includes(searchLower)
+        })
       }
       
       // Aplicar paginação
@@ -95,7 +96,7 @@ export const useGetFinancialAgreements = (
 export const useGetAllFinancialAgreements = (filters: FinancialAgreementFilters = {}) => {
   return useQuery<FinancialAgreement[], Error>({
     queryKey: [...financialAgreementsQueryKey, 'all', filters],
-    queryFn: () => apiClient.getFinancialAgreements(), // ✅ CORREÇÃO: Usando método existente
+    queryFn: () => apiClient.getFinancialAgreements(), // ✅ método existente
     staleTime: 1000 * 60 * 10, // Cache de 10 minutos
     select: (data) => {
       // Aplicar filtros no lado cliente
@@ -105,14 +106,15 @@ export const useGetAllFinancialAgreements = (filters: FinancialAgreementFilters 
         filteredData = filteredData.filter(item => item.status === filters.status)
       }
       if (filters.agreementType) {
-        filteredData = filteredData.filter(item => item.agreement_type === filters.agreementType)
+        filteredData = filteredData.filter(item => (item as any).agreement_type === filters.agreementType)
       }
       if (filters.search) {
         const searchLower = filters.search.toLowerCase()
-        filteredData = filteredData.filter(item => 
-          item.entities.name.toLowerCase().includes(searchLower) ||
-          item.cases.case_number?.toLowerCase().includes(searchLower)
-        )
+        filteredData = filteredData.filter(item => {
+          const entityName = item.entities?.name?.toLowerCase() ?? ''
+          const caseNumber = item.cases?.case_number?.toLowerCase() ?? ''
+          return entityName.includes(searchLower) || caseNumber.includes(searchLower)
+        })
       }
       
       return filteredData
@@ -305,12 +307,13 @@ export const useRenegotiateFinancialAgreement = () => {
 
 /**
  * Hook para buscar as parcelas de um acordo específico.
+ * ✅ CORREÇÃO: converter agreementId (string) para número.
  */
 export const useGetAgreementInstallments = (agreementId: string | null) => {
   return useQuery({
     queryKey: [...agreementInstallmentsQueryKey, agreementId],
     queryFn: () => 
-      agreementId ? apiClient.getAgreementInstallments(agreementId) : [],
+      agreementId ? apiClient.getAgreementInstallments(Number(agreementId)) : [],
     enabled: !!agreementId,
     staleTime: 1000 * 60 * 2, // Cache de 2 minutos
   })
@@ -318,40 +321,49 @@ export const useGetAgreementInstallments = (agreementId: string | null) => {
 
 /**
  * Hook para buscar o histórico de pagamentos de um acordo.
+ * ⚠️ Ainda não há método correspondente no apiClient.
+ * Mantemos o hook para não quebrar importações, retornando lista vazia.
+ * (Se quiser o histórico real, no próximo passo adiciono o método/rota.)
  */
 export const useGetAgreementPaymentHistory = (agreementId: string | null) => {
   return useQuery({
     queryKey: [...agreementPaymentHistoryQueryKey, agreementId],
-    queryFn: () =>
-      agreementId ? apiClient.getAgreementPaymentHistory(agreementId) : [],
-    enabled: !!agreementId,
-    staleTime: 1000 * 60 * 2, // Cache de 2 minutos
+    queryFn: () => Promise.resolve([] as any[]),
+    enabled: false, // desativado até implementarmos o endpoint
+    staleTime: 1000 * 60 * 2,
   })
 }
 
 /**
- * Hook para registrar o pagamento de uma parcela.
+ * ✅ CORREÇÃO: Hook para registrar o pagamento ("Dar baixa") de uma **parcela**.
+ * Agora usamos o **installmentId** na chamada ao apiClient.
+ * (agreementId é opcional, usado só para invalidar o cache relacionado.)
  */
 export const useRecordInstallmentPayment = () => {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  return useMutation<any, Error, { agreementId: string; paymentData: any }>({
-    mutationFn: ({ agreementId, paymentData }) =>
-      apiClient.recordInstallmentPayment(agreementId, paymentData),
+  return useMutation<
+    any,
+    Error,
+    { installmentId: string; agreementId?: string; paymentData: any }
+  >({
+    mutationFn: ({ installmentId, paymentData }) =>
+      apiClient.recordInstallmentPayment(installmentId, paymentData),
     onSuccess: (data, variables) => {
-      // Invalida parcelas e histórico de pagamentos
-      queryClient.invalidateQueries({
-        queryKey: [...agreementInstallmentsQueryKey, variables.agreementId]
-      })
-      queryClient.invalidateQueries({
-        queryKey: [...agreementPaymentHistoryQueryKey, variables.agreementId]
-      })
-      
-      // Invalida detalhes do acordo
-      queryClient.invalidateQueries({
-        queryKey: ['financialAgreementDetails', variables.agreementId]
-      })
+      // Invalida parcelas e histórico de pagamentos do acordo (se informado)
+      if (variables.agreementId) {
+        queryClient.invalidateQueries({
+          queryKey: [...agreementInstallmentsQueryKey, variables.agreementId]
+        })
+        queryClient.invalidateQueries({
+          queryKey: [...agreementPaymentHistoryQueryKey, variables.agreementId]
+        })
+        // Invalida detalhes do acordo
+        queryClient.invalidateQueries({
+          queryKey: ['financialAgreementDetails', variables.agreementId]
+        })
+      }
       
       // Invalida listas e relatórios
       queryClient.invalidateQueries({ 
@@ -435,78 +447,4 @@ export const useExportFinancialAgreements = () => {
   })
 }
 
-// ============================================================================
-// HOOKS PARA ESTATÍSTICAS E MÉTRICAS
-// ============================================================================
-
-/**
- * Hook para buscar estatísticas financeiras gerais.
- */
-export const useGetFinancialStats = () => {
-  return useQuery({
-    queryKey: ['financialStats'],
-    queryFn: () => apiClient.getFinancialStats?.() || Promise.resolve(null),
-    staleTime: 1000 * 60 * 5, // Cache de 5 minutos
-  })
-}
-
-/**
- * Hook para buscar acordos em atraso.
- */
-export const useGetOverdueAgreements = () => {
-  return useQuery<FinancialAgreement[], Error>({
-    queryKey: ['overdueAgreements'],
-    queryFn: () => apiClient.getOverdueAgreements?.() || Promise.resolve([]),
-    staleTime: 1000 * 60 * 2, // Cache de 2 minutos
-    refetchInterval: 1000 * 60 * 5, // Atualiza automaticamente a cada 5 minutos
-  })
-}
-
-// ============================================================================
-// HOOKS UTILITÁRIOS
-// ============================================================================
-
-/**
- * Hook para invalidar todas as queries relacionadas a financeiro.
- * Útil para refresh geral da aplicação.
- */
-export const useRefreshFinancialData = () => {
-  const queryClient = useQueryClient()
-
-  return () => {
-    queryClient.invalidateQueries({ 
-      queryKey: financialAgreementsQueryKey,
-      exact: false 
-    })
-    queryClient.invalidateQueries({ 
-      queryKey: financialReportsQueryKey,
-      exact: false 
-    })
-    queryClient.invalidateQueries({ 
-      queryKey: agreementInstallmentsQueryKey,
-      exact: false 
-    })
-    queryClient.invalidateQueries({ 
-      queryKey: agreementPaymentHistoryQueryKey,
-      exact: false 
-    })
-    queryClient.invalidateQueries({ queryKey: ['financialStats'] })
-    queryClient.invalidateQueries({ queryKey: ['overdueAgreements'] })
-  }
-}
-
-/**
- * Hook para pré-carregar dados de acordo específico.
- * Útil para melhorar a experiência do usuário.
- */
-export const usePrefetchAgreementDetails = () => {
-  const queryClient = useQueryClient()
-
-  return (agreementId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: ['financialAgreementDetails', agreementId],
-      queryFn: () => apiClient.getFinancialAgreementDetails(agreementId),
-      staleTime: 1000 * 60 * 2,
-    })
-  }
-}
+// =================================

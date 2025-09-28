@@ -14,17 +14,19 @@ export async function POST(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const installmentId = params.id;
-    const body = await request.json();
-
+    const body = await request.json().catch(() => ({}));
+    // ✅ Garante que o installment_id venha do path param
     const paymentData = {
       ...body,
-      installment_id: installmentId,
+      installment_id: params.id,
     };
-    
+
     const validationResult = PaymentSchema.safeParse(paymentData);
     if (!validationResult.success) {
-      return NextResponse.json({ error: 'Dados de pagamento inválidos.', details: validationResult.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Dados de pagamento inválidos.', details: validationResult.error.flatten() },
+        { status: 400 }
+      );
     }
 
     const newPayment = await FinancialService.recordPaymentForInstallment(validationResult.data, user);
