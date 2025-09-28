@@ -13,9 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { apiClient } from "@/lib/api-client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-
-// Importação dos Módulos
-import { EntitiesModule } from "@/components/entities-module"
+import EntitiesModule from "@/components/entities-module"
 import { CasesModule } from "@/components/cases-module"
 import { FinancialModule } from "@/components/financial-module"
 import { PetitionsModule } from "@/components/petitions-module"
