@@ -41,18 +41,10 @@ export default function LoginForm() {
         throw new Error(data?.error || "Não foi possível entrar.")
       }
 
-      if (typeof window !== "undefined") {
-        document.cookie = "sb-auth-token-client=authenticated; path=/; max-age=604800"
-        document.cookie = `user-info=${JSON.stringify({ email, id: data.user?.id || 'temp' })}; path=/; max-age=604800`
-        sessionStorage.setItem("just-logged-in", "true")
-        console.log("[LoginForm] ✅ Cookies e sessionStorage definidos")
-      }
-
       console.log("[LoginForm] ✅ Login bem-sucedido, redirecionando...")
       
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 500)
+      // Redireciona para o dashboard, o AuthGuard e o middleware farão o resto
+      router.push("/dashboard")
       
     } catch (err: any) {
       console.error("[LoginForm] ❌ Erro no login:", err)
@@ -116,7 +108,6 @@ export default function LoginForm() {
                 required
                 className="h-12 border-slate-300 focus-visible:ring-slate-500 rounded-xl bg-white/60 backdrop-blur-sm pr-12"
               />
-              {/* ==> PASSO 10: ADICIONADO ARIA-LABEL <== */}
               <Button
                 type="button"
                 variant="ghost"
@@ -127,7 +118,6 @@ export default function LoginForm() {
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </Button>
-              {/* ==> FIM DO PASSO 10 <== */}
             </div>
           </div>
 

@@ -5,9 +5,10 @@ import { requirePermission } from "@/lib/auth";
 import * as caseService from "@/lib/services/caseService";
 import { CaseSchema } from "@/lib/schemas";
 import { validateAndParseBody, apiError, apiSuccess } from "@/lib/api-helpers";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
 // GET: Listar todos os casos com paginação
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
   try {
     await requirePermission("cases_view");
     
@@ -28,9 +29,10 @@ export async function GET(req: NextRequest) {
     return apiError(error.message || "Erro interno do servidor.");
   }
 }
+export const GET = withRateLimit(GET_handler);
 
 // POST: Criar um novo caso
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest) {
   try {
     const user = await requirePermission("cases_create");
     
@@ -51,3 +53,4 @@ export async function POST(req: NextRequest) {
     return apiError(error.message || "Erro interno do servidor.");
   }
 }
+export const POST = withRateLimit(POST_handler);

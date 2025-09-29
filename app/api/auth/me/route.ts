@@ -1,8 +1,9 @@
 // app/api/auth/me/route.ts
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
-export async function GET() {
+async function GET_handler() {
   try {
     const user = await getSessionUser();
 
@@ -22,3 +23,4 @@ export async function GET() {
     return NextResponse.json({ error: "Erro interno ao buscar usuário." }, { status: 500 });
   }
 }
+export const GET = withRateLimit(GET_handler);

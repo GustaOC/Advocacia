@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimit as inMemoryRateLimit } from "@/lib/rate-limit"; // Implementação em memória
 import { ratelimit as redisRateLimit } from "@/lib/rate-limit-redis"; // Nova implementação com Redis
 
-export function withRateLimit(handler: (req: NextRequest) => Promise<NextResponse> | NextResponse) {
-  return async (req: NextRequest) => {
+// Define um tipo de handler que aceita 'req' e qualquer outro argumento (como o context com 'params')
+type RouteHandler = (req: NextRequest, ...args: any[]) => Promise<NextResponse> | NextResponse;
+
+export function withRateLimit(handler: RouteHandler) {
+  // O wrapper agora aceita e repassa os argumentos adicionais
+  return async (req: NextRequest, ...args: any[]) => {
     const ip = req.ip ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "127.0.0.1";
 
     // Usa o rate limiter do Redis se estiver configurado (ambiente de produção)
@@ -26,6 +30,7 @@ export function withRateLimit(handler: (req: NextRequest) => Promise<NextRespons
       }
     }
 
-    return handler(req);
+    // Chama o handler original com todos os seus argumentos
+    return handler(req, ...args);
   };
 }

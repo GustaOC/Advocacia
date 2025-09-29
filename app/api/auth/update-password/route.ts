@@ -1,114 +1,88 @@
 // app/api/auth/update-password/route.ts
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
 /**
- * Atualiza a senha de um usuário usando o Admin SDK do Supabase v2.
- * Este endpoint é para casos admin ou reset via link.
+ * Atualiza a senha de um usuário usando o Admin SDK do Supabase.
+ * Suporta identificar o usuário por email OU por user_id.
  */
 
-const bodySchema = z.object({
+const BodySchema = z.object({
   email: z.string().email().optional(),
-  userId: z.string().optional(),
-  newPassword: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
+  user_id: z.string().optional(),
+  new_password: z.string().min(8, "A senha deve ter no mínimo 8 caracteres"),
+}).refine((data) => data.email || data.user_id, {
+  message: "Informe 'email' ou 'user_id'.",
+  path: ["email"],
 });
 
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest): Promise<NextResponse> {
   try {
-    const body = await req.json();
-    const { email, userId, newPassword } = bodySchema.parse(body);
-
-    if (!email && !userId) {
+    const json = await req.json();
+    const parsed = BodySchema.safeParse(json);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
       return NextResponse.json(
-        { error: "Email ou userId é obrigatório" }, 
+        { error: issue?.message || "Dados inválidos", details: parsed.error.format() },
         { status: 400 }
       );
     }
 
+    const { email, user_id, new_password } = parsed.data;
     const supabase = getSupabaseAdmin();
 
-    // Se temos userId, usamos diretamente
-    if (userId) {
-      const { data, error } = await supabase.auth.admin.updateUserById(
-        userId,
-        { password: newPassword }
-      );
+    // Descobre o ID do usuário (por email ou já fornecido)
+    let targetUserId: string | undefined = user_id;
 
+    if (!targetUserId && email) {
+      const { data, error } = await supabase.auth.admin.listUsers();
       if (error) {
-        console.error("Erro ao atualizar senha por userId:", error);
-        return NextResponse.json(
-          { error: `Erro ao atualizar senha: ${error.message}` },
-          { status: 500 }
-        );
+        return NextResponse.json({ error: error.message }, { status: 500 });
       }
-
-      return NextResponse.json({ 
-        success: true,
-        message: "Senha atualizada com sucesso",
-        user: { id: data.user.id, email: data.user.email }
-      });
+      const found = data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (!found) {
+        return NextResponse.json({ error: "Usuário não encontrado pelo email informado." }, { status: 404 });
+      }
+      targetUserId = found.id;
     }
 
-    // Se temos email, primeiro buscamos o usuário
-    if (email) {
-      const { data: users, error: listError } = await supabase.auth.admin.listUsers();
-      
-      if (listError) {
-        console.error("Erro ao listar usuários:", listError);
-        return NextResponse.json(
-          { error: "Erro interno ao buscar usuário" },
-          { status: 500 }
-        );
-      }
-
-      const user = users.users.find(u => u.email === email);
-      
-      if (!user) {
-        return NextResponse.json(
-          { error: "Usuário não encontrado" },
-          { status: 404 }
-        );
-      }
-
-      const { data, error } = await supabase.auth.admin.updateUserById(
-        user.id,
-        { password: newPassword }
-      );
-
-      if (error) {
-        console.error("Erro ao atualizar senha por email:", error);
-        return NextResponse.json(
-          { error: `Erro ao atualizar senha: ${error.message}` },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({ 
-        success: true,
-        message: "Senha atualizada com sucesso",
-        user: { id: data.user.id, email: data.user.email }
-      });
+    if (!targetUserId) {
+      return NextResponse.json({ error: "Não foi possível identificar o usuário." }, { status: 400 });
     }
 
-  } catch (err: any) {
-    console.error("API /api/auth/update-password error:", err);
-    
-    // Se for erro de validação do Zod
-    if (err.name === 'ZodError') {
+    // ✅ No SDK v2, o retorno tem a forma { data: { user }, error }
+    const { data: updateData, error: updateError } = await supabase.auth.admin.updateUserById(targetUserId, {
+      password: new_password,
+    });
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Senha atualizada com sucesso.",
+      user: {
+        id: updateData?.user?.id ?? targetUserId,
+        email: updateData?.user?.email,
+      },
+    });
+
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "name" in err && (err as any).name === "ZodError") {
+      const ze = err as z.ZodError;
+      const issue = ze.issues[0];
       return NextResponse.json(
-        { 
-          error: "Dados inválidos", 
-          details: err.errors 
-        }, 
+        { error: issue?.message || "Dados inválidos", details: ze.format() },
         { status: 400 }
       );
     }
 
-    return NextResponse.json(
-      { error: err?.message || "Erro interno do servidor" }, 
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Erro interno do servidor";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const POST = withRateLimit(POST_handler);

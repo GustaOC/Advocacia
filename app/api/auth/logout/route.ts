@@ -2,8 +2,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clearAuthCache } from "@/lib/auth";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest) {
   try {
     const res = NextResponse.json({ message: "Logout realizado com sucesso" });
     const supabase = createSupabaseServerClient(req, res);
@@ -24,3 +25,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Erro ao fazer logout" }, { status: 500 });
   }
 }
+export const POST = withRateLimit(POST_handler);

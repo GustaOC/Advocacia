@@ -1,8 +1,9 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { withRateLimit } from "@/lib/with-rate-limit";
 
-export async function GET(request: Request) {
+async function GET_handler(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   // if "next" is in param, use it as the redirect URL
@@ -36,3 +37,4 @@ export async function GET(request: Request) {
   // return the user to an error page with instructions
   return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }
+export const GET = withRateLimit(GET_handler);

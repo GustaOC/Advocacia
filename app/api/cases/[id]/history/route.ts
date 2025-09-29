@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import * as caseService from "@/lib/services/caseService";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
 interface RouteParams {
   params: {
@@ -10,7 +11,7 @@ interface RouteParams {
 }
 
 // GET: Obter o histórico de um caso específico
-export async function GET(req: NextRequest, { params }: RouteParams) {
+async function GET_handler(req: NextRequest, { params }: RouteParams) {
   try {
     await requirePermission("cases_view");
     const caseId = Number(params.id);
@@ -29,3 +30,4 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+export const GET = withRateLimit(GET_handler);

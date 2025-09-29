@@ -5,6 +5,7 @@ import * as caseService from "@/lib/services/caseService";
 import { getEntities } from "@/lib/services/entityService";
 import { z } from "zod";
 import * as XLSX from "xlsx";
+import { withRateLimit } from "@/lib/with-rate-limit";
 
 // Schema para validar cada linha da planilha
 const ImportCaseSchema = z.object({
@@ -16,7 +17,7 @@ const ImportCaseSchema = z.object({
   "Prioridade": z.enum(['Alta', 'Média', 'Baixa']).default('Média'),
 });
 
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest) {
   try {
     const user = await requirePermission("cases_create");
     const formData = await req.formData();
@@ -99,3 +100,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ocorreu um erro inesperado ao processar o arquivo." }, { status: 500 });
   }
 }
+export const POST = withRateLimit(POST_handler);
