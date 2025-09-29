@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, Case } from '@/lib/api-client';
+import { Case } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -13,16 +13,31 @@ import { DocumentsModule } from './documents-module';
 interface Client {
   id: string;
   name: string;
+  document: string;
+  type: string;
+  email?: string | null;
+  address?: string | null;
+  address_number?: string | null;
+  district?: string | null;
+  city?: string | null;
+  zip_code?: string | null;
+  cellphone1?: string | null;
+  cellphone2?: string | null;
+  phone?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  birth_date?: string | null;
+  rg?: string | null;
+  cnh?: string | null;
+  profession?: string | null;
+  marital_status?: string | null;
+  mother_name?: string | null;
+  father_name?: string | null;
+  nationality?: string | null;
+  observations?: string | null;
 }
 
-const REQUIRED_DOCS_CHECKLIST: Record<string, string[]> = {
-  cobranca: ['Procuração', 'Documentos Pessoais (CNH/RG)', 'Comprovante de Residência', 'Contrato ou Título de Dívida', 'Comprovantes de Pagamento Parcial (se houver)'],
-  divorcio: ['Procuração', 'Documentos Pessoais (CNH/RG)', 'Comprovante de Residência', 'Certidão de Casamento', 'Pacto Antenupcial (se houver)'],
-  inventario: ['Procuração', 'Documentos Pessoais do Falecido', 'Certidão de Óbito', 'Documentos dos Herdeiros', 'Relação de Bens'],
-  outros: ['Procuração', 'Documentos Pessoais (CNH/RG)', 'Comprovante de Residência'],
-};
-
-const DocumentChecklistItem = ({ name, isUploaded }: { name: string, isUploaded: boolean }) => (
+const DocStatusItem = ({ name, isUploaded }: { name: string; isUploaded: boolean }) => (
   <li className={`flex items-center justify-between p-2 rounded ${isUploaded ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
     <span className="text-sm">{name}</span>
     {isUploaded ? <FileCheck className="h-4 w-4" /> : <FileWarning className="h-4 w-4" />}
@@ -32,46 +47,77 @@ const DocumentChecklistItem = ({ name, isUploaded }: { name: string, isUploaded:
 export function ClientDetailView({ client, onBack }: { client: Client, onBack: () => void }) {
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
 
-  const { data: casesResponse, isLoading } = useQuery<{ cases: Case[]; total: number }>({
-    queryKey: ['cases'],
-    queryFn: () => apiClient.getCases(),
+  const { data: casesResponse, isLoading, isError, error } = useQuery<{ cases: Case[]; total: number }>({
+    queryKey: ['cases', { page: 1, limit: 1000 }],
+    queryFn: async () => {
+      const res = await fetch(`/api/cases?limit=1000`, { method: 'GET' });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Falha ao carregar processos (HTTP ${res.status})`);
+      }
+      const payload = await res.json();
+      return payload?.data ?? payload; // { cases, total }
+    },
+    staleTime: 1000 * 60 * 2,
   });
-  
+
   const allCases = casesResponse?.cases ?? [];
 
+  // ✅ Mais robusto: aceita entities.id, entity_id ou entity?.id no case_parties
   const clientCases = useMemo(() => {
     if (!Array.isArray(allCases)) return [];
-    return allCases.filter(c => c.case_parties.some(party => String(party.entities.id) === client.id));
+    const targetId = String(client.id);
+    return allCases.filter((c: any) =>
+      Array.isArray(c.case_parties) &&
+      c.case_parties.some((p: any) => {
+        const pid =
+          p?.entities?.id ??
+          p?.entity_id ??
+          p?.entity?.id ??
+          null;
+        return pid != null && String(pid) === targetId;
+      })
+    );
   }, [allCases, client.id]);
 
-  const uploadedDocs = useMemo(() => {
-    if (!selectedCase || !selectedCase.action_type) return [];
-    if (selectedCase.action_type === 'cobranca') return ['Procuração', 'Documentos Pessoais (CNH/RG)', 'Comprovante de Residência'];
-    if (selectedCase.action_type === 'divorcio') return ['Procuração', 'Documentos Pessoais (CNH/RG)', 'Comprovante de Residência', 'Certidão de Casamento', 'Pacto Antenupcial (se houver)'];
-    return ['Procuração'];
-  }, [selectedCase]);
-  
-  // ✅ CORREÇÃO APLICADA: Garante que 'requiredDocs' seja sempre um array.
-  const requiredDocs = (selectedCase?.action_type && REQUIRED_DOCS_CHECKLIST[selectedCase.action_type]) || [];
-  
-  const isReadyForPetition = selectedCase && requiredDocs.every(doc => uploadedDocs.includes(doc));
-
+  const uploadedDocs = useMemo(() =>
+    [
+      { name: "RG/CPF", isUploaded: true },
+      { name: "Comprovante de Residência", isUploaded: true },
+      { name: "Procuração", isUploaded: false },
+      { name: "Contrato", isUploaded: false },
+    ],
+  []);
 
   return (
     <div className="space-y-6">
-       <Button variant="outline" onClick={onBack} className="mb-4">
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Voltar para a lista
+      <Button variant="outline" onClick={onBack} className="flex items-center gap-2">
+        <ArrowLeft className="h-4 w-4" />
+        Voltar
       </Button>
-      
+
       <Card className="border-0 shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-3">
+          <CardTitle className="text-2xl flex items-center gap-2">
             <User className="h-6 w-6" />
-            <span>Pasta Virtual de: {client.name}</span>
+            Pasta Virtual de: {client.name}
           </CardTitle>
-          <CardDescription>Visualize todos os processos e documentos do cliente em um só lugar.</CardDescription>
+          <CardDescription>CPF/CNPJ: {client.document}</CardDescription>
         </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <p className="text-sm text-slate-500">Tipo</p>
+            <p className="font-medium">{client.type || '-'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Cidade</p>
+            <p className="font-medium">{client.city || '-'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500">Telefone</p>
+            <p className="font-medium">{client.cellphone1 || client.phone || '-'}</p>
+          </div>
+        </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -81,9 +127,20 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
               <CardTitle className="flex items-center gap-2 text-xl"><Briefcase className="h-5 w-5"/> Processos</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? <Loader2 className="animate-spin" /> : (
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Loader2 className="animate-spin h-4 w-4" /> Carregando processos...
+                </div>
+              ) : isError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Falha ao carregar processos</AlertTitle>
+                  <AlertDescription>{(error as Error)?.message || 'Tente novamente.'}</AlertDescription>
+                </Alert>
+              ) : clientCases.length === 0 ? (
+                <div className="text-slate-500 text-sm">Nenhum processo relacionado a este cliente.</div>
+              ) : (
                 <ul className="space-y-2">
-                  {clientCases.map(c => (
+                  {clientCases.map((c: any) => (
                     <li key={c.id}>
                       <Button
                         variant={selectedCase?.id === c.id ? 'default' : 'outline'}
@@ -91,8 +148,8 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
                         onClick={() => setSelectedCase(c)}
                       >
                         <div className="flex flex-col">
-                           <span className="font-semibold">{c.title}</span>
-                           <span className="text-xs font-mono">{c.case_number}</span>
+                          <span className="font-semibold">{c.title}</span>
+                          <span className="text-xs font-mono">{c.case_number}</span>
                         </div>
                       </Button>
                     </li>
@@ -101,39 +158,34 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
               )}
             </CardContent>
           </Card>
+
+          <Card className="border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl"><CheckCircle className="h-5 w-5"/> Documentos</CardTitle>
+              <CardDescription>Status dos documentos enviados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {uploadedDocs.map(d => (
+                  <DocStatusItem key={d.name} name={d.name} isUploaded={d.isUploaded} />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="lg:col-span-2">
           {selectedCase ? (
-            <div className="space-y-6">
-              {isReadyForPetition && (
-                <Alert className="bg-green-100 border-green-300 text-green-900">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <AlertTitle className="font-bold">Ação Pronta!</AlertTitle>
-                  <AlertDescription>
-                    Todos os documentos necessários para este processo foram anexados. A ação está pronta para ser peticionada.
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-0 shadow-lg">
-                    <CardHeader>
-                        <CardTitle className="text-xl">Checklist de Documentos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ul className="space-y-2">
-                            {requiredDocs.map(doc => (
-                                <DocumentChecklistItem key={doc} name={doc} isUploaded={uploadedDocs.includes(doc)} />
-                            ))}
-                        </ul>
-                    </CardContent>
-                </Card>
-                
-                <div className="md:col-span-1">
-                    <DocumentsModule caseId={selectedCase.id} />
-                </div>
-              </div>
+            <div className="space-y-4">
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl">{selectedCase.title}</CardTitle>
+                  <CardDescription>Nº {selectedCase.case_number} — {selectedCase.status}</CardDescription>
+                </CardHeader>
+              </Card>
+
+              {/* DocumentsModule espera number */}
+              <DocumentsModule caseId={Number(selectedCase.id)} />
             </div>
           ) : (
             <Card className="border-0 shadow-lg h-full flex items-center justify-center">

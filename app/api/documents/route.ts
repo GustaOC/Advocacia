@@ -1,64 +1,53 @@
 // app/api/documents/route.ts
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
-import * as documentService from "@/lib/services/documentService";
-import { DocumentUploadSchema } from "@/lib/schemas";
+import { getDocumentsByCaseId, createDocument } from "@/lib/services/documentService";
 
-// GET: Lista os documentos de um caso específico
+/** GET: lista documentos por case_id */
 export async function GET(req: NextRequest) {
   try {
     await requireAuth();
-    const { searchParams } = new URL(req.url);
-    const caseId = searchParams.get("case_id");
 
-    if (!caseId) {
-      return NextResponse.json({ error: "O parâmetro case_id é obrigatório." }, { status: 400 });
+    const url = new URL(req.url);
+    const caseIdParam = url.searchParams.get("case_id");
+    const caseId = Number(caseIdParam);
+
+    if (!caseId || Number.isNaN(caseId)) {
+      return NextResponse.json({ error: "Parâmetro 'case_id' inválido." }, { status: 400 });
     }
 
-    const documents = await documentService.getDocumentsByCaseId(Number(caseId));
-    return NextResponse.json(documents);
-  } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const documents = await getDocumentsByCaseId(caseId);
+    return NextResponse.json({ data: { documents, total: documents.length } }, { status: 200 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: "Falha ao listar documentos.", details: err?.message ?? String(err) },
+      { status: 500 }
+    );
   }
 }
 
-// POST: Lida com o upload de um novo documento
+/** POST: cria um registro em `documents` (metadados/URL já devem vir do front ou de upload prévio) */
+const BodySchema = z.object({
+  case_id: z.coerce.number(),
+}).passthrough();
+
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth();
-    const formData = await req.formData();
-
-    const file = formData.get("file") as File | null;
-    const case_id = formData.get("case_id");
-    const description = formData.get("description");
-
-    if (!file) {
-      return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
+    const user = await requireAuth(); // garante autenticação
+    if (!user) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const parsedDetails = DocumentUploadSchema.parse({ case_id, description });
-    
-    const newDocument = await documentService.uploadDocument(
-      file,
-      { case_id: parsedDetails.case_id, description: parsedDetails.description },
-      user
+    const body = await req.json();
+    const parsed = BodySchema.parse(body);
+
+    const doc = await createDocument(parsed);
+    return NextResponse.json({ data: doc }, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: "Falha ao criar documento.", details: err?.message ?? String(err) },
+      { status: 400 }
     );
-
-    return NextResponse.json(newDocument, { status: 201 });
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Dados inválidos.", issues: error.errors },
-        { status: 400 }
-      );
-    }
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

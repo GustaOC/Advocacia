@@ -16,12 +16,11 @@ import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
 import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
 
-// --- Tipagem Atualizada com todos os campos ---
 interface Client {
   id: string;
   name: string;
-  document: string; // Cpf
-  type: string; // "Cliente" | "Executado"
+  document: string; // CPF/CNPJ
+  type: string;     // "Cliente" | "Executado"
   email?: string | null;
   social_name?: string | null;
   image_url?: string | null;
@@ -47,39 +46,65 @@ interface Client {
   observations?: string | null;
 }
 
+function onlyDigits(v: string | null | undefined) {
+  return (v ?? "").replace(/\D+/g, "");
+}
+
+function cleanEntityPayload(input: Partial<Client>): Partial<Client> {
+  const payload: Partial<Client> = {
+    name: (input.name ?? "").trim(),
+    document: onlyDigits(input.document),
+    type: (input.type as any) || "Cliente",
+    email: input.email?.trim() || undefined,
+    cellphone1: input.cellphone1?.trim() || undefined,
+    city: input.city?.trim() || undefined,
+    observations: input.observations?.trim() || undefined,
+  };
+  // remove keys undefined
+  Object.keys(payload).forEach((k) => {
+    const key = k as keyof typeof payload;
+    if (payload[key] === undefined) delete payload[key];
+  });
+  return payload;
+}
+
 export default function EntitiesModule() {
   const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [importModal, setImportModal] = useState<{ isOpen: boolean; type: "Cliente" | "Executado" }>({ isOpen: false, type: "Cliente" });
   const [file, setFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"Cliente" | "Executado">("Cliente");
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false); // ✅ NOVO: controla abertura do modal
   const [currentClient, setCurrentClient] = useState<Partial<Client>>({});
-  // ✅ NOVO: seletor para escolher a listagem exibida
   const [listType, setListType] = useState<'Cliente' | 'Executado'>('Cliente');
+  const { toast } = useToast();
 
   const { data: clients = [], isLoading, isError, error } = useQuery<Client[]>({
     queryKey: ["entities"],
     queryFn: () => apiClient.getEntities(),
+    staleTime: 60_000,
   });
 
   const saveMutation = useMutation({
-    mutationFn: (clientData: Partial<Client>) => {
-      // se não vier type, usa "Cliente" por padrão
-      const dataToSave = { ...clientData, type: clientData.type || 'Cliente' };
-      return dataToSave.id
-        ? apiClient.updateEntity(dataToSave.id, dataToSave)
+    mutationFn: async (clientData: Partial<Client>) => {
+      const dataToSave = cleanEntityPayload(clientData);
+      if (!dataToSave.name || !dataToSave.document) {
+        throw new Error("Informe Nome e Documento válidos.");
+      }
+      return clientData.id
+        ? apiClient.updateEntity(clientData.id, dataToSave)
         : apiClient.createEntity(dataToSave);
     },
     onSuccess: () => {
       toast({ title: "Sucesso!", description: `Cadastro ${isEditMode ? "atualizado" : "criado"} com sucesso.` });
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       setIsEditMode(false);
+      setIsFormOpen(false);        // ✅ fecha modal
       setCurrentClient({});
     },
     onError: (err: any) => {
-      toast({ title: "Erro ao salvar", description: err?.message || "Não foi possível salvar o cadastro.", variant: "destructive" });
+      toast({ title: "Dados inválidos", description: err?.message || "Não foi possível salvar o cadastro.", variant: "destructive" });
     }
   });
 
@@ -94,61 +119,55 @@ export default function EntitiesModule() {
     }
   });
 
-  const { toast } = useToast();
-
   const handleOpenModal = (client?: Client) => {
     if (client) {
       setIsEditMode(true);
       setCurrentClient(client);
     } else {
       setIsEditMode(false);
-      // quando criar novo, herdamos o listType atual
-      setCurrentClient({ type: listType });
+      setCurrentClient({ type: listType }); // herda listType
     }
+    setIsFormOpen(true); // ✅ abre modal sempre
   };
 
   const handleCloseModal = () => {
     setIsEditMode(false);
+    setIsFormOpen(false); // ✅ fecha modal
     setCurrentClient({});
   };
 
   const handleSave = () => {
-    if (!currentClient.name || !currentClient.document) {
-      toast({ title: "Dados incompletos", description: "Informe ao menos Nome e Documento (CPF/CNPJ).", variant: "destructive" });
-      return;
-    }
     saveMutation.mutate(currentClient as Client);
   };
 
-  const handleView = (client: Client) => {
-    setSelectedClient(client);
-  };
+  const handleView = (client: Client) => setSelectedClient(client);
+  const handleEdit = (client: Client) => handleOpenModal(client);
 
-  const handleEdit = (client: Client) => {
-    handleOpenModal(client);
-  };
-  
   const handleDelete = (clientId: string) => {
-    if(confirm("Tem certeza que deseja excluir este cadastro?")) {
-        deleteMutation.mutate(clientId);
+    if (confirm("Tem certeza que deseja excluir este cadastro?")) {
+      deleteMutation.mutate(clientId);
     }
   };
 
-  // ✅ AJUSTE: filtra por listType (Clientes/Executados) e depois aplica a busca
   const filteredClients = useMemo(() => clients
       .filter(client => (client.type || 'Cliente') === listType)
       .filter(client =>
         (client.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (client.document || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    , [clients, searchTerm, listType]);
+      ),
+    [clients, searchTerm, listType]
+  );
 
   if (isLoading) {
-    return ( <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-4 text-slate-600">Carregando...</span></div> );
+    return (
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-4 text-slate-600">Carregando...</span>
+      </div>
+    );
   }
   if (isError) return <div>Erro ao carregar dados: {(error as Error).message}</div>;
 
-  // ✅ CORREÇÃO: Lógica de renderização ajustada para passar a função onBack.
   if (selectedClient) {
     return (
       <ClientDetailView 
@@ -180,7 +199,7 @@ export default function EntitiesModule() {
                 />
               </div>
 
-              {/* ✅ NOVO: seletor da listagem (Clientes x Executados) */}
+              {/* Seletor Clientes/Executados */}
               <div className="w-48">
                 <Select value={listType} onValueChange={(v) => setListType(v as 'Cliente' | 'Executado')}>
                   <SelectTrigger className="h-11">
@@ -195,14 +214,12 @@ export default function EntitiesModule() {
 
               {/* Ações */}
               <div className="flex gap-2">
-                {/* Importações em massa (cada uma abre com o tipo correspondente) */}
                 <Button onClick={() => setImportModal({isOpen: true, type: 'Cliente'})} variant="secondary">
                   <Upload className="mr-2 h-4 w-4" /> Importar Clientes
                 </Button>
                 <Button onClick={() => setImportModal({isOpen: true, type: 'Executado'})} variant="secondary">
                   <Upload className="mr-2 h-4 w-4" /> Importar Executados
                 </Button>
-                {/* Novo cadastro já herda o tipo da listagem selecionada */}
                 <Button onClick={() => handleOpenModal()} className="bg-slate-900 hover:bg-slate-900">
                   <Plus className="mr-2 h-4 w-4" /> Novo
                 </Button>
@@ -211,6 +228,7 @@ export default function EntitiesModule() {
           </CardContent>
         </Card>
 
+        {/* Tabela */}
         {filteredClients.length > 0 ? (
           <Card className="border-0 shadow-lg">
             <CardContent>
@@ -267,7 +285,7 @@ export default function EntitiesModule() {
       </div>
 
       {/* Dialog de criação/edição */}
-      <Dialog open={isEditMode} onOpenChange={(o) => !o ? handleCloseModal() : null}>
+      <Dialog open={isFormOpen} onOpenChange={(o) => (o ? setIsFormOpen(true) : handleCloseModal())}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Cadastro" : "Novo Cadastro"}</DialogTitle>
@@ -275,7 +293,7 @@ export default function EntitiesModule() {
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Tipo (Cliente/Executado) */}
+            {/* Tipo */}
             <div className="col-span-1">
               <Label>Tipo</Label>
               <Select
@@ -349,7 +367,6 @@ export default function EntitiesModule() {
                   return;
                 }
                 try {
-                  // Se sua API de importação existir, chame aqui passando importModal.type.
                   // await apiClient.importEntities(file, importModal.type)
                   toast({ title: "Importação iniciada", description: "Processaremos seu arquivo em segundo plano." });
                   setImportModal({ isOpen: false, type: importModal.type });

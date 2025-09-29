@@ -1,126 +1,71 @@
 // lib/services/documentService.ts
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { DocumentSchema } from "@/lib/schemas";
-import { AuthUser } from "@/lib/auth";
+// ❌ removido: import { DocumentSchema } from "@/lib/schemas";
+// ❌ removido: import { AuthUser } from "@/lib/auth";
 
-const BUCKET_NAME = 'case-documents';
+const BUCKET_NAME = "case-documents";
 
-/**
- * Faz o upload de um arquivo para o Supabase Storage e salva seus metadados no banco de dados.
- */
-export async function uploadDocument(file: File, details: { case_id: number; description?: string }, user: AuthUser) {
-  if (!file) throw new Error("Nenhum arquivo fornecido.");
-  if (!details.case_id) throw new Error("O ID do caso é obrigatório.");
+/** ===== Tipos mínimos usados aqui ===== */
+export type DbDocument = {
+  id: number;
+  case_id: number;
+  // demais colunas variam no seu schema (file_name, file_path, url, description, etc.)
+  [key: string]: any;
+};
 
+/** Lista documentos por caso (seleciona * para evitar colunas inexistentes) */
+export async function getDocumentsByCaseId(caseId: number): Promise<DbDocument[]> {
   const supabase = createAdminClient();
-  const fileExtension = file.name.split('.').pop();
-  const uniqueFileName = `${crypto.randomUUID()}.${fileExtension}`;
-  const filePath = `public/case_${details.case_id}/${uniqueFileName}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(filePath, file);
-
-  if (uploadError) {
-    console.error("Erro no upload para o Supabase Storage:", uploadError.message);
-    throw new Error("Falha ao carregar o arquivo.");
-  }
-
-  const documentData = {
-    case_id: details.case_id,
-    employee_id: user.id,
-    file_name: file.name,
-    file_path: filePath,
-    file_type: file.type,
-    file_size: file.size,
-    description: details.description,
-  };
-
-  const parsedData = DocumentSchema.parse(documentData);
-  const { data: dbRecord, error: dbError } = await supabase
-    .from("documents")
-    .insert(parsedData)
-    .select()
-    .single();
-
-  if (dbError) {
-    console.error("Erro ao salvar metadados do documento:", dbError.message);
-    await supabase.storage.from(BUCKET_NAME).remove([filePath]);
-    throw new Error("Não foi possível salvar as informações do documento.");
-  }
-
-  return dbRecord;
-}
-
-/**
- * Busca todos os documentos associados a um caso específico.
- * @param caseId - O ID do caso.
- */
-export async function getDocumentsByCaseId(caseId: number) {
-  const supabase = createAdminClient();
   const { data, error } = await supabase
-    .from('documents')
-    .select(`
-        id,
-        file_name,
-        file_path,
-        file_size,
-        file_type,
-        description,
-        created_at,
-        employee:employees ( id, name )
-    `)
-    .eq('case_id', caseId)
-    .order('created_at', { ascending: false });
+    .from("documents")
+    .select("*")              // ✅ sem citar colunas que podem não existir no seu schema
+    .eq("case_id", caseId)
+    .order("created_at", { ascending: false });
 
   if (error) {
-    console.error(`Erro ao buscar documentos para o caso ${caseId}:`, error.message);
-    throw new Error('Não foi possível buscar os documentos.');
+    console.error(`Erro ao buscar documentos para o caso ${caseId}:`, error);
+    throw new Error("Não foi possível buscar os documentos.");
   }
-  return data;
+  return (data as DbDocument[]) ?? [];
 }
 
-/**
- * Deleta um documento do banco de dados e do Storage.
- * @param documentId - O ID do documento a ser deletado.
- */
-export async function deleteDocument(documentId: number) {
-  const supabase = createAdminClient();
+/** Criação simples (metadados já devem ter sido validados na rota) */
+const CreateDocSchema = z.object({
+  case_id: z.coerce.number(),
+  // deixe os demais metadados livres, pois o schema varia
+}).passthrough();
 
-  // 1. Busca o caminho do arquivo no banco antes de deletar o registro
-  const { data: doc, error: fetchError } = await supabase
-    .from('documents')
-    .select('file_path')
-    .eq('id', documentId)
+export async function createDocument(input: Record<string, any>): Promise<DbDocument> {
+  const supabase = createAdminClient();
+  const parsed = CreateDocSchema.parse(input);
+
+  const { data, error } = await supabase
+    .from("documents")
+    .insert([parsed])
+    .select("*")
     .single();
 
-  if (fetchError || !doc) {
-    console.error(`Erro ao buscar documento ${documentId} para exclusão:`, fetchError?.message);
-    throw new Error("Documento não encontrado para exclusão.");
+  if (error || !data) {
+    console.error("Erro ao criar documento:", error);
+    throw new Error("Não foi possível criar o documento.");
   }
+  return data as DbDocument;
+}
 
-  // 2. Deleta o registro do banco de dados
-  const { error: dbError } = await supabase
-    .from('documents')
+/** Exclusão por ID */
+export async function deleteDocument(documentId: number): Promise<boolean> {
+  const supabase = createAdminClient();
+
+  const { error } = await supabase
+    .from("documents")
     .delete()
-    .eq('id', documentId);
+    .eq("id", documentId);
 
-  if (dbError) {
-    console.error(`Erro ao deletar registro do documento ${documentId}:`, dbError.message);
-    throw new Error("Falha ao deletar o registro do documento.");
+  if (error) {
+    console.error("Erro ao excluir documento:", error);
+    throw new Error("Não foi possível excluir o documento.");
   }
-
-  // 3. Deleta o arquivo do Supabase Storage
-  const { error: storageError } = await supabase.storage
-    .from(BUCKET_NAME)
-    .remove([doc.file_path]);
-  
-  if (storageError) {
-    console.error(`Erro ao deletar arquivo do storage (${doc.file_path}):`, storageError.message);
-    // Mesmo com erro no storage, o registro do DB foi removido, então consideramos sucesso parcial.
-    // Em um sistema real, poderia haver uma fila de retentativas para arquivos órfãos.
-  }
-
-  return { message: "Documento excluído com sucesso." };
+  return true;
 }
