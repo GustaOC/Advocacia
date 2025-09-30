@@ -1,4 +1,4 @@
-// components/client-detail-view.tsx 
+// components/client-detail-view.tsx
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -7,9 +7,10 @@ import { Case } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { User, Briefcase, FileCheck, FileWarning, CheckCircle, Loader2, FolderOpen, ArrowLeft } from 'lucide-react';
+import { User, Briefcase, FileCheck, FileWarning, CheckCircle, Loader2, FolderOpen, ArrowLeft, Users } from 'lucide-react';
 import { DocumentsModule } from './documents-module';
 
+// Interface para Cliente (pode ser movida para um arquivo central de tipos posteriormente)
 interface Client {
   id: string;
   name: string;
@@ -47,8 +48,9 @@ const DocStatusItem = ({ name, isUploaded }: { name: string; isUploaded: boolean
 export function ClientDetailView({ client, onBack }: { client: Client, onBack: () => void }) {
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
 
+  // Busca os casos da API
   const { data: casesResponse, isLoading, isError, error } = useQuery<{ cases: Case[]; total: number }>({
-    queryKey: ['cases', { page: 1, limit: 1000 }],
+    queryKey: ['cases', { page: 1, limit: 1000 }], // Busca todos os casos para filtrar no cliente
     queryFn: async () => {
       const res = await fetch(`/api/cases?limit=1000`, { method: 'GET' });
       if (!res.ok) {
@@ -56,30 +58,24 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
         throw new Error(payload?.error || `Falha ao carregar processos (HTTP ${res.status})`);
       }
       const payload = await res.json();
-      return payload?.data ?? payload; // { cases, total }
+      return payload?.data ?? payload;
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 2, // 2 minutos de cache
   });
 
   const allCases = casesResponse?.cases ?? [];
 
-  // ✅ Mais robusto: aceita entities.id, entity_id ou entity?.id no case_parties
+  // Filtra os casos que pertencem a este cliente
   const clientCases = useMemo(() => {
     if (!Array.isArray(allCases)) return [];
     const targetId = String(client.id);
     return allCases.filter((c: any) =>
       Array.isArray(c.case_parties) &&
-      c.case_parties.some((p: any) => {
-        const pid =
-          p?.entities?.id ??
-          p?.entity_id ??
-          p?.entity?.id ??
-          null;
-        return pid != null && String(pid) === targetId;
-      })
+      c.case_parties.some((p: any) => String(p?.entities?.id) === targetId)
     );
   }, [allCases, client.id]);
 
+  // Dados mocados para o status dos documentos
   const uploadedDocs = useMemo(() =>
     [
       { name: "RG/CPF", isUploaded: true },
@@ -96,6 +92,7 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
         Voltar
       </Button>
 
+      {/* Card Principal de Informações do Cliente */}
       <Card className="border-0 shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2">
@@ -114,7 +111,7 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
             <p className="font-medium">{client.city || '-'}</p>
           </div>
           <div>
-            <p className="text-sm text-slate-500">Telefone</p>
+            <p className="text-sm text-slate-500">Telefone Principal</p>
             <p className="font-medium">{client.cellphone1 || client.phone || '-'}</p>
           </div>
         </CardContent>
@@ -122,6 +119,8 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-4">
+          
+          {/* Card de Processos */}
           <Card className="border-0 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-xl"><Briefcase className="h-5 w-5"/> Processos</CardTitle>
@@ -129,36 +128,49 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
             <CardContent>
               {isLoading ? (
                 <div className="flex items-center gap-2 text-slate-500">
-                  <Loader2 className="animate-spin h-4 w-4" /> Carregando processos...
+                  <Loader2 className="animate-spin h-4 w-4" /> Carregando...
                 </div>
               ) : isError ? (
                 <Alert variant="destructive">
-                  <AlertTitle>Falha ao carregar processos</AlertTitle>
+                  <AlertTitle>Falha ao carregar</AlertTitle>
                   <AlertDescription>{(error as Error)?.message || 'Tente novamente.'}</AlertDescription>
                 </Alert>
               ) : clientCases.length === 0 ? (
                 <div className="text-slate-500 text-sm">Nenhum processo relacionado a este cliente.</div>
               ) : (
                 <ul className="space-y-2">
-                  {clientCases.map((c: any) => (
-                    <li key={c.id}>
-                      <Button
-                        variant={selectedCase?.id === c.id ? 'default' : 'outline'}
-                        className="w-full justify-start text-left h-auto py-2"
-                        onClick={() => setSelectedCase(c)}
-                      >
-                        <div className="flex flex-col">
-                          <span className="font-semibold">{c.title}</span>
-                          <span className="text-xs font-mono">{c.case_number}</span>
-                        </div>
-                      </Button>
-                    </li>
-                  ))}
+                  {clientCases.map((c: any) => {
+                    // ===== MELHORIA APLICADA AQUI =====
+                    // Encontra a "outra parte" do processo que não é o cliente atual.
+                    const otherParty = c.case_parties.find((p: any) => String(p?.entities?.id) !== String(client.id));
+                    const otherPartyName = otherParty?.entities?.name || 'Parte não identificada';
+
+                    return (
+                      <li key={c.id}>
+                        <Button
+                          variant={selectedCase?.id === c.id ? 'default' : 'outline'}
+                          className="w-full justify-start text-left h-auto py-2"
+                          onClick={() => setSelectedCase(c)}
+                        >
+                          <div className="flex flex-col">
+                            {/* Mostra o nome do cliente vs. a outra parte */}
+                            <span className="font-semibold flex items-center gap-1.5">
+                              <Users className="h-3 w-3" />
+                              {client.name.split(' ')[0]} vs. {otherPartyName}
+                            </span>
+                            <span className="text-xs text-slate-500">{c.title}</span>
+                            <span className="text-xs font-mono">{c.case_number}</span>
+                          </div>
+                        </Button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
           </Card>
 
+          {/* Card de Status de Documentos */}
           <Card className="border-0 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-xl"><CheckCircle className="h-5 w-5"/> Documentos</CardTitle>
@@ -174,6 +186,7 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
           </Card>
         </div>
 
+        {/* Módulo de Documentos do Processo Selecionado */}
         <div className="lg:col-span-2">
           {selectedCase ? (
             <div className="space-y-4">
@@ -184,7 +197,6 @@ export function ClientDetailView({ client, onBack }: { client: Client, onBack: (
                 </CardHeader>
               </Card>
 
-              {/* DocumentsModule espera number */}
               <DocumentsModule caseId={Number(selectedCase.id)} />
             </div>
           ) : (

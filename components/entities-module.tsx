@@ -1,5 +1,6 @@
-// components/entities-module.tsx 
+// components/entities-module.tsx
 "use client";
+
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
@@ -14,56 +15,40 @@ import { Plus, Search, User, FolderOpen, Edit, Trash2, Loader2, Upload, FileUp }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClientDetailView } from "./client-detail-view";
 import { useToast } from "@/hooks/use-toast";
-import { maskCPFCNPJ, maskPhone } from "@/lib/form-utils";
-
-interface Client {
-  id: string;
-  name: string;
-  document: string; // CPF/CNPJ
-  type: string;     // "Cliente" | "Executado"
-  email?: string | null;
-  social_name?: string | null;
-  image_url?: string | null;
-  address?: string | null;
-  address_number?: string | null;
-  address_complement?: string | null;
-  district?: string | null;
-  city?: string | null;
-  zip_code?: string | null;
-  cellphone1?: string | null;
-  cellphone2?: string | null;
-  phone?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  birth_date?: string | null;
-  rg?: string | null;
-  cnh?: string | null;
-  profession?: string | null;
-  marital_status?: string | null;
-  mother_name?: string | null;
-  father_name?: string | null;
-  nationality?: string | null;
-  observations?: string | null;
-}
+import { maskCPFCNPJ, maskPhone, unmask } from "@/lib/form-utils";
+import { Entity as Client } from "@/lib/types"; // Importando a interface centralizada
 
 function onlyDigits(v: string | null | undefined) {
   return (v ?? "").replace(/\D+/g, "");
 }
 
+// Função para limpar e preparar os dados antes de enviar para a API
 function cleanEntityPayload(input: Partial<Client>): Partial<Client> {
-  const payload: Partial<Client> = {
-    name: (input.name ?? "").trim(),
-    document: onlyDigits(input.document),
-    type: (input.type as any) || "Cliente",
-    email: input.email?.trim() || undefined,
-    cellphone1: input.cellphone1?.trim() || undefined,
-    city: input.city?.trim() || undefined,
-    observations: input.observations?.trim() || undefined,
-  };
+    const payload: Partial<Client> = {
+        id: input.id,
+        name: (input.name ?? "").trim(),
+        document: onlyDigits(input.document),
+        type: (input.type as any) || "Cliente",
+        email: input.email?.trim() || undefined,
+        cellphone1: onlyDigits(input.cellphone1),
+        city: input.city?.trim() || undefined,
+        observations: input.observations?.trim() || undefined,
+        address: input.address?.trim() || undefined,
+        address_number: input.address_number?.trim() || undefined,
+        district: input.district?.trim() || undefined,
+        state: input.state?.trim() || undefined,
+        zip_code: onlyDigits(input.zip_code),
+        birth_date: input.birth_date || undefined,
+        marital_status: input.marital_status || undefined,
+        profession: input.profession?.trim() || undefined,
+        rg: onlyDigits(input.rg),
+    };
   // remove keys undefined
   Object.keys(payload).forEach((k) => {
     const key = k as keyof typeof payload;
-    if (payload[key] === undefined) delete payload[key];
+    if (payload[key] === undefined || payload[key] === null || payload[key] === "") {
+        delete payload[key];
+    }
   });
   return payload;
 }
@@ -75,7 +60,7 @@ export default function EntitiesModule() {
   const [importModal, setImportModal] = useState<{ isOpen: boolean; type: "Cliente" | "Executado" }>({ isOpen: false, type: "Cliente" });
   const [file, setFile] = useState<File | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [isFormOpen, setIsFormOpen] = useState(false); // ✅ NOVO: controla abertura do modal
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentClient, setCurrentClient] = useState<Partial<Client>>({});
   const [listType, setListType] = useState<'Cliente' | 'Executado'>('Cliente');
   const { toast } = useToast();
@@ -100,7 +85,7 @@ export default function EntitiesModule() {
       toast({ title: "Sucesso!", description: `Cadastro ${isEditMode ? "atualizado" : "criado"} com sucesso.` });
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       setIsEditMode(false);
-      setIsFormOpen(false);        // ✅ fecha modal
+      setIsFormOpen(false);
       setCurrentClient({});
     },
     onError: (err: any) => {
@@ -125,14 +110,14 @@ export default function EntitiesModule() {
       setCurrentClient(client);
     } else {
       setIsEditMode(false);
-      setCurrentClient({ type: listType }); // herda listType
+      setCurrentClient({ type: listType });
     }
-    setIsFormOpen(true); // ✅ abre modal sempre
+    setIsFormOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsEditMode(false);
-    setIsFormOpen(false); // ✅ fecha modal
+    setIsFormOpen(false);
     setCurrentClient({});
   };
 
@@ -148,6 +133,17 @@ export default function EntitiesModule() {
       deleteMutation.mutate(clientId);
     }
   };
+  
+  const handleInputChange = (field: keyof Client, value: string) => {
+    let maskedValue = value;
+    if (field === 'document') {
+      maskedValue = maskCPFCNPJ(value);
+    } else if (field === 'cellphone1' || field === 'phone') {
+        maskedValue = maskPhone(value);
+    }
+    setCurrentClient(prev => ({ ...prev, [field]: maskedValue }));
+  };
+
 
   const filteredClients = useMemo(() => clients
       .filter(client => (client.type || 'Cliente') === listType)
@@ -188,7 +184,6 @@ export default function EntitiesModule() {
         <Card className="border-0 shadow-lg">
           <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-              {/* Busca */}
               <div className="relative w-full lg:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                 <Input
@@ -198,8 +193,6 @@ export default function EntitiesModule() {
                   className="pl-10 h-11"
                 />
               </div>
-
-              {/* Seletor Clientes/Executados */}
               <div className="w-48">
                 <Select value={listType} onValueChange={(v) => setListType(v as 'Cliente' | 'Executado')}>
                   <SelectTrigger className="h-11">
@@ -211,14 +204,9 @@ export default function EntitiesModule() {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Ações */}
               <div className="flex gap-2">
                 <Button onClick={() => setImportModal({isOpen: true, type: 'Cliente'})} variant="secondary">
                   <Upload className="mr-2 h-4 w-4" /> Importar Clientes
-                </Button>
-                <Button onClick={() => setImportModal({isOpen: true, type: 'Executado'})} variant="secondary">
-                  <Upload className="mr-2 h-4 w-4" /> Importar Executados
                 </Button>
                 <Button onClick={() => handleOpenModal()} className="bg-slate-900 hover:bg-slate-900">
                   <Plus className="mr-2 h-4 w-4" /> Novo
@@ -228,7 +216,6 @@ export default function EntitiesModule() {
           </CardContent>
         </Card>
 
-        {/* Tabela */}
         {filteredClients.length > 0 ? (
           <Card className="border-0 shadow-lg">
             <CardContent>
@@ -284,55 +271,110 @@ export default function EntitiesModule() {
         )}
       </div>
 
-      {/* Dialog de criação/edição */}
       <Dialog open={isFormOpen} onOpenChange={(o) => (o ? setIsFormOpen(true) : handleCloseModal())}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Cadastro" : "Novo Cadastro"}</DialogTitle>
-            <DialogDescription>Preencha os dados da entidade.</DialogDescription>
+            <DialogDescription>Preencha os dados da entidade. Campos com * são obrigatórios.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Tipo */}
-            <div className="col-span-1">
-              <Label>Tipo</Label>
-              <Select
-                value={(currentClient.type as any) || listType}
-                onValueChange={(v) => setCurrentClient((c) => ({ ...c, type: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Cliente">Cliente</SelectItem>
-                  <SelectItem value="Executado">Executado</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
+            {/* Coluna 1 */}
+            <div className="space-y-4">
+              <div>
+                <Label>Tipo *</Label>
+                <Select
+                  value={(currentClient.type as any) || listType}
+                  onValueChange={(v) => setCurrentClient((c) => ({ ...c, type: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Cliente">Cliente</SelectItem>
+                    <SelectItem value="Executado">Executado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Nome Completo *</Label>
+                <Input value={currentClient.name || ""} onChange={(e) => handleInputChange('name', e.target.value)} />
+              </div>
+              <div>
+                <Label>CPF/CNPJ *</Label>
+                <Input value={currentClient.document || ""} onChange={(e) => handleInputChange('document', e.target.value)} />
+              </div>
+              <div>
+                <Label>RG</Label>
+                <Input value={currentClient.rg || ""} onChange={(e) => handleInputChange('rg', e.target.value)} />
+              </div>
+               <div>
+                <Label>Data de Nascimento</Label>
+                <Input type="date" value={currentClient.birth_date || ""} onChange={(e) => handleInputChange('birth_date', e.target.value)} />
+              </div>
             </div>
 
-            <div>
-              <Label>Nome</Label>
-              <Input value={currentClient.name || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, name: e.target.value }))} />
+            {/* Coluna 2 */}
+            <div className="space-y-4">
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={currentClient.email || ""} onChange={(e) => handleInputChange('email', e.target.value)} />
+              </div>
+              <div>
+                <Label>Telefone Celular</Label>
+                <Input value={currentClient.cellphone1 || ""} onChange={(e) => handleInputChange('cellphone1', e.target.value)} />
+              </div>
+               <div>
+                <Label>Estado Civil</Label>
+                <Select value={currentClient.marital_status || ""} onValueChange={(v) => handleInputChange('marital_status', v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Solteiro(a)">Solteiro(a)</SelectItem>
+                        <SelectItem value="Casado(a)">Casado(a)</SelectItem>
+                        <SelectItem value="Divorciado(a)">Divorciado(a)</SelectItem>
+                        <SelectItem value="Viúvo(a)">Viúvo(a)</SelectItem>
+                        <SelectItem value="União Estável">União Estável</SelectItem>
+                    </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Profissão</Label>
+                <Input value={currentClient.profession || ""} onChange={(e) => handleInputChange('profession', e.target.value)} />
+              </div>
+              <div>
+                <Label>Nacionalidade</Label>
+                <Input value={currentClient.nationality || ""} onChange={(e) => handleInputChange('nationality', e.target.value)} />
+              </div>
             </div>
-            <div>
-              <Label>CPF/CNPJ</Label>
-              <Input value={currentClient.document || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, document: e.target.value }))} />
-            </div>
-            <div>
-              <Label>E-mail</Label>
-              <Input value={currentClient.email || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, email: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input value={currentClient.cellphone1 || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, cellphone1: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Cidade</Label>
-              <Input value={currentClient.city || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, city: e.target.value }))} />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Observações</Label>
-              <Input value={currentClient.observations || ""} onChange={(e) => setCurrentClient((c) => ({ ...c, observations: e.target.value }))} />
+
+            {/* Coluna 3 */}
+            <div className="space-y-4">
+               <div>
+                <Label>Endereço</Label>
+                <Input value={currentClient.address || ""} onChange={(e) => handleInputChange('address', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Nº</Label>
+                  <Input value={currentClient.address_number || ""} onChange={(e) => handleInputChange('address_number', e.target.value)} />
+                </div>
+                 <div>
+                  <Label>Bairro</Label>
+                  <Input value={currentClient.district || ""} onChange={(e) => handleInputChange('district', e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Cidade</Label>
+                  <Input value={currentClient.city || ""} onChange={(e) => handleInputChange('city', e.target.value)} />
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Input value={currentClient.state || ""} onChange={(e) => handleInputChange('state', e.target.value)} />
+                </div>
+              </div>
+               <div className="md:col-span-2">
+                <Label>Observações</Label>
+                <Input value={currentClient.observations || ""} onChange={(e) => handleInputChange('observations', e.target.value)} />
+              </div>
             </div>
           </div>
 
@@ -340,42 +382,7 @@ export default function EntitiesModule() {
             <Button variant="outline" onClick={handleCloseModal}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog de Importação em Massa */}
-      <Dialog open={importModal.isOpen} onOpenChange={(o) => setImportModal((s) => ({ ...s, isOpen: o }))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Importar {importModal.type}s em Massa</DialogTitle>
-            <DialogDescription>
-              Envie uma planilha com as colunas: "Nome", "Documento", "E-mail", "Telefone", "Cidade", etc. O tipo será definido como “{importModal.type}”.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input type="file" accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportModal({ isOpen: false, type: importModal.type })}>Cancelar</Button>
-            <Button
-              onClick={async () => {
-                if (!file) {
-                  toast({ title: "Nenhum arquivo", description: "Selecione um arquivo para importar.", variant: "destructive" });
-                  return;
-                }
-                try {
-                  // await apiClient.importEntities(file, importModal.type)
-                  toast({ title: "Importação iniciada", description: "Processaremos seu arquivo em segundo plano." });
-                  setImportModal({ isOpen: false, type: importModal.type });
-                } catch (err: any) {
-                  toast({ title: "Erro na importação", description: err?.message || "Falha ao importar.", variant: "destructive" });
-                }
-              }}
-            >
-              <FileUp className="mr-2 h-4 w-4" /> Importar {importModal.type}s
+              {isEditMode ? "Salvar Alterações" : "Criar Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
