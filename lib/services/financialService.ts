@@ -54,8 +54,7 @@ export class FinancialService {
     let agreementsById: Record<string, EnhancedAgreement> = {};
     if (agreementIds.length > 0) {
       const { data: agreements, error: agErr } = await supabase
-        .from("financial_agreements")
-        .select(`
+        .from("financial_agreements").select(`
           id,
           case_id,
           debtor_id,
@@ -70,6 +69,16 @@ export class FinancialService {
           notes,
           created_at,
           updated_at
+        
+        ,
+        cases:case_id (
+          case_number,
+          title
+        ),
+        debtor:debtor_id (
+          name
+        )
+    
         `)
         .in("id", agreementIds as string[]);
 

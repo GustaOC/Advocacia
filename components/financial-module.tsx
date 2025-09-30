@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiClient, type FinancialAgreement, type MonthlyInstallment } from "@/lib/api-client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { FinancialAgreementModal } from "@/components/financial-agreement-modal"; // <-- ADICIONADO
 
 // ===== TIPOS E INTERFACES =====
 interface Alvara {
@@ -370,7 +371,15 @@ function MonthlyInstallmentsTab() {
 }
 
 // ===== ABA DE ACORDOS =====
-function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgreement[], onSendMessage: (agreement: FinancialAgreement) => void }) {
+function AgreementsTab({
+  agreements,
+  onSendMessage,
+  onNewAgreement, // <-- ADICIONADO
+}: {
+  agreements: FinancialAgreement[],
+  onSendMessage: (agreement: FinancialAgreement) => void,
+  onNewAgreement: () => void, // <-- ADICIONADO
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -433,7 +442,7 @@ function AgreementsTab({ agreements, onSendMessage }: { agreements: FinancialAgr
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setExpandedAgreements(new Set())}>Recolher Todos</Button>
           <Button variant="outline" onClick={() => setExpandedAgreements(new Set(filteredAgreements.map(a => a.id)))}>Expandir Todos</Button>
-          <Button><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button>
+          <Button onClick={onNewAgreement}><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button> {/* <-- AJUSTADO */}
         </div>
       </div>
 
@@ -709,6 +718,10 @@ export function FinancialModule() {
   const [messageText, setMessageText] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState<{name: string, type: string} | null>(null);
 
+  // ESTADO DO MODAL "NOVO ACORDO" (ADICIONADO)
+  const [isAgreementModalOpen, setAgreementModalOpen] = useState(false);
+  const [selectedCaseForAgreement, setSelectedCaseForAgreement] = useState<any | null>(null);
+
   const safeAgreements: FinancialAgreement[] = Array.isArray(agreements) ? agreements : [];
   
   const handleSendMessage = useCallback((agreement: FinancialAgreement) => {
@@ -791,7 +804,16 @@ export function FinancialModule() {
         </TabsList>
 
         <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
-        <TabsContent value="acordos"><AgreementsTab agreements={safeAgreements} onSendMessage={handleSendMessage} /></TabsContent>
+        <TabsContent value="acordos">
+          <AgreementsTab
+            agreements={safeAgreements}
+            onSendMessage={handleSendMessage}
+            onNewAgreement={() => { // <-- abre o modal
+              setSelectedCaseForAgreement(null);
+              setAgreementModalOpen(true);
+            }}
+          />
+        </TabsContent>
         <TabsContent value="alvaras"><AlvarasTab alvaras={alvaras} onMarkAsReceived={handleMarkAsReceived} /></TabsContent>
         <TabsContent value="atraso"><OverdueTab overdueInstallments={overdueInstallments} onSendMessage={handleSendOverdueMessage} /></TabsContent>
         <TabsContent value="despesas"><ExpensesTab expenses={expenses} onAddExpense={handleAddExpense} onToggleExpenseStatus={handleToggleExpenseStatus} /></TabsContent>
@@ -810,6 +832,13 @@ export function FinancialModule() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: NOVO ACORDO */}
+      <FinancialAgreementModal
+        isOpen={isAgreementModalOpen}
+        onClose={() => setAgreementModalOpen(false)}
+        caseData={selectedCaseForAgreement}
+      />
     </div>
   );
 }

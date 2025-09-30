@@ -205,7 +205,42 @@ export class ApiClient {
 
   async getFinancialStats(): Promise<FinancialStats> { return instance.get('/financial-agreements/stats'); }
   async getOverdueAgreements(): Promise<FinancialAgreement[]> { return instance.get('/financial-agreements/overdue'); }
-  async createFinancialAgreement(data: Partial<FinancialAgreement>): Promise<FinancialAgreement> { return instance.post('/financial-agreements', data); }
+
+  // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  // CORRIGIDO: mapeia formulário → schema da API (EnhancedAgreementSchema)
+  async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
+    // Campos esperados pelo formulário do modal:
+    // - case_id, client_entity_id, agreement_type, total_value, entry_value, installments, status, start_date?, end_date?, notes?
+    // A API espera (EnhancedAgreementSchema):
+    // - case_id, debtor_id, creditor_id, total_amount, down_payment, number_of_installments, start_date, end_date, status, agreement_type, notes, installments?
+    const payload: any = {
+      case_id: String(data.case_id),
+      debtor_id: String(data.client_entity_id), // No sistema atual, o "Cliente" é tratado como devedor (debtor_id)
+      creditor_id: String(data.creditor_id ?? data.client_entity_id), // ajuste se houver campo específico de credor
+      total_amount: Number(data.total_value ?? data.total_amount),
+      down_payment: Number(data.entry_value ?? data.down_payment ?? 0),
+      number_of_installments: Number(data.installments ?? data.number_of_installments ?? 1),
+      start_date: data.start_date ?? new Date().toISOString(),
+      end_date: data.end_date ?? new Date(new Date().setMonth(new Date().getMonth() + (Number(data.installments ?? 1)))).toISOString(),
+      status: data.status ?? 'ATIVO',
+      agreement_type: data.agreement_type ?? 'SOMENTE_PARCELADO',
+      notes: data.notes ?? null,
+    };
+
+    // Caso o front gere a lista de parcelas, já repassa no formato esperado
+    if (Array.isArray(data.installments_list)) {
+      payload.installments = data.installments_list.map((it: any, idx: number) => ({
+        installment_number: Number(it.installment_number ?? (idx + 1)),
+        amount: Number(it.amount),
+        due_date: it.due_date,
+        status: it.status ?? 'PENDENTE',
+      }));
+    }
+
+    return instance.post('/financial-agreements', payload);
+  }
+  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
   async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> { return instance.get(`/financial-agreements/${id}`); }
   async updateFinancialAgreement(id: string, data: Partial<FinancialAgreement>): Promise<FinancialAgreement> { return instance.put(`/financial-agreements/${id}`, data); }
   async deleteFinancialAgreement(id: string): Promise<boolean> { return instance.delete(`/financial-agreements/${id}`); }

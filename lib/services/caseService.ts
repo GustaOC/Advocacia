@@ -6,6 +6,18 @@ import { CaseSchema } from "@/lib/schemas";
 import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
 
+
+function normalizeParties(caseItem: any) {
+  if (!caseItem?.case_parties) return caseItem;
+  caseItem.case_parties = caseItem.case_parties.map((party: any) => ({
+    role: party?.role,
+    entity_id: party?.entity_id ?? party?.entities?.id ?? null,
+    entities: party?.entities
+      ? { ...party.entities, id: party.entities?.id != null ? String(party.entities.id) : null }
+      : null,
+  }));
+  return caseItem;
+}
 const CaseCreateSchema = CaseSchema.extend({
   client_entity_id: z.number(),
   executed_entity_id: z.number(),
@@ -35,7 +47,7 @@ export async function getCases(page: number = 1, limit: number = 10) {
     }))
   }));
   
-  return { data: normalizedData, count: count || 0 };
+  return { data: (data || []).map(d => normalizeParties(d)), count: count || 0 };
 }
 
 export async function getCaseById(id: string) {
@@ -59,7 +71,7 @@ export async function getCaseById(id: string) {
     }));
   }
   
-  return data;
+  return normalizeParties(data);
 }
 
 export async function createCase(caseData: unknown, user: AuthUser) {
@@ -128,7 +140,7 @@ export async function createCase(caseData: unknown, user: AuthUser) {
       }));
     }
     
-    return createdCaseWithParties;
+    return normalizeParties(createdCaseWithParties);
 }
 
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
@@ -136,7 +148,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
     const supabase = createAdminClient();
 
     const { data: currentCase, error: fetchError } = await supabase
-        .from("cases").select(`*, case_parties (role, entity_id)`)
+        .from("cases").select(`*, case_parties (role, entity_id, entities:entity_id (*))`)
         .eq("id", id).single();
 
     if (fetchError || !currentCase) {

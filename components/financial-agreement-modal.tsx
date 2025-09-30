@@ -1,4 +1,4 @@
-// components/financial-agreement-modal.tsx - 
+// components/financial-agreement-modal.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -21,7 +21,9 @@ interface AgreementFormData {
   total_value: number | string;
   entry_value?: number | string;
   installments: number | string;
-  status: 'active' | 'completed' | 'cancelled' | 'defaulted';
+  // IMPORTANTE: alinhar com o schema do backend
+  // Vamos sempre enviar 'ATIVO' (valor aceito pelo EnhancedAgreementSchema)
+  status: 'ATIVO';
   notes?: string;
 }
 
@@ -41,13 +43,14 @@ interface FinancialAgreementModalProps {
 export function FinancialAgreementModal({ isOpen, onClose, caseData }: FinancialAgreementModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState<AgreementFormData>({
     case_id: null,
     client_entity_id: null,
     agreement_type: 'Judicial',
     total_value: '',
     installments: 1,
-    status: 'active',
+    status: 'ATIVO', // <- alinhado ao backend
   });
 
   // Efeito para pré-preencher o formulário quando os dados do caso são recebidos
@@ -68,18 +71,19 @@ export function FinancialAgreementModal({ isOpen, onClose, caseData }: Financial
 
   const createAgreementMutation = useMutation({
     mutationFn: (agreementData: AgreementFormData) => {
-        // Converte valores numéricos antes de enviar para a API
-        const numericData = {
-            ...agreementData,
-            total_value: Number(agreementData.total_value),
-            entry_value: Number(agreementData.entry_value || 0),
-            installments: Number(agreementData.installments),
-        };
-        return apiClient.createFinancialAgreement(numericData);
+      // Converte valores numéricos antes de enviar para a API
+      const numericData = {
+        ...agreementData,
+        total_value: Number(agreementData.total_value),
+        entry_value: Number(agreementData.entry_value || 0),
+        installments: Number(agreementData.installments),
+      };
+      return apiClient.createFinancialAgreement(numericData);
     },
     onSuccess: () => {
       toast({ title: "Sucesso!", description: "Acordo financeiro criado com sucesso." });
-      queryClient.invalidateQueries({ queryKey: ['financialAgreements'] }); // Invalida a query do módulo financeiro principal
+      // Invalida as listas relacionadas para atualizar a UI
+      queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
       onClose(); // Fecha o modal
     },
     onError: (error: Error) => {
@@ -88,10 +92,26 @@ export function FinancialAgreementModal({ isOpen, onClose, caseData }: Financial
   });
 
   const handleSave = () => {
-    if (!formData.case_id || !formData.client_entity_id || !formData.total_value) {
-        toast({ title: "Campos obrigatórios", description: "Caso, Cliente e Valor Total são obrigatórios.", variant: "destructive"});
-        return;
+    // Validações básicas de preenchimento e faixas
+    const total = Number(formData.total_value);
+    const installments = Number(formData.installments);
+    if (!formData.case_id || !formData.client_entity_id || !total) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Caso, Cliente e Valor Total são obrigatórios.",
+        variant: "destructive"
+      });
+      return;
     }
+    if (total <= 0) {
+      toast({ title: "Valor inválido", description: "O valor total deve ser maior que zero.", variant: "destructive" });
+      return;
+    }
+    if (!installments || installments < 1) {
+      toast({ title: "Parcelas inválidas", description: "O número de parcelas deve ser pelo menos 1.", variant: "destructive" });
+      return;
+    }
+
     createAgreementMutation.mutate(formData);
   };
 
@@ -105,25 +125,45 @@ export function FinancialAgreementModal({ isOpen, onClose, caseData }: Financial
           </DialogTitle>
           {caseData && <DialogDescription>Acordo para o caso: {caseData.title}</DialogDescription>}
         </DialogHeader>
+
         <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Valor Total do Acordo *</Label>
-              <Input type="number" placeholder="5000,00" value={String(formData.total_value)} onChange={e => handleChange('total_value', e.target.value)} />
+              <Input
+                type="number"
+                placeholder="5000,00"
+                value={String(formData.total_value)}
+                onChange={e => handleChange('total_value', e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Valor de Entrada (Opcional)</Label>
-              <Input type="number" placeholder="1000,00" value={String(formData.entry_value || '')} onChange={e => handleChange('entry_value', e.target.value)} />
+              <Input
+                type="number"
+                placeholder="1000,00"
+                value={String(formData.entry_value || '')}
+                onChange={e => handleChange('entry_value', e.target.value)}
+              />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Número de Parcelas *</Label>
-              <Input type="number" min="1" value={String(formData.installments)} onChange={e => handleChange('installments', e.target.value)} />
+              <Input
+                type="number"
+                min="1"
+                value={String(formData.installments)}
+                onChange={e => handleChange('installments', e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Tipo de Acordo *</Label>
-              <Select value={formData.agreement_type} onValueChange={value => handleChange('agreement_type', value)}>
+              <Select
+                value={formData.agreement_type}
+                onValueChange={value => handleChange('agreement_type', value)}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Judicial">Judicial</SelectItem>
@@ -133,15 +173,24 @@ export function FinancialAgreementModal({ isOpen, onClose, caseData }: Financial
               </Select>
             </div>
           </div>
+
           <div className="space-y-2">
             <Label>Observações</Label>
-            <Textarea placeholder="Detalhes do acordo, datas de vencimento das parcelas, etc." value={formData.notes || ''} onChange={e => handleChange('notes', e.target.value)} />
+            <Textarea
+              placeholder="Detalhes do acordo, datas de vencimento das parcelas, etc."
+              value={formData.notes || ''}
+              onChange={e => handleChange('notes', e.target.value)}
+            />
           </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={createAgreementMutation.isPending}>
-            {createAgreementMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {createAgreementMutation.isPending
+              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              : <Save className="mr-2 h-4 w-4" />
+            }
             Salvar Acordo
           </Button>
         </DialogFooter>
