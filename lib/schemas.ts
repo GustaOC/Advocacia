@@ -266,15 +266,31 @@ export const CaseSchema = z.object({
 
 export const EntitySchema = z.object({
   id: z.string().optional(),
+  // Campos principais
   name: z.string().min(1, 'Nome é obrigatório'),
-  document: z.string().min(1, 'Documento é obrigatório'),
-  type: z.enum(['Pessoa Física', 'Pessoa Jurídica']),
-  contact_info: z.object({
-    email: z.string().email('Email inválido').optional(),
-    phone: z.string().optional(),
-    address: z.string().optional(),
-  }),
-})
+  document: z.string().min(1, 'Documento é obrigatório'), // CPF/CNPJ (somente dígitos)
+  type: z.enum(['Cliente', 'Executado']).default('Cliente'),
+
+  // Dados pessoais / contato (todos opcionais)
+  rg: z.string().optional().nullable(),
+  birth_date: z.string().optional().nullable(),
+  email: z.string().email('Email inválido').optional().nullable(),
+  cellphone1: z.string().optional().nullable(),
+  cellphone2: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+
+  // Endereço
+  address: z.string().optional().nullable(),
+  address_number: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  zip_code: z.string().optional().nullable(),
+
+  // Outros
+  observations: z.string().optional().nullable(),
+});
+
 
 export const DocumentTemplateSchema = z.object({
   id: z.string().optional(),
@@ -318,3 +334,5 @@ export const ChangePasswordSchema = z
     message: 'As senhas não coincidem',
     path: ['confirmPassword'],
   })
+
+  

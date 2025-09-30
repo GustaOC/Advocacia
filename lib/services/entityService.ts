@@ -6,6 +6,45 @@ import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
 
 /**
+ * Sanitiza payload para colunas existentes no banco.
+ * - Remove campos ainda não migrados (ex.: birth_date)
+ * - Mapeia 'district' (UI) para 'neighborhood' (DB atual)
+ */
+function toDbEntity(input: any) {
+  if (!input || typeof input !== 'object') return {};
+  const out: any = {};
+
+  // Mapeamento direto de campos comuns
+  const ALLOWED = [
+    'id','name','document','type',
+    'email','cellphone1','cellphone2','phone',
+    'address','address_number',
+    /* usamos neighborhood no DB; 'district' vem da UI */
+    'city','state','zip_code','observations'
+  ] as const;
+
+  for (const k of ALLOWED) {
+    if (input[k] !== undefined) out[k] = input[k];
+  }
+
+  // district -> neighborhood (mantemos apenas a coluna existente no DB)
+  if (input.district !== undefined && out.neighborhood === undefined) {
+    out.neighborhood = input.district;
+  }
+  // Se vier neighborhood diretamente, mantemos
+  if (input.neighborhood !== undefined) {
+    out.neighborhood = input.neighborhood;
+  }
+
+  // Campos ainda não migrados no DB: ignorar para não quebrar o insert/update
+  // birth_date será adicionado via migração futura
+  // quaisquer extras também são ignorados
+
+  return out;
+}
+
+
+/**
  * Busca todas as entidades no banco de dados.
  */
 export async function getEntities() {
@@ -51,11 +90,12 @@ export async function getEntityById(id: string) {
  */
 export async function createEntity(entityData: unknown, user: AuthUser) {
   const parsedData = EntitySchema.parse(entityData);
-  const supabase = createAdminClient();
+    const dbData = toDbEntity(parsedData);
+const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("entities")
-    .insert(parsedData)
+    .insert(dbData)
     .select()
     .single();
 
@@ -81,11 +121,12 @@ export async function createEntity(entityData: unknown, user: AuthUser) {
  */
 export async function updateEntity(id: string, entityData: unknown, user: AuthUser) {
   const parsedData = EntitySchema.partial().parse(entityData);
+  const dbData = toDbEntity(parsedData);
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("entities")
-    .update(parsedData)
+    .update(dbData)
     .eq("id", id)
     .select()
     .single();

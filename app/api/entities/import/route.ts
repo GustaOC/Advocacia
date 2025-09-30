@@ -125,9 +125,30 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
     const entityType = (formData.get("type") as string) || 'Cliente'; 
 
-    if (!file) {
-      return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
-    }
+if (!file) {
+  return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
+}
+
+// ---- Validações de upload ----
+const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel"
+];
+
+if (file) {
+  const fAny: any = file as any;
+  const mime = (fAny.type || "").toString();
+  const size = Number(fAny.size ?? 0);
+
+  if (!ALLOWED_TYPES.includes(mime)) {
+    return NextResponse.json({ error: "Tipo de arquivo inválido. Envie um .xlsx" }, { status: 400 });
+  }
+  if (size <= 0 || size > MAX_BYTES) {
+    return NextResponse.json({ error: "Arquivo muito grande. Limite: 10MB." }, { status: 400 });
+  }
+}
+// -------------------------------
 
     console.log(`[Import] Iniciando importação de ${entityType}s...`);
 

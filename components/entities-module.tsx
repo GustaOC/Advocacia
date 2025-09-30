@@ -22,7 +22,7 @@ function onlyDigits(v: string | null | undefined) {
   return (v ?? "").replace(/\D+/g, "");
 }
 
-// Função para limpar e preparar os dados antes de enviar para a API
+// FunÃ§Ã£o para limpar e preparar os dados antes de enviar para a API
 function cleanEntityPayload(input: Partial<Client>): Partial<Client> {
     const payload: Partial<Client> = {
         id: input.id,
@@ -65,6 +65,35 @@ export default function EntitiesModule() {
   const [listType, setListType] = useState<'Cliente' | 'Executado'>('Cliente');
   const { toast } = useToast();
 
+  async function handleImport() {
+    try {
+      if (!file) {
+        toast({ title: "Selecione um arquivo", description: "Escolha uma planilha (.xlsx) para importar.", variant: "destructive" });
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", importModal.type);
+
+      const res = await fetch("/api/entities/import", {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || "Falha na importaÃ§Ã£o");
+      }
+
+      toast({ title: "ImportaÃ§Ã£o concluÃ­da", description: json?.message || "Dados importados com sucesso." });
+      setImportModal({ isOpen: false, type: importModal.type });
+      setFile(null);
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+    } catch (err: any) {
+      toast({ title: "Erro ao importar", description: err?.message ?? String(err), variant: "destructive" });
+    }
+  }
+
+
   const { data: clients = [], isLoading, isError, error } = useQuery<Client[]>({
     queryKey: ["entities"],
     queryFn: () => apiClient.getEntities(),
@@ -75,7 +104,7 @@ export default function EntitiesModule() {
     mutationFn: async (clientData: Partial<Client>) => {
       const dataToSave = cleanEntityPayload(clientData);
       if (!dataToSave.name || !dataToSave.document) {
-        throw new Error("Informe Nome e Documento válidos.");
+        throw new Error("Informe Nome e Documento vÃ¡lidos.");
       }
       return clientData.id
         ? apiClient.updateEntity(clientData.id, dataToSave)
@@ -89,18 +118,18 @@ export default function EntitiesModule() {
       setCurrentClient({});
     },
     onError: (err: any) => {
-      toast({ title: "Dados inválidos", description: err?.message || "Não foi possível salvar o cadastro.", variant: "destructive" });
+      toast({ title: "Dados invÃ¡lidos", description: err?.message || "NÃ£o foi possÃ­vel salvar o cadastro.", variant: "destructive" });
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: (clientId: string) => apiClient.deleteEntity(clientId),
     onSuccess: () => {
-      toast({ title: "Excluído", description: "Cadastro removido com sucesso." });
+      toast({ title: "ExcluÃ­do", description: "Cadastro removido com sucesso." });
       queryClient.invalidateQueries({ queryKey: ["entities"] });
     },
     onError: (err: any) => {
-      toast({ title: "Erro ao excluir", description: err?.message || "Não foi possível excluir o cadastro.", variant: "destructive" });
+      toast({ title: "Erro ao excluir", description: err?.message || "NÃ£o foi possÃ­vel excluir o cadastro.", variant: "destructive" });
     }
   });
 
@@ -177,7 +206,7 @@ export default function EntitiesModule() {
     <>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-          <h2 className="text-3xl font-bold mb-2">Gestão de Clientes e Partes</h2>
+          <h2 className="text-3xl font-bold mb-2">GestÃ£o de Clientes e Partes</h2>
           <p className="text-slate-300 text-lg">Acesse a pasta virtual de cada entidade para ver processos e documentos.</p>
         </div>
 
@@ -208,6 +237,9 @@ export default function EntitiesModule() {
                 <Button onClick={() => setImportModal({isOpen: true, type: 'Cliente'})} variant="secondary">
                   <Upload className="mr-2 h-4 w-4" /> Importar Clientes
                 </Button>
+                <Button onClick={() => setImportModal({isOpen: true, type: 'Executado'})} variant="secondary">
+                  <FileUp className="mr-2 h-4 w-4" /> Importar Executados
+                </Button>
                 <Button onClick={() => handleOpenModal()} className="bg-slate-900 hover:bg-slate-900">
                   <Plus className="mr-2 h-4 w-4" /> Novo
                 </Button>
@@ -227,7 +259,7 @@ export default function EntitiesModule() {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Cidade</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
+                    <TableHead className="text-right">AÃ§Ãµes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -265,17 +297,52 @@ export default function EntitiesModule() {
         ) : (
           <Card className="border-0 shadow-lg">
             <CardContent className="py-16 text-center text-slate-500">
-              Nenhum registro encontrado para “{listType}”.
+              Nenhum registro encontrado para â€œ{listType}â€.
             </CardContent>
           </Card>
         )}
       </div>
 
-      <Dialog open={isFormOpen} onOpenChange={(o) => (o ? setIsFormOpen(true) : handleCloseModal())}>
+      
+      {/* Dialog de ImportaÃ§Ã£o */}
+      <Dialog open={importModal.isOpen} onOpenChange={(o) => setImportModal((m) => ({...m, isOpen: o}))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar {importModal.type === 'Executado' ? 'Executados' : 'Clientes'}</DialogTitle>
+            <DialogDescription>Envie uma planilha .xlsx com as colunas esperadas (ex.: Nome Completo, Cpf, Email...).</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label>Tipo</Label>
+              <Select value={importModal.type} onValueChange={(v) => setImportModal((m) => ({...m, type: v as 'Cliente' | 'Executado'}))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cliente">Cliente</SelectItem>
+                  <SelectItem value="Executado">Executado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Arquivo (.xlsx)</Label>
+              <Input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportModal((m)=>({...m, isOpen:false})); setFile(null); }}>Cancelar</Button>
+            <Button onClick={handleImport}><Upload className="mr-2 h-4 w-4" /> Importar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+        <Dialog open={isFormOpen} onOpenChange={(o) => (o ? setIsFormOpen(true) : handleCloseModal())}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Cadastro" : "Novo Cadastro"}</DialogTitle>
-            <DialogDescription>Preencha os dados da entidade. Campos com * são obrigatórios.</DialogDescription>
+            <DialogDescription>Preencha os dados da entidade. Campos com * sÃ£o obrigatÃ³rios.</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
@@ -330,13 +397,13 @@ export default function EntitiesModule() {
                         <SelectItem value="Solteiro(a)">Solteiro(a)</SelectItem>
                         <SelectItem value="Casado(a)">Casado(a)</SelectItem>
                         <SelectItem value="Divorciado(a)">Divorciado(a)</SelectItem>
-                        <SelectItem value="Viúvo(a)">Viúvo(a)</SelectItem>
-                        <SelectItem value="União Estável">União Estável</SelectItem>
+                        <SelectItem value="ViÃºvo(a)">ViÃºvo(a)</SelectItem>
+                        <SelectItem value="UniÃ£o EstÃ¡vel">UniÃ£o EstÃ¡vel</SelectItem>
                     </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Profissão</Label>
+                <Label>ProfissÃ£o</Label>
                 <Input value={currentClient.profession || ""} onChange={(e) => handleInputChange('profession', e.target.value)} />
               </div>
               <div>
@@ -348,12 +415,12 @@ export default function EntitiesModule() {
             {/* Coluna 3 */}
             <div className="space-y-4">
                <div>
-                <Label>Endereço</Label>
+                <Label>EndereÃ§o</Label>
                 <Input value={currentClient.address || ""} onChange={(e) => handleInputChange('address', e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label>Nº</Label>
+                  <Label>NÂº</Label>
                   <Input value={currentClient.address_number || ""} onChange={(e) => handleInputChange('address_number', e.target.value)} />
                 </div>
                  <div>
@@ -372,7 +439,7 @@ export default function EntitiesModule() {
                 </div>
               </div>
                <div className="md:col-span-2">
-                <Label>Observações</Label>
+                <Label>ObservaÃ§Ãµes</Label>
                 <Input value={currentClient.observations || ""} onChange={(e) => handleInputChange('observations', e.target.value)} />
               </div>
             </div>
@@ -382,7 +449,7 @@ export default function EntitiesModule() {
             <Button variant="outline" onClick={handleCloseModal}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {isEditMode ? "Salvar Alterações" : "Criar Cadastro"}
+              {isEditMode ? "Salvar AlteraÃ§Ãµes" : "Criar Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
