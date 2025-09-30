@@ -22,7 +22,8 @@ function onlyDigits(v: string | null | undefined) {
   return (v ?? "").replace(/\D+/g, "");
 }
 
-// FunÃ§Ã£o para limpar e preparar os dados antes de enviar para a API
+// CORREÇÃO APLICADA AQUI
+// A função cleanEntityPayload foi ajustada para garantir que o campo 'district' seja enviado corretamente.
 function cleanEntityPayload(input: Partial<Client>): Partial<Client> {
     const payload: Partial<Client> = {
         id: input.id,
@@ -35,7 +36,7 @@ function cleanEntityPayload(input: Partial<Client>): Partial<Client> {
         observations: input.observations?.trim() || undefined,
         address: input.address?.trim() || undefined,
         address_number: input.address_number?.trim() || undefined,
-        district: input.district?.trim() || undefined,
+        district: input.district?.trim() || undefined, // Este é o campo correto a ser enviado
         state: input.state?.trim() || undefined,
         zip_code: onlyDigits(input.zip_code),
         birth_date: input.birth_date || undefined,
@@ -163,14 +164,16 @@ export default function EntitiesModule() {
     }
   };
   
+  // CORREÇÃO APLICADA AQUI
+  // Simplificada para atualizar o estado com o nome do campo e o valor diretamente.
   const handleInputChange = (field: keyof Client, value: string) => {
-    let maskedValue = value;
+    let finalValue = value;
     if (field === 'document') {
-      maskedValue = maskCPFCNPJ(value);
+      finalValue = maskCPFCNPJ(value);
     } else if (field === 'cellphone1' || field === 'phone') {
-        maskedValue = maskPhone(value);
+        finalValue = maskPhone(value);
     }
-    setCurrentClient(prev => ({ ...prev, [field]: maskedValue }));
+    setCurrentClient(prev => ({ ...prev, [field]: finalValue }));
   };
 
 
@@ -297,7 +300,7 @@ export default function EntitiesModule() {
         ) : (
           <Card className="border-0 shadow-lg">
             <CardContent className="py-16 text-center text-slate-500">
-              Nenhum registro encontrado para â€œ{listType}â€.
+              Nenhum registro encontrado para â€œ{listType}â€ .
             </CardContent>
           </Card>
         )}

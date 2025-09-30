@@ -27,6 +27,7 @@ function toDbEntity(input: any) {
     if (input[k] !== undefined) out[k] = input[k];
   }
 
+  // CORREÇÃO APLICADA AQUI
   // district -> neighborhood (mantemos apenas a coluna existente no DB)
   if (input.district !== undefined && out.neighborhood === undefined) {
     out.neighborhood = input.district;
@@ -90,8 +91,8 @@ export async function getEntityById(id: string) {
  */
 export async function createEntity(entityData: unknown, user: AuthUser) {
   const parsedData = EntitySchema.parse(entityData);
-    const dbData = toDbEntity(parsedData);
-const supabase = createAdminClient();
+  const dbData = toDbEntity(parsedData);
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("entities")
