@@ -3,158 +3,288 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
-import {
-  EnhancedAgreement,
-  Installment,
-  Payment,
-  PaymentSchema,
-} from "@/lib/schemas";
+import { Installment, Payment, PaymentSchema } from "@/lib/schemas";
 
-/** Converte string | Date para Date */
+/** YYYY-MM-DD em UTC, a partir de string | Date */
+function toIsoDateOnly(d: string | Date): string {
+  const date = d instanceof Date ? d : new Date(d);
+  const utc = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+  return utc.toISOString().split("T")[0];
+}
+
+/** Converte string | Date para Date (mantém compat c/ tipos existentes) */
 function toDate(d: string | Date): Date {
   return d instanceof Date ? d : new Date(d);
 }
 
+/** Normaliza status para 'PENDENTE' | 'PAGA' | 'ATRASADA' */
+function normalizeStatus(raw?: string): "PENDENTE" | "PAGA" | "ATRASADA" {
+  const s = String(raw ?? "").toUpperCase();
+  if (s === "PAGO" || s === "PAGA" || s === "PAID") return "PAGA";
+  if (s === "ATRASADO" || s === "ATRASADA" || s === "OVERDUE") return "ATRASADA";
+  return "PENDENTE";
+}
+
+/** DTO usado pelo front em Parcelas do Mês */
+export type MonthlyInstallmentDTO = {
+  id: number;
+  due_date: string; // YYYY-MM-DD
+  amount: number;
+  status: "PENDENTE" | "PAGA" | "ATRASADA";
+  agreement: {
+    id: number;
+    cases: {
+      case_number: string | null;
+      title: string | null;
+      case_parties?: { role: string; entities: { name: string } }[];
+    } | null;
+    debtor: { name: string } | null;
+  } | null;
+};
+
 export class FinancialService {
   /**
-   * Parcelas por mês/ano para a aba "PARCELAS DO MÊS".
-   * Normaliza para o shape que o front espera:
-   * - due_date: string "YYYY-MM-DD"
-   * - amount: number
-   * - status: 'PENDENTE' | 'PAGA' | 'ATRASADA'
-   * - agreement: { id, cases, debtor } | null
+   * PARCELAS POR MÊS/ANO
+   * - Busca parcelas no intervalo UTC [1º dia, 1º dia do mês seguinte)
+   * - Resolve relacionamentos com queries planas (sem nested select)
+   * - Tolera falhas parciais (segue com dados parciais)
    */
   static async getInstallmentsByMonthYear(
     year: number,
     month: number,
-    authUser: AuthUser
-  ): Promise<
-    Array<{
-      id: number;
-      due_date: string;
-      amount: number;
-      status: "PENDENTE" | "PAGA" | "ATRASADA";
-      agreement: {
-        id: number;
-        cases: {
-          case_number: string | null;
-          title: string;
-          case_parties?: { role: string; entities: { name: string } }[];
-        } | null;
-        debtor: { name: string } | null;
-      } | null;
-    }>
-  > {
+    _authUser: AuthUser
+  ): Promise<MonthlyInstallmentDTO[]> {
     const supabase = createAdminClient();
 
-    // Delimita o mês em UTC para evitar off-by-one
-    const firstDay = new Date(Date.UTC(year, month - 1, 1));
-    const nextMonth = new Date(Date.UTC(year, month, 1));
+    // 1) Janela de datas em UTC (YYYY-MM-DD)
+    const startStr = toIsoDateOnly(new Date(Date.UTC(year, month - 1, 1)));
+    const endStr = toIsoDateOnly(new Date(Date.UTC(year, month, 1)));
 
-    // 1) Parcelas do mês
+    console.log(`🔍 Buscando parcelas do período [${startStr}, ${endStr})`);
+
+    // 2) Parcelas do mês (sem QUALQUER nested select)
     const { data: installments, error: instError } = await supabase
       .from("financial_installments")
-      .select(`
-        id,
-        agreement_id,
-        installment_number,
-        amount,
-        due_date,
-        status,
-        created_at,
-        updated_at
-      `)
-      .gte("due_date", firstDay.toISOString().slice(0, 10))
-      .lt("due_date", nextMonth.toISOString().slice(0, 10))
+      .select("id, agreement_id, installment_number, amount, due_date, status")
+      .gte("due_date", startStr)
+      .lt("due_date", endStr)
       .order("due_date", { ascending: true });
 
     if (instError) {
-      console.error("Erro ao buscar parcelas do mês:", instError);
+      console.error("❌ Erro ao buscar parcelas do mês:", instError);
       throw new Error("Não foi possível buscar as parcelas do mês.");
     }
 
-    // 2) Busca acordos relacionados para enriquecer o campo 'agreement'
-    const agreementIds = Array.from(
-      new Set(((installments as any[]) || []).map((i) => i.agreement_id).filter(Boolean))
+    const safeInstallments = (installments ?? []) as any[];
+    console.log(
+      `📊 Encontradas ${safeInstallments.length} parcelas para ${month}/${year}`
     );
 
-    const agreementsById: Record<string, EnhancedAgreement> = {};
+    // 3) Resolver relacionamentos com consultas planas
+    const agreementIds = Array.from(
+      new Set(safeInstallments.map((i) => i.agreement_id).filter(Boolean))
+    ) as number[];
+
+    const agreementsById: Record<
+      number,
+      { id: number; case_id: number | null; debtor_id: number | null }
+    > = {};
+    const casesById: Record<
+      number,
+      { case_number: string | null; title: string | null }
+    > = {};
+    const debtorNamesById: Record<number, string> = {};
+    const casePartiesByCaseId: Record<
+      number,
+      Array<{ role: string; name: string }>
+    > = {};
+
     if (agreementIds.length > 0) {
-      const { data: agreements, error: agErr } = await supabase
+      // 3.1) financial_agreements -> chaves mínimas
+      const { data: ags, error: agErr } = await supabase
         .from("financial_agreements")
-        .select(`
-          id,
-          start_date,
-          end_date,
-          status,
-          agreement_type,
-          notes,
-          created_at,
-          updated_at,
-
-          cases:case_id (
-            case_number,
-            title,
-            case_parties (
-              role,
-              entities:entity_id (
-                name
-              )
-            )
-          ),
-
-          debtor:debtor_id (
-            name
-          )
-        `)
-        .in("id", agreementIds as string[]);
-
+        .select("id, case_id, debtor_id")
+        .in("id", agreementIds);
       if (agErr) {
-        console.error("Erro ao buscar acordos relacionados:", agErr);
-      } else if (agreements) {
-        for (const ag of agreements as any[]) {
-          agreementsById[String(ag.id)] = {
-            ...ag,
-            start_date: toDate(ag.start_date),
-            end_date: toDate(ag.end_date),
-          } as EnhancedAgreement;
+        console.warn(
+          "⚠️ Falha ao buscar acordos (seguindo com dados parciais):",
+          agErr
+        );
+      } else {
+        for (const ag of ags ?? []) {
+          agreementsById[Number(ag.id)] = {
+            id: Number(ag.id),
+            case_id: ag.case_id ?? null,
+            debtor_id: ag.debtor_id ?? null,
+          };
+        }
+      }
+
+      // 3.2) cases -> número e título
+      const caseIds = Array.from(
+        new Set(Object.values(agreementsById).map((a) => a.case_id).filter(Boolean))
+      ) as number[];
+      if (caseIds.length > 0) {
+        const { data: cs, error: cErr } = await supabase
+          .from("cases")
+          .select("id, case_number, title")
+          .in("id", caseIds);
+        if (cErr) {
+          console.warn("⚠️ Falha ao buscar processos:", cErr);
+        } else {
+          for (const c of cs ?? []) {
+            casesById[Number(c.id)] = {
+              case_number: c.case_number ?? null,
+              title: c.title ?? null,
+            };
+          }
+        }
+
+        // 3.3) case_parties -> papeis + ids de entidades
+        const { data: cps, error: cpErr } = await supabase
+          .from("case_parties")
+          .select("case_id, role, entity_id")
+          .in("case_id", caseIds);
+        if (cpErr) {
+          console.warn("⚠️ Falha ao buscar partes do processo:", cpErr);
+        } else {
+          const entityIds = Array.from(
+            new Set((cps ?? []).map((p) => p.entity_id).filter(Boolean))
+          ) as number[];
+
+          // 3.3.1) entities -> nomes das entidades
+          let entitiesById: Record<number, string> = {};
+          if (entityIds.length > 0) {
+            const { data: ents, error: eErr } = await supabase
+              .from("entities")
+              .select("id, name")
+              .in("id", entityIds);
+            if (eErr) {
+              console.warn("⚠️ Falha ao buscar entidades (nomes):", eErr);
+            } else {
+              for (const e of ents ?? []) {
+                entitiesById[Number(e.id)] = e.name ?? "";
+              }
+            }
+          }
+
+          // montar map por case_id
+          for (const p of cps ?? []) {
+            const cid = Number(p.case_id);
+            const name = p.entity_id
+              ? entitiesById[Number(p.entity_id)] ?? ""
+              : "";
+            if (!casePartiesByCaseId[cid]) casePartiesByCaseId[cid] = [];
+            casePartiesByCaseId[cid].push({ role: p.role, name });
+          }
+        }
+      }
+
+      // 3.4) devedores -> entities (nomes)
+      const debtorIds = Array.from(
+        new Set(
+          Object.values(agreementsById).map((a) => a.debtor_id).filter(Boolean)
+        )
+      ) as number[];
+      if (debtorIds.length > 0) {
+        const { data: debtors, error: dErr } = await supabase
+          .from("entities")
+          .select("id, name")
+          .in("id", debtorIds);
+        if (dErr) {
+          console.warn("⚠️ Falha ao buscar devedores:", dErr);
+        } else {
+          for (const d of debtors ?? []) {
+            debtorNamesById[Number(d.id)] = d.name ?? "";
+          }
         }
       }
     }
 
-    // 3) Normalização: shape compatível com a interface MonthlyInstallment do front
-    return ((installments as any[]) || []).map((it) => {
-      const agreement = (it.agreement_id && agreementsById[it.agreement_id]) || null;
-
-      const due =
-        it.due_date instanceof Date ? it.due_date : new Date(it.due_date);
+    // 4) Normalização final -> MonthlyInstallmentDTO[]
+    const result: MonthlyInstallmentDTO[] = safeInstallments.map((it) => {
+      const ag = it.agreement_id
+        ? agreementsById[Number(it.agreement_id)]
+        : undefined;
+      const caseId = ag?.case_id ?? null;
+      const debtorId = ag?.debtor_id ?? null;
 
       return {
         id: Number(it.id),
-        due_date: due.toISOString().slice(0, 10), // string "YYYY-MM-DD"
-        amount: Number(it.amount),
-        status: it.status as "PENDENTE" | "PAGA" | "ATRASADA",
-        agreement: agreement
+        due_date:
+          typeof it.due_date === "string"
+            ? it.due_date.split("T")[0]
+            : toIsoDateOnly(it.due_date),
+        amount: Number(it.amount) || 0,
+        status: normalizeStatus(it.status),
+        agreement: ag
           ? {
-              id: Number((agreement as any).id),
-              cases: agreement.cases
+              id: Number(ag.id),
+              cases: caseId
                 ? {
-                    case_number: (agreement.cases as any).case_number ?? null,
-                    title: (agreement.cases as any).title,
-                    case_parties:
-                      (agreement.cases as any).case_parties?.map((p: any) => ({
+                    case_number: casesById[caseId]?.case_number ?? null,
+                    title: casesById[caseId]?.title ?? null,
+                    case_parties: (casePartiesByCaseId[caseId] ?? []).map(
+                      (p) => ({
                         role: p.role,
-                        entities: { name: p.entities?.name ?? "" },
-                      })) ?? [],
+                        entities: { name: p.name },
+                      })
+                    ),
                   }
                 : null,
-              debtor: agreement.debtor
-                ? { name: (agreement.debtor as any).name ?? "" }
+              debtor: debtorId
+                ? { name: debtorNamesById[debtorId] ?? "" }
                 : null,
             }
           : null,
       };
     });
+
+    console.log(`✅ Parcelas normalizadas: ${result.length}`);
+    return result;
+  }
+
+  /**
+   * DEBUG: Lista todas as parcelas e filtra por mês/ano no Node
+   */
+  static async debugInstallments(year: number, month: number) {
+    const supabase = createAdminClient();
+
+    console.log("🔍 [DEBUG] Buscando TODAS as parcelas do banco...");
+    const { data: allInstallments, error } = await supabase
+      .from("financial_installments")
+      .select("id, agreement_id, installment_number, amount, due_date, status")
+      .order("due_date", { ascending: true });
+
+    if (error) {
+      console.error("❌ [DEBUG] Erro ao buscar parcelas:", error);
+      return [];
+    }
+
+    const monthInstallments =
+      allInstallments?.filter((inst) => {
+        try {
+          const d = new Date(inst.due_date);
+          return (
+            d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month
+          );
+        } catch {
+          return false;
+        }
+      }) ?? [];
+
+    console.log(
+      `📅 [DEBUG] Parcelas do mês ${month}/${year}:`,
+      monthInstallments
+    );
+    console.log(
+      `📊 [DEBUG] Acordos com parcelas neste mês:`,
+      [...new Set(monthInstallments.map((i) => i.agreement_id))]
+    );
+
+    return monthInstallments;
   }
 
   /** Parcelas por acordo */
@@ -164,25 +294,20 @@ export class FinancialService {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("financial_installments")
-      .select(`
-        id,
-        agreement_id,
-        installment_number,
-        amount,
-        due_date,
-        status,
-        created_at,
-        updated_at
-      `)
+      .select(
+        "id, agreement_id, installment_number, amount, due_date, status, created_at, updated_at"
+      )
       .eq("agreement_id", agreementId)
       .order("installment_number", { ascending: true });
 
     if (error) {
-      console.error(`Erro ao buscar parcelas para o acordo ${agreementId}:`, error);
+      console.error(
+        `Erro ao buscar parcelas para o acordo ${agreementId}:`,
+        error
+      );
       throw new Error("Não foi possível buscar as parcelas.");
     }
 
-    // Retorno explícito como Installment[]
     return ((data as any[]) || []).map((x) => ({
       id: x.id,
       agreement_id: x.agreement_id ?? undefined,
@@ -197,84 +322,93 @@ export class FinancialService {
 
   /**
    * Registrar pagamento de parcela
-   * (Assinatura do logAudit: (action, user, details))
+   * - Insere pagamento
+   * - Atualiza status da parcela (best effort)
+   * - Registra auditoria (best effort)
    */
   static async recordPayment(
     authUser: AuthUser,
     data: z.infer<typeof PaymentSchema>
   ): Promise<Payment> {
     const parsed = PaymentSchema.parse(data);
-
     const supabase = createAdminClient();
 
-    const {
-      installment_id,
-      amount_paid,
-      payment_date,
-      payment_method,
-      notes,
-    } = parsed;
-
-    // Insere pagamento
+    // 1) Inserir pagamento
     const { data: inserted, error: insertErr } = await supabase
       .from("financial_payments")
       .insert([
         {
-          installment_id,
-          amount_paid: Number(amount_paid),
+          installment_id: parsed.installment_id,
+          amount_paid: Number(parsed.amount_paid),
           payment_date:
-            payment_date instanceof Date
-              ? payment_date.toISOString()
-              : new Date(payment_date as unknown as string).toISOString(),
-          payment_method,
-          notes: notes ?? null,
+            parsed.payment_date instanceof Date
+              ? parsed.payment_date.toISOString()
+              : new Date(
+                  parsed.payment_date as unknown as string
+                ).toISOString(),
+          payment_method: parsed.payment_method,
+          notes: parsed.notes ?? null,
           created_by: authUser.id,
         },
       ])
-      .select(`
-        id,
-        installment_id,
-        amount_paid,
-        payment_date,
-        payment_method,
-        notes,
-        created_at
-      `)
+      .select(
+        "id, installment_id, amount_paid, payment_date, payment_method, notes, created_at"
+      )
       .single();
 
-    if (insertErr) {
+    if (insertErr || !inserted) {
       console.error("Erro ao registrar pagamento:", insertErr);
       throw new Error("Não foi possível registrar o pagamento.");
     }
 
-    // Atualiza status da parcela se cobriu o valor
-    const { data: instData, error: instErr } = await supabase
-      .from("financial_installments")
-      .select(`amount`)
-      .eq("id", installment_id)
-      .single();
-
-    if (!instErr) {
-      const installmentAmount = Number(instData?.amount ?? 0);
-      const paidAmount = Number(amount_paid);
-      const newStatus = paidAmount >= installmentAmount ? "PAGA" : "PENDENTE";
-
-      const { error: updErr } = await supabase
+    // 2) Atualizar status da parcela (best effort)
+    try {
+      const { data: instData, error: instErr } = await supabase
         .from("financial_installments")
-        .update({ status: newStatus })
-        .eq("id", installment_id);
+        .select("amount")
+        .eq("id", parsed.installment_id)
+        .single();
 
-      if (updErr) {
-        console.error("Falha ao atualizar status da parcela:", updErr);
+      if (!instErr && instData) {
+        const installmentAmount = Number(instData.amount ?? 0);
+        const paidAmount = Number(parsed.amount_paid);
+        const newStatus = paidAmount >= installmentAmount ? "PAGA" : "PENDENTE";
+
+        const { error: updErr } = await supabase
+          .from("financial_installments")
+          .update({ status: newStatus })
+          .eq("id", parsed.installment_id);
+
+        if (updErr) {
+          console.warn(
+            "⚠️ Pagamento inserido, mas falhou atualização de status:",
+            updErr
+          );
+        }
+      } else {
+        console.warn(
+          "⚠️ Pagamento inserido, mas não foi possível ler o valor da parcela:",
+          instErr
+        );
       }
+    } catch (e) {
+      console.warn(
+        "⚠️ Pagamento inserido, mas ocorreu erro inesperado ao atualizar status:",
+        e
+      );
     }
 
-    // AUDITORIA — ordem e ação corretas
-    await logAudit("PAYMENT_RECORDED", authUser, {
-      installmentId: installment_id,
-      amount: Number(amount_paid),
-    });
+    // 3) Auditoria (best effort)
+    try {
+      await logAudit("PAYMENT_RECORDED", authUser, {
+        installmentId: parsed.installment_id,
+        amount: Number(parsed.amount_paid),
+      });
+    } catch (e) {
+      console.warn("⚠️ Falha ao registrar auditoria de pagamento:", e);
+    }
 
+    // 4) Retorno tipado
     return {
       id: inserted.id,
       installment_id: inserted.installment_id,
