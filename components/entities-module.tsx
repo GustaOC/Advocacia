@@ -1,3 +1,4 @@
+// gustaoc/advocacia/Advocacia-dc2c3ca59752c81675b94fe13f5aec0c2ed506d0/components/entities-module.tsx
 // components/entities-module.tsx
 "use client";
 
@@ -82,10 +83,10 @@ export default function EntitiesModule() {
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json?.error || "Falha na importaÃ§Ã£o");
+        throw new Error(json?.error || "Falha na importação");
       }
 
-      toast({ title: "ImportaÃ§Ã£o concluÃ­da", description: json?.message || "Dados importados com sucesso." });
+      toast({ title: "Importação concluída", description: json?.message || "Dados importados com sucesso." });
       setImportModal({ isOpen: false, type: importModal.type });
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["entities"] });
@@ -105,7 +106,7 @@ export default function EntitiesModule() {
     mutationFn: async (clientData: Partial<Client>) => {
       const dataToSave = cleanEntityPayload(clientData);
       if (!dataToSave.name || !dataToSave.document) {
-        throw new Error("Informe Nome e Documento vÃ¡lidos.");
+        throw new Error("Informe Nome e Documento válidos.");
       }
       return clientData.id
         ? apiClient.updateEntity(clientData.id, dataToSave)
@@ -119,18 +120,18 @@ export default function EntitiesModule() {
       setCurrentClient({});
     },
     onError: (err: any) => {
-      toast({ title: "Dados invÃ¡lidos", description: err?.message || "NÃ£o foi possÃ­vel salvar o cadastro.", variant: "destructive" });
+      toast({ title: "Dados inválidos", description: err?.message || "Não foi possível salvar o cadastro.", variant: "destructive" });
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: (clientId: string) => apiClient.deleteEntity(clientId),
     onSuccess: () => {
-      toast({ title: "ExcluÃ­do", description: "Cadastro removido com sucesso." });
+      toast({ title: "Excluído", description: "Cadastro removido com sucesso." });
       queryClient.invalidateQueries({ queryKey: ["entities"] });
     },
     onError: (err: any) => {
-      toast({ title: "Erro ao excluir", description: err?.message || "NÃ£o foi possÃ­vel excluir o cadastro.", variant: "destructive" });
+      toast({ title: "Erro ao excluir", description: err?.message || "Não foi possível excluir o cadastro.", variant: "destructive" });
     }
   });
 
@@ -164,8 +165,6 @@ export default function EntitiesModule() {
     }
   };
   
-  // CORREÇÃO APLICADA AQUI
-  // Simplificada para atualizar o estado com o nome do campo e o valor diretamente.
   const handleInputChange = (field: keyof Client, value: string) => {
     let finalValue = value;
     if (field === 'document') {
@@ -209,7 +208,7 @@ export default function EntitiesModule() {
     <>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-          <h2 className="text-3xl font-bold mb-2">GestÃ£o de Clientes e Partes</h2>
+          <h2 className="text-3xl font-bold mb-2">Gestão de Clientes e Partes</h2>
           <p className="text-slate-300 text-lg">Acesse a pasta virtual de cada entidade para ver processos e documentos.</p>
         </div>
 
@@ -262,7 +261,7 @@ export default function EntitiesModule() {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Cidade</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead className="text-right">AÃ§Ãµes</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -300,14 +299,14 @@ export default function EntitiesModule() {
         ) : (
           <Card className="border-0 shadow-lg">
             <CardContent className="py-16 text-center text-slate-500">
-              Nenhum registro encontrado para â€œ{listType}â€ .
+              Nenhum registro encontrado para “{listType}”.
             </CardContent>
           </Card>
         )}
       </div>
 
       
-      {/* Dialog de ImportaÃ§Ã£o */}
+      {/* Dialog de Importação */}
       <Dialog open={importModal.isOpen} onOpenChange={(o) => setImportModal((m) => ({...m, isOpen: o}))}>
         <DialogContent>
           <DialogHeader>
@@ -345,7 +344,7 @@ export default function EntitiesModule() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Editar Cadastro" : "Novo Cadastro"}</DialogTitle>
-            <DialogDescription>Preencha os dados da entidade. Campos com * sÃ£o obrigatÃ³rios.</DialogDescription>
+            <DialogDescription>Preencha os dados da entidade. Campos com * são obrigatórios.</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
@@ -400,13 +399,13 @@ export default function EntitiesModule() {
                         <SelectItem value="Solteiro(a)">Solteiro(a)</SelectItem>
                         <SelectItem value="Casado(a)">Casado(a)</SelectItem>
                         <SelectItem value="Divorciado(a)">Divorciado(a)</SelectItem>
-                        <SelectItem value="ViÃºvo(a)">ViÃºvo(a)</SelectItem>
-                        <SelectItem value="UniÃ£o EstÃ¡vel">UniÃ£o EstÃ¡vel</SelectItem>
+                        <SelectItem value="Viúvo(a)">Viúvo(a)</SelectItem>
+                        <SelectItem value="União Estável">União Estável</SelectItem>
                     </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>ProfissÃ£o</Label>
+                <Label>Profissão</Label>
                 <Input value={currentClient.profession || ""} onChange={(e) => handleInputChange('profession', e.target.value)} />
               </div>
               <div>
@@ -418,12 +417,12 @@ export default function EntitiesModule() {
             {/* Coluna 3 */}
             <div className="space-y-4">
                <div>
-                <Label>EndereÃ§o</Label>
+                <Label>Endereço</Label>
                 <Input value={currentClient.address || ""} onChange={(e) => handleInputChange('address', e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label>NÂº</Label>
+                  <Label>Nº</Label>
                   <Input value={currentClient.address_number || ""} onChange={(e) => handleInputChange('address_number', e.target.value)} />
                 </div>
                  <div>
@@ -442,7 +441,7 @@ export default function EntitiesModule() {
                 </div>
               </div>
                <div className="md:col-span-2">
-                <Label>ObservaÃ§Ãµes</Label>
+                <Label>Observações</Label>
                 <Input value={currentClient.observations || ""} onChange={(e) => handleInputChange('observations', e.target.value)} />
               </div>
             </div>
@@ -452,7 +451,7 @@ export default function EntitiesModule() {
             <Button variant="outline" onClick={handleCloseModal}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {isEditMode ? "Salvar AlteraÃ§Ãµes" : "Criar Cadastro"}
+              {isEditMode ? "Salvar Alterações" : "Criar Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>

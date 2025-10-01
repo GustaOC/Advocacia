@@ -1,3 +1,4 @@
+// gustaoc/advocacia/Advocacia-dc2c3ca59752c81675b94fe13f5aec0c2ed506d0/components/financial-module.tsx
 // components/financial-module.tsx - VERSÃO UNIFICADA COMPLETA
 "use client";
 
@@ -342,13 +343,22 @@ function MonthlyInstallmentsTab() {
             <Card className="border-0 shadow-lg">
                 <CardContent>
                     <Table>
-                        <TableHeader><TableRow><TableHead>Vencimento</TableHead><TableHead>Cliente</TableHead><TableHead>Processo</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Vencimento</TableHead><TableHead>Partes</TableHead><TableHead>Processo</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                         <TableBody>
                             {isLoading && <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>}
-                            {!isLoading && installments.map((inst) => (
+                            {!isLoading && installments.map((inst) => {
+                                const clientName = inst.agreement?.debtor?.name || 'Cliente N/A';
+                                const executedParty = inst.agreement?.cases?.case_parties.find((p: any) => p.role === 'Executado');
+                                const executedName = executedParty?.entities?.name || 'Executado N/A';
+
+                                return (
                                 <TableRow key={inst.id}>
                                     <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
-                                    <TableCell className="font-medium">{inst.agreement?.debtor?.name || 'N/A'}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <span>{clientName}</span>
+                                        <span className="text-slate-500"> vs </span>
+                                        <span>{executedName}</span>
+                                    </TableCell>
                                     <TableCell>{inst.agreement?.cases?.case_number || 'N/A'}</TableCell>
                                     <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
                                     <TableCell>{getStatusBadge(inst.status)}</TableCell>
@@ -361,7 +371,8 @@ function MonthlyInstallmentsTab() {
                                         )}
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </CardContent>

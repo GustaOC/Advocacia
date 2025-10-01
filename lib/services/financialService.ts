@@ -1,3 +1,4 @@
+// gustaoc/advocacia/Advocacia-dc2c3ca59752c81675b94fe13f5aec0c2ed506d0/lib/services/financialService.ts
 // lib/services/financialService.ts
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -73,7 +74,11 @@ export class FinancialService {
         ,
         cases:case_id (
           case_number,
-          title
+          title,
+          case_parties (
+            role,
+            entities (name)
+          )
         ),
         debtor:debtor_id (
           name

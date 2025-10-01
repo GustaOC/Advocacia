@@ -1,3 +1,4 @@
+// gustaoc/advocacia/Advocacia-dc2c3ca59752c81675b94fe13f5aec0c2ed506d0/components/cases-module.tsx
 // components/cases-module.tsx
 "use client";
 
@@ -25,7 +26,7 @@ interface ExtendedCase extends Case {
   payment_date?: string | null;
   final_value?: number | null;
   // Campos de acordo
-  agreement_type?: 'Judicial' | 'Extrajudicial' | 'Em AudiÃªncia' | 'Pela Loja' | null;
+  agreement_type?: 'Judicial' | 'Extrajudicial' | 'Em Audiência' | 'Pela Loja' | null;
   agreement_value?: number | null;
   installments?: number | null;
   down_payment?: number | null;
@@ -36,7 +37,7 @@ interface CasesModuleProps {
   initialFilters?: { status: string };
 }
 
-// Componente de estatÃ­sticas (sem alteraÃ§Ãµes)
+// Componente de estatísticas (sem alterações)
 function CasesStats({ cases }: { cases: ExtendedCase[] }) {
   const stats = [
     { label: "Total de Casos", value: cases.length.toString(), icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50", trend: "+5%" },
@@ -106,17 +107,17 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
     const isLoading = isLoadingCases || isLoadingEntities;
 
     const getEntityName = (id: number | string | undefined) => {
-        if (!id) return 'NÃ£o selecionado';
+        if (!id) return 'Não selecionado';
         const target = String(id);
         const found = allEntities.find(e => String(e.id) === target);
-        return found?.name ?? 'Entidade nÃ£o localizada';
+        return found?.name ?? 'Entidade não localizada';
     }
 
     const saveCaseMutation = useMutation({
         mutationFn: (caseData: Partial<ExtendedCase>) => {
             const dataToSave = {
                 ...caseData,
-                // NormalizaÃ§Ã£o numÃ©rica
+                // Normalização numérica
                 client_entity_id: caseData.client_entity_id != null ? Number(caseData.client_entity_id) : undefined,
                 executed_entity_id: caseData.executed_entity_id != null ? Number(caseData.executed_entity_id) : undefined,
                 value: caseData.value ? parseFloat(String(caseData.value)) : null,
@@ -130,7 +131,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         },
         onSuccess: () => {
             toast({ title: "Sucesso!", description: `Caso ${isEditMode ? 'atualizado' : 'criado'} com sucesso.` });
-            console.log('[cases-module] MutaÃ§Ã£o bem-sucedida. Invalidando queries: ["cases", "financialAgreements"]');
+            console.log('[cases-module] Mutação bem-sucedida. Invalidando queries: ["cases", "financialAgreements"]');
             queryClient.invalidateQueries({ queryKey: ['cases'] });
             queryClient.invalidateQueries({ queryKey: ['financialAgreements'] });
             setIsModalOpen(false);
@@ -182,13 +183,13 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
 
     const handleSaveCase = () => {
         if (!currentCase.title || !currentCase.client_entity_id || !currentCase.executed_entity_id) {
-            toast({ title: "Campos obrigatÃ³rios", description: "TÃ­tulo, Cliente e Executado sÃ£o obrigatÃ³rios.", variant: "destructive" });
+            toast({ title: "Campos obrigatórios", description: "Título, Cliente e Executado são obrigatórios.", variant: "destructive" });
             return;
         }
         saveCaseMutation.mutate(currentCase);
     };
 
-    const handleImportCases = async () => { /* ... (cÃ³digo de importaÃ§Ã£o permanece o mesmo) ... */ };
+    const handleImportCases = async () => { /* ... (código de importação permanece o mesmo) ... */ };
 
     const filteredCases = useMemo(() => {
         if (!cases) return [];
@@ -240,7 +241,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         switch(type) {
             case 'Judicial': return <Scale className="h-4 w-4 text-slate-500 mr-2" />;
             case 'Extrajudicial': return <FileSignature className="h-4 w-4 text-slate-500 mr-2" />;
-            case 'Em AudiÃªncia': return <Handshake className="h-4 w-4 text-slate-500 mr-2" />;
+            case 'Em Audiência': return <Handshake className="h-4 w-4 text-slate-500 mr-2" />;
             case 'Pela Loja': return <Store className="h-4 w-4 text-slate-500 mr-2" />;
             default: return null;
         }
@@ -262,8 +263,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
             <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white overflow-hidden">
                 <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-10"></div>
                 <div className="relative z-10">
-                    <h2 className="text-4xl font-bold mb-3">GestÃ£o de Casos e Processos</h2>
-                    <p className="text-slate-300 text-xl">Administre todos os casos do escritÃ³rio de forma centralizada e eficiente.</p>
+                    <h2 className="text-4xl font-bold mb-3">Gestão de Casos e Processos</h2>
+                    <p className="text-slate-300 text-xl">Administre todos os casos do escritório de forma centralizada e eficiente.</p>
                 </div>
             </div>
 
@@ -275,7 +276,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                         <div className="flex flex-col sm:flex-row gap-4 flex-1">
                             <div className="relative flex-1 max-w-md">
                                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-                                <Input placeholder="Buscar por tÃ­tulo, nÃºmero ou parte..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-12 bg-white/80 border-2 border-slate-200 focus:border-slate-400" />
+                                <Input placeholder="Buscar por título, número ou parte..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-12 bg-white/80 border-2 border-slate-200 focus:border-slate-400" />
                             </div>
                             <Select value={filterStatus} onValueChange={setFilterStatus}>
                                 <SelectTrigger className="w-[200px] bg-white/80 border-2 border-slate-200"><SelectValue placeholder="Status" /></SelectTrigger>
@@ -304,7 +305,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
                     <CardContent className="p-0">
                         <Table>
-                            <TableHeader><TableRow><TableHead className="text-slate-700 font-bold">Processo / TÃ­tulo</TableHead><TableHead className="text-slate-700 font-bold">Prioridade</TableHead><TableHead className="text-slate-700 font-bold">Status</TableHead><TableHead className="text-slate-700 font-bold">Partes</TableHead><TableHead className="text-right text-slate-700 font-bold">AÃ§Ãµes</TableHead></TableRow></TableHeader>
+                            <TableHeader><TableRow><TableHead className="text-slate-700 font-bold">Processo / Título</TableHead><TableHead className="text-slate-700 font-bold">Prioridade</TableHead><TableHead className="text-slate-700 font-bold">Status</TableHead><TableHead className="text-slate-700 font-bold">Partes</TableHead><TableHead className="text-right text-slate-700 font-bold">Ações</TableHead></TableRow></TableHeader>
                             <TableBody>
                                 {filteredCases.map(caseItem => (
                                     <TableRow key={caseItem.id} className="group hover:bg-gradient-to-r hover:from-slate-50/50 hover:to-transparent">
@@ -348,7 +349,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 </div>
             )}
 
-            {/* Modal de VisualizaÃ§Ã£o */}
+            {/* Modal de Visualização */}
             <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
                 <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
@@ -358,7 +359,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                     {selectedCaseForView && (
                         <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
                             <div className="grid grid-cols-2 gap-4">
-                                <div><Label>NÂº do Processo</Label><p className="font-mono text-sm">{selectedCaseForView.case_number || 'N/A'}</p></div>
+                                <div><Label>Nº do Processo</Label><p className="font-mono text-sm">{selectedCaseForView.case_number || 'N/A'}</p></div>
                                 <div><Label>Vara/Tribunal</Label><p className="text-sm">{selectedCaseForView.court || 'N/A'}</p></div>
                                 <div><Label>Cliente</Label><p className="text-sm font-medium">{getEntityName(selectedCaseForView.case_parties.find(p => p.role === 'Cliente')?.entities.id)}</p></div>
                                 <div><Label>Executado</Label><p className="text-sm font-medium">{getEntityName(selectedCaseForView.case_parties.find(p => p.role === 'Executado')?.entities.id)}</p></div>
@@ -378,7 +379,7 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                                     </div>
                                 </div>
                             )}
-                            <div><Label>DescriÃ§Ã£o</Label><p className="text-sm bg-slate-50 p-3 rounded-md">{selectedCaseForView.description || 'Nenhuma descriÃ§Ã£o fornecida.'}</p></div>
+                            <div><Label>Descrição</Label><p className="text-sm bg-slate-50 p-3 rounded-md">{selectedCaseForView.description || 'Nenhuma descrição fornecida.'}</p></div>
                         </div>
                     )}
                     <DialogFooter>
@@ -392,15 +393,15 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 <DialogContent className="sm:max-w-[650px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5 text-slate-600" />{isEditMode ? 'Editar Caso' : 'Criar Novo Caso'}</DialogTitle>
-                        <DialogDescription>{isEditMode ? 'Altere as informaÃ§Ãµes do caso.' : 'Preencha as informaÃ§Ãµes do novo caso/processo judicial'}</DialogDescription>
+                        <DialogDescription>{isEditMode ? 'Altere as informações do caso.' : 'Preencha as informações do novo caso/processo judicial'}</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-6 py-4 max-h-[70vh] overflow-y-auto pr-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2"><Label htmlFor="title">TÃ­tulo do Caso *</Label><Input id="title" value={currentCase.title || ''} onChange={(e) => setCurrentCase({ ...currentCase, title: e.target.value })} placeholder="Ex: AÃ§Ã£o de CobranÃ§a - JoÃ£o Silva" /></div>
-                            <div className="space-y-2"><Label htmlFor="case_number">NÃºmero do Processo</Label><Input id="case_number" value={currentCase.case_number || ''} onChange={(e) => setCurrentCase({ ...currentCase, case_number: e.target.value })} placeholder="0000000-00.0000.0.00.0000" className="font-mono" /></div>
+                            <div className="space-y-2"><Label htmlFor="title">Título do Caso *</Label><Input id="title" value={currentCase.title || ''} onChange={(e) => setCurrentCase({ ...currentCase, title: e.target.value })} placeholder="Ex: Ação de Cobrança - João Silva" /></div>
+                            <div className="space-y-2"><Label htmlFor="case_number">Número do Processo</Label><Input id="case_number" value={currentCase.case_number || ''} onChange={(e) => setCurrentCase({ ...currentCase, case_number: e.target.value })} placeholder="0000000-00.0000.0.00.0000" className="font-mono" /></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2"><Label htmlFor="court">Vara/Tribunal</Label><Input id="court" value={currentCase.court || ''} onChange={(e) => setCurrentCase({ ...currentCase, court: e.target.value })} placeholder="Ex: 1Âª Vara CÃ­vel de Campo Grande" /></div>
+                            <div className="space-y-2"><Label htmlFor="court">Vara/Tribunal</Label><Input id="court" value={currentCase.court || ''} onChange={(e) => setCurrentCase({ ...currentCase, court: e.target.value })} placeholder="Ex: 1ª Vara Cível de Campo Grande" /></div>
                             <div className="space-y-2"><Label htmlFor="value">Valor da Causa</Label><Input id="value" type="number" value={currentCase.value ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, value: parseFloat(e.target.value) })} placeholder="0,00" /></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -415,19 +416,19 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                             <div className="border-t border-dashed pt-6 mt-2 space-y-6">
                                 <h4 className="font-semibold text-lg flex items-center text-slate-800"><DollarSign className="mr-2 h-5 w-5 text-yellow-600"/> Detalhes do Acordo</h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2"><Label>Tipo de Acordo</Label><Select value={currentCase.agreement_type || ''} onValueChange={(value) => setCurrentCase({ ...currentCase, agreement_type: value as ExtendedCase['agreement_type'] })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent><SelectItem value="Judicial">Judicial</SelectItem><SelectItem value="Extrajudicial">Extrajudicial</SelectItem><SelectItem value="Em AudiÃªncia">Em AudiÃªncia</SelectItem><SelectItem value="Pela Loja">Pela Loja</SelectItem></SelectContent></Select></div>
+                                    <div className="space-y-2"><Label>Tipo de Acordo</Label><Select value={currentCase.agreement_type || ''} onValueChange={(value) => setCurrentCase({ ...currentCase, agreement_type: value as ExtendedCase['agreement_type'] })}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent><SelectItem value="Judicial">Judicial</SelectItem><SelectItem value="Extrajudicial">Extrajudicial</SelectItem><SelectItem value="Em Audiência">Em Audiência</SelectItem><SelectItem value="Pela Loja">Pela Loja</SelectItem></SelectContent></Select></div>
                                     <div className="space-y-2"><Label>Valor do Acordo</Label><Input type="number" placeholder="5000,00" value={currentCase.agreement_value ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, agreement_value: parseFloat(e.target.value) })} /></div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-2"><Label>Valor de Entrada</Label><Input type="number" placeholder="1000,00" value={currentCase.down_payment ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, down_payment: parseFloat(e.target.value) })} /></div>
-                                    <div className="space-y-2"><Label>NÂº de Parcelas</Label><Input type="number" value={currentCase.installments ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, installments: parseInt(e.target.value, 10) })} /></div>
-                                    <div className="space-y-2"><Label>Vencimento da 1Âª Parcela</Label><Input type="date" value={currentCase.installment_due_date || ''} onChange={(e) => setCurrentCase({ ...currentCase, installment_due_date: e.target.value })} /></div>
+                                    <div className="space-y-2"><Label>Nº de Parcelas</Label><Input type="number" value={currentCase.installments ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, installments: parseInt(e.target.value, 10) })} /></div>
+                                    <div className="space-y-2"><Label>Vencimento da 1ª Parcela</Label><Input type="date" value={currentCase.installment_due_date || ''} onChange={(e) => setCurrentCase({ ...currentCase, installment_due_date: e.target.value })} /></div>
                                 </div>
                             </div>
                         )}
-                        <div className="space-y-2"><Label htmlFor="description">DescriÃ§Ã£o</Label><Textarea id="description" value={currentCase.description || ''} onChange={(e) => setCurrentCase({ ...currentCase, description: e.target.value })} placeholder="DescriÃ§Ã£o detalhada do caso..." className="min-h-[100px]" /></div>
+                        <div className="space-y-2"><Label htmlFor="description">Descrição</Label><Textarea id="description" value={currentCase.description || ''} onChange={(e) => setCurrentCase({ ...currentCase, description: e.target.value })} placeholder="Descrição detalhada do caso..." className="min-h-[100px]" /></div>
                     </div>
-                    <DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button><Button onClick={handleSaveCase} disabled={saveCaseMutation.isPending} className="bg-slate-800 hover:bg-slate-900" style={{ color: 'white' }}>{saveCaseMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin text-white" /><span className="text-white">Salvando...</span></>) : (<><Plus className="mr-2 h-4 w-4 text-white" /><span className="text-white">{isEditMode ? 'Salvar AlteraÃ§Ãµes' : 'Criar Caso'}</span></>)}</Button></DialogFooter>
+                    <DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button><Button onClick={handleSaveCase} disabled={saveCaseMutation.isPending} className="bg-slate-800 hover:bg-slate-900" style={{ color: 'white' }}>{saveCaseMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin text-white" /><span className="text-white">Salvando...</span></>) : (<><Plus className="mr-2 h-4 w-4 text-white" /><span className="text-white">{isEditMode ? 'Salvar Alterações' : 'Criar Caso'}</span></>)}</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

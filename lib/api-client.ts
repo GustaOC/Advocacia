@@ -112,20 +112,22 @@ export interface Installment {
 
 // *** NOVA INTERFACE ADICIONADA PARA A NOVA FUNCIONALIDADE ***
 export interface MonthlyInstallment {
-  id: number;
-  due_date: string;
-  amount: number;
-  status: 'PENDENTE' | 'PAGA' | 'ATRASADA';
-  agreement: {
-    id: number;
-    cases: {
-      case_number: string | null;
-      title: string;
-    } | null;
+  id: number;
+  due_date: string;
+  amount: number;
+  status: 'PENDENTE' | 'PAGA' | 'ATRASADA';
+  agreement: {
+    id: number;
+    cases: {
+      case_number: string | null;
+      title: string;
+      // >>> LINHA ADICIONADA PARA CORRIGIR O ERRO <<<
+      case_parties: { role: string; entities: { name: string } }[]; 
+    } | null;
     debtor: {
-      name: string;
-    } | null;
-  } | null;
+    name: string;
+    } | null;
+  } | null;
 }
 
 
