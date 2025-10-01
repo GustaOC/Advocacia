@@ -39,6 +39,14 @@ interface OverdueInstallment {
   total_agreement_value: number; client_contact?: { phone?: string; email?: string; };
 }
 
+// ===== UTIL DE NORMALIZAÇÃO DE STATUS =====
+function normalizeStatus(raw?: string) {
+  const s = String(raw ?? "").toUpperCase();
+  if (s === "PAGO" || s === "PAGA" || s === "PAID") return "PAGA" as const;        // usamos 'PAGA' no front
+  if (s === "ATRASADO" || s === "ATRASADA" || s === "OVERDUE") return "ATRASADA" as const;
+  return "PENDENTE" as const;
+}
+
 // ===== DADOS MOCK =====
 const mockAlvaras: Alvara[] = [
     { id: 1, case_id: 2, case_number: '002/2024', value: 8500, received: true, issue_date: '2024-08-15', received_date: '2024-09-01', creditor_name: 'João Silva', court: '1ª Vara Cível' },
@@ -260,12 +268,25 @@ function MonthlyInstallmentsTab() {
         year: new Date().getFullYear(),
     });
 
-    const { data: installments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[], Error>({
+    // NOTA: a API pode retornar um array direto OU um objeto { installments: [...] }
+    const { data, isLoading, isError, error } = useQuery({
         queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month],
         queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
         placeholderData: (prev) => prev,
     });
-    
+
+    // Normaliza a resposta para sempre termos um array de parcelas
+    const installments: MonthlyInstallment[] = useMemo(() => {
+      const raw = data as any;
+      const list = Array.isArray(raw) ? raw : Array.isArray(raw?.installments) ? raw.installments : [];
+      // Normaliza campos críticos (status/amount) para evitar NaN e inconsistências
+      return list.map((it: any) => ({
+        ...it,
+        amount: Number(it?.amount) || 0,
+        status: normalizeStatus(it?.status),
+      })) as MonthlyInstallment[];
+    }, [data]);
+
     // Hook de mutação para marcar parcela como paga
     const payInstallmentMutation = useMutation({
         mutationFn: (installmentId: number) => apiClient.recordInstallmentPayment(String(installmentId), {
@@ -282,15 +303,18 @@ function MonthlyInstallmentsTab() {
         }
     });
 
+    // <<< CORREÇÃO PRINCIPAL: garantir array + normalizar status >>>
     const { totalToReceive, totalReceived } = useMemo(() => {
-        return installments.reduce((acc, installment) => {
-            if (installment.status === 'PAGA') {
-                acc.totalReceived += installment.amount;
-            } else {
-                acc.totalToReceive += installment.amount;
-            }
+        return installments.reduce(
+          (acc, installment) => {
+            const amount = Number(installment.amount) || 0;
+            const status = normalizeStatus(installment.status);
+            if (status === 'PAGA') acc.totalReceived += amount;
+            else acc.totalToReceive += amount;
             return acc;
-        }, { totalToReceive: 0, totalReceived: 0 });
+          },
+          { totalToReceive: 0, totalReceived: 0 }
+        );
     }, [installments]);
 
     const handleDateChange = (type: 'month' | 'year', value: string) => {
@@ -298,12 +322,14 @@ function MonthlyInstallmentsTab() {
     };
 
     const getStatusBadge = (status: MonthlyInstallment['status']) => {
+        // status já normalizado para 'PAGA' | 'PENDENTE' | 'ATRASADA'
         const variants = {
             'PAGA': { label: 'Paga', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
             'PENDENTE': { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
             'ATRASADA': { label: 'Atrasada', className: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
-        };
-        const config = variants[status] || variants.PENDENTE;
+        } as const;
+        const key = (status as any) in variants ? (status as "PAGA" | "PENDENTE" | "ATRASADA") : "PENDENTE";
+        const config = variants[key];
         const Icon = config.icon;
         return (
             <Badge className={`${config.className} flex items-center gap-1 font-semibold`}>
@@ -347,23 +373,30 @@ function MonthlyInstallmentsTab() {
                         <TableBody>
                             {isLoading && <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>}
                             {!isLoading && installments.map((inst) => {
-                                const clientName = inst.agreement?.debtor?.name || 'Cliente N/A';
-                                const executedParty = inst.agreement?.cases?.case_parties.find((p: any) => p.role === 'Executado');
+                                // Tornar robusto para diferentes formatos de join vindos da API:
+                                const clientName =
+                                  inst.agreement?.debtor?.name ||
+                                  (inst.agreement as any)?.client_entities?.name ||
+                                  (inst.agreement as any)?.debtor_id?.name ||
+                                  'Cliente N/A';
+
+                                const executedParty =
+                                  (inst.agreement as any)?.cases?.case_parties?.find?.((p: any) => p.role === 'Executado');
                                 const executedName = executedParty?.entities?.name || 'Executado N/A';
 
                                 return (
                                 <TableRow key={inst.id}>
-                                    <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
+                                    <TableCell className="font-mono">{formatDate(inst.due_date as any)}</TableCell>
                                     <TableCell className="font-medium">
                                         <span>{clientName}</span>
                                         <span className="text-slate-500"> vs </span>
                                         <span>{executedName}</span>
                                     </TableCell>
-                                    <TableCell>{inst.agreement?.cases?.case_number || 'N/A'}</TableCell>
+                                    <TableCell>{(inst.agreement as any)?.cases?.case_number || 'N/A'}</TableCell>
                                     <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
                                     <TableCell>{getStatusBadge(inst.status)}</TableCell>
                                     <TableCell className="text-right">
-                                        {inst.status !== 'PAGA' && (
+                                        {normalizeStatus(inst.status) !== 'PAGA' && (
                                             <Button size="sm" onClick={() => payInstallmentMutation.mutate(inst.id)} disabled={payInstallmentMutation.isPending}>
                                                 <Banknote className="h-4 w-4 mr-2" />
                                                 Dar Baixa
