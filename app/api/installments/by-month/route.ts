@@ -4,47 +4,51 @@ import { FinancialService } from '@/lib/services/financialService';
 import { getSessionUser, requirePermission } from '@/lib/auth';
 import { z } from 'zod';
 
-// Schema para validar os parâmetros da query
+/**
+ * Validação forte dos parâmetros
+ * - Aceita números ou strings numéricas (ex.: "10")
+ * - Aplica limites e valores padrão (mês/ano atuais quando omitidos)
+ */
 const QuerySchema = z.object({
-  year: z.coerce.number().int().min(2000).max(2100),
-  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
 });
 
 export async function GET(request: NextRequest) {
   try {
-    // Garante que o usuário esteja autenticado
-    await requirePermission('financial_view'); // Assumindo que existe uma permissão para ver dados financeiros
+    // Autorização
+    await requirePermission('financial_view');
 
-    const { searchParams } = new URL(request.url);
+    // Garante AuthUser não-nulo (corrige o erro de tipagem)
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+    }
 
-    // Valida os parâmetros de ano e mês
-    const validationResult = QuerySchema.safeParse({
-      year: searchParams.get('year'),
-      month: searchParams.get('month'),
+    // Parse seguro dos parâmetros com fallback
+    const url = new URL(request.url);
+    const parsed = QuerySchema.parse({
+      year: url.searchParams.get('year'),
+      month: url.searchParams.get('month'),
     });
 
-    if (!validationResult.success) {
-      return NextResponse.json(
-        { error: 'Parâmetros de ano e mês inválidos ou ausentes.', issues: validationResult.error.flatten() },
-        { status: 400 }
-      );
-    }
+    const now = new Date();
+    const year = parsed.year ?? now.getUTCFullYear();
+    const month = parsed.month ?? (now.getUTCMonth() + 1);
 
-    const { year, month } = validationResult.data;
+    // Busca via service (normaliza TZ para evitar off-by-one de mês)
+    const installments = await FinancialService.getInstallmentsByMonthYear(year, month, user);
 
-    // Chama o nosso novo método no serviço
-    const installments = await FinancialService.getInstallmentsByMonthYear(year, month);
-
-    return NextResponse.json(installments);
-
+    return NextResponse.json(installments, { status: 200 });
   } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    // Tratamento explícito de erro de auth
+    if (error?.message === 'UNAUTHORIZED' || error?.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
     }
-    
-    console.error(`[API /installments/by-month] Erro:`, error);
+
+    console.error('[API /installments/by-month] Erro:', error);
     return NextResponse.json(
-      { error: 'Erro no servidor ao buscar parcelas.', details: error.message }, 
+      { error: 'Erro no servidor ao buscar parcelas.', details: String(error?.message ?? error) },
       { status: 500 }
     );
   }

@@ -41,6 +41,8 @@ const financialAgreementsQueryKey = ['financialAgreements']
 const financialReportsQueryKey = ['financialReports']
 const agreementInstallmentsQueryKey = ['agreementInstallments']
 const agreementPaymentHistoryQueryKey = ['agreementPaymentHistory']
+// ⚠️ A aba "Parcelas do mês" usa esta key (em components/financial-module.tsx):
+// ['monthlyInstallments', year, month]
 
 // ============================================================================
 // HOOKS PARA ACORDOS FINANCEIROS
@@ -137,6 +139,7 @@ export const useGetFinancialAgreementDetails = (agreementId: string | null) => {
 
 /**
  * Hook para criar um novo acordo financeiro.
+ * ✅ ADIÇÃO: invalidar também ['monthlyInstallments'] para atualizar a aba "Parcelas do mês".
  */
 export const useCreateFinancialAgreement = () => {
   const queryClient = useQueryClient()
@@ -154,6 +157,11 @@ export const useCreateFinancialAgreement = () => {
       queryClient.invalidateQueries({ 
         queryKey: financialReportsQueryKey,
         exact: false 
+      })
+      // ✅ NOVO: Invalida as parcelas do mês
+      queryClient.invalidateQueries({
+        queryKey: ['monthlyInstallments'],
+        exact: false,
       })
       
       toast({
@@ -173,6 +181,7 @@ export const useCreateFinancialAgreement = () => {
 
 /**
  * Hook para atualizar um acordo financeiro existente.
+ * ✅ ADIÇÃO: invalidar também ['monthlyInstallments'].
  */
 export const useUpdateFinancialAgreement = () => {
   const queryClient = useQueryClient()
@@ -200,6 +209,11 @@ export const useUpdateFinancialAgreement = () => {
         queryKey: financialReportsQueryKey,
         exact: false 
       })
+      // ✅ NOVO: Invalida as parcelas do mês
+      queryClient.invalidateQueries({
+        queryKey: ['monthlyInstallments'],
+        exact: false,
+      })
       
       toast({
         title: 'Sucesso!',
@@ -218,6 +232,7 @@ export const useUpdateFinancialAgreement = () => {
 
 /**
  * Hook para deletar um acordo financeiro.
+ * ✅ ADIÇÃO: invalidar também ['monthlyInstallments'].
  */
 export const useDeleteFinancialAgreement = () => {
   const queryClient = useQueryClient()
@@ -240,6 +255,11 @@ export const useDeleteFinancialAgreement = () => {
         queryKey: financialReportsQueryKey,
         exact: false 
       })
+      // ✅ NOVO: Invalida as parcelas do mês
+      queryClient.invalidateQueries({
+        queryKey: ['monthlyInstallments'],
+        exact: false,
+      })
       
       toast({
         title: 'Sucesso!',
@@ -258,6 +278,7 @@ export const useDeleteFinancialAgreement = () => {
 
 /**
  * Hook para renegociar um acordo financeiro existente.
+ * ✅ ADIÇÃO: invalidar também ['monthlyInstallments'] (parcelas geradas/atualizadas).
  */
 export const useRenegotiateFinancialAgreement = () => {
   const queryClient = useQueryClient()
@@ -281,6 +302,11 @@ export const useRenegotiateFinancialAgreement = () => {
       queryClient.invalidateQueries({ 
         queryKey: financialAgreementsQueryKey,
         exact: false 
+      })
+      // ✅ NOVO: Invalida as parcelas do mês
+      queryClient.invalidateQueries({
+        queryKey: ['monthlyInstallments'],
+        exact: false,
       })
       queryClient.invalidateQueries({
         queryKey: [...agreementInstallmentsQueryKey, variables.agreementId]
@@ -338,6 +364,7 @@ export const useGetAgreementPaymentHistory = (agreementId: string | null) => {
  * ✅ CORREÇÃO: Hook para registrar o pagamento ("Dar baixa") de uma **parcela**.
  * Agora usamos o **installmentId** na chamada ao apiClient.
  * (agreementId é opcional, usado só para invalidar o cache relacionado.)
+ * ✅ ADIÇÃO: invalidar também ['monthlyInstallments'] para refletir status e totais do mês.
  */
 export const useRecordInstallmentPayment = () => {
   const queryClient = useQueryClient()
@@ -373,6 +400,11 @@ export const useRecordInstallmentPayment = () => {
       queryClient.invalidateQueries({ 
         queryKey: financialReportsQueryKey,
         exact: false 
+      })
+      // ✅ NOVO: Invalida as parcelas do mês
+      queryClient.invalidateQueries({
+        queryKey: ['monthlyInstallments'],
+        exact: false,
       })
       
       toast({
