@@ -70,7 +70,8 @@ export const InstallmentSchema = z.object({
     required_error: 'A data de vencimento é obrigatória.',
     invalid_type_error: 'Forneça uma data de vencimento válida.',
   }),
-  status: InstallmentStatus.default('PENDENTE'),
+  // ***** CORREÇÃO APLICADA AQUI *****
+  status: InstallmentStatus.default('PENDENTE').optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 })
@@ -112,9 +113,7 @@ export const EnhancedAgreementSchema = z
       required_error: 'A data final é obrigatória.',
       invalid_type_error: 'Forneça uma data final válida.',
     }),
-    // ***** CORREÇÃO 1 APLICADA AQUI *****
     status: AgreementStatus.default('ATIVO').optional(),
-    // ***** CORREÇÃO 2 APLICADA AQUI *****
     agreement_type: AgreementType.default('SOMENTE_PARCELADO').optional(),
     notes: z.string().optional().nullable(),
     installments: z.array(InstallmentSchema).optional(),
@@ -131,6 +130,9 @@ export const EnhancedAgreementSchema = z
     },
   )
   .superRefine((data, ctx) => {
+    // CORREÇÃO APLICADA AQUI:
+    // Adicionada uma verificação explícita para a existência da primeira parcela
+    // para satisfazer a análise estrita de tipos do TypeScript.
     if (data.installments && data.installments.length > 0) {
       const firstInstallment = data.installments[0]
       if (firstInstallment && firstInstallment.due_date < data.start_date) {
