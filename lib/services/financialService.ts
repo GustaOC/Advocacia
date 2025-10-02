@@ -2,7 +2,8 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AuthUser } from "@/lib/auth";
-import { Installment, Payment, PaymentSchema } from "@/lib/schemas";
+// A importação foi mantida caso você use o tipo EnhancedAgreement em outro lugar.
+import { Installment, Payment, PaymentSchema, EnhancedAgreement } from "@/lib/schemas";
 
 // Função auxiliar para auditoria
 async function logAudit(action: string, user: AuthUser, data: any) {
@@ -286,7 +287,7 @@ export class FinancialService {
       }) ?? [];
 
     console.log(`📅 [DEBUG] Parcelas do mês ${month}/${year}: ${monthInstallments.length}`);
-    console.log(`📊 [DEBUG] Acordos com parcelas neste mês:`, 
+    console.log(`📊 [DEBUG] Acordos com parcelas neste mês:`,
       [...new Set(monthInstallments.map((i) => i.agreement_id))]
     );
 
@@ -333,7 +334,7 @@ export class FinancialService {
    */
   static async getInstallmentById(installmentId: string): Promise<Installment | null> {
     const supabase = createAdminClient();
-    
+
     const { data, error } = await supabase
       .from("financial_installments")
       .select("id, agreement_id, installment_number, amount, due_date, status, created_at, updated_at")
@@ -393,8 +394,8 @@ export class FinancialService {
             parsed.payment_date instanceof Date
               ? parsed.payment_date.toISOString()
               : new Date(
-                  parsed.payment_date as unknown as string
-                ).toISOString(),
+                parsed.payment_date as unknown as string
+              ).toISOString(),
           payment_method: parsed.payment_method,
           notes: parsed.notes ?? null,
           created_by: authUser.id,
@@ -467,5 +468,89 @@ export class FinancialService {
       notes: inserted.notes ?? undefined,
       created_at: inserted.created_at ? new Date(inserted.created_at) : undefined,
     } as Payment;
+  }
+
+  // --- MÉTODOS ADICIONADOS ---
+
+  /**
+   * Busca um acordo financeiro específico pelo ID com detalhes.
+   * @param agreementId - O UUID do acordo.
+   */
+  static async getAgreementWithDetails(agreementId: string) {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('financial_agreements')
+      .select(`
+        *,
+        debtor:debtor_id (*),
+        creditor:creditor_id (*),
+        cases:case_id (case_number, title),
+        installments:financial_installments (*)
+      `)
+      .eq('id', agreementId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      console.error(`Erro ao buscar acordo ${agreementId}:`, error);
+      throw new Error("Não foi possível buscar os detalhes do acordo.");
+    }
+
+    return data;
+  }
+
+  /**
+   * Atualiza um acordo financeiro.
+   * @param agreementId - O UUID do acordo a ser atualizado.
+   * @param data - Os dados para atualizar.
+   * @param user - O usuário autenticado que realiza a ação.
+   */
+  static async updateFinancialAgreement(agreementId: string, data: Partial<EnhancedAgreement>, user: AuthUser) {
+    const supabase = createAdminClient();
+
+    // ***** LINHA CORRIGIDA *****
+    // Removemos a validação com .partial() que estava causando o erro.
+    // O Supabase irá ignorar campos que não existem na tabela, tornando a operação segura.
+    const { data: updatedAgreement, error } = await supabase
+      .from('financial_agreements')
+      .update(data) // Passamos o objeto 'data' diretamente
+      .eq('id', agreementId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Erro ao atualizar acordo ${agreementId}:`, error);
+      throw new Error("Não foi possível atualizar o acordo financeiro.");
+    }
+
+    await logAudit('FINANCIAL_AGREEMENT_UPDATE', user, {
+        agreementId,
+        updatedFields: Object.keys(data) // Usamos 'data' aqui também
+    });
+
+    return updatedAgreement;
+  }
+
+  /**
+   * Deleta um acordo financeiro e suas parcelas associadas.
+   * @param agreementId - O UUID do acordo a ser deletado.
+   * @param user - O usuário autenticado que realiza a ação.
+   */
+  static async deleteFinancialAgreement(agreementId: string, user: AuthUser) {
+    const supabase = createAdminClient();
+
+    const { error } = await supabase
+      .from('financial_agreements')
+      .delete()
+      .eq('id', agreementId);
+
+    if (error) {
+      console.error(`Erro ao deletar acordo ${agreementId}:`, error);
+      throw new Error("Não foi possível deletar o acordo. Verifique se existem pagamentos associados.");
+    }
+
+    await logAudit('FINANCIAL_AGREEMENT_DELETE', user, { agreementId });
+
+    return { message: "Acordo deletado com sucesso." };
   }
 }

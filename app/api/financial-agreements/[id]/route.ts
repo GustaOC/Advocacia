@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FinancialService } from '@/lib/services/financialService'
 import { z } from 'zod'
+import { requirePermission } from '@/lib/auth' // 1. Importar a função de autenticação
 
 // Schema para validar os parâmetros da URL
 const paramsSchema = z.object({
@@ -19,6 +20,8 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
+    // Adicionando verificação de permissão para consistência
+    await requirePermission('financial_view');
     const validation = paramsSchema.safeParse(params)
     if (!validation.success) {
       return NextResponse.json(
@@ -39,8 +42,12 @@ export async function GET(
     }
 
     return NextResponse.json(agreement)
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Falha ao buscar acordo ${params.id}:`, error)
+    // Tratamento de erro aprimorado para acesso negado
+    if (error.message === 'FORBIDDEN') {
+        return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
+    }
     return NextResponse.json(
       { message: 'Erro no servidor ao buscar detalhes do acordo.' },
       { status: 500 },
@@ -58,6 +65,8 @@ export async function PATCH(
   { params }: { params: { id: string } },
 ) {
   try {
+    // 2. Obter o usuário autenticado que tem permissão para editar
+    const user = await requirePermission('financial_edit');
     const validation = paramsSchema.safeParse(params)
     if (!validation.success) {
       return NextResponse.json(
@@ -72,11 +81,15 @@ export async function PATCH(
     const updatedAgreement = await FinancialService.updateFinancialAgreement(
       validation.data.id,
       body,
+      user, // 3. Passar o usuário como argumento
     )
 
     return NextResponse.json(updatedAgreement)
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Falha ao atualizar acordo ${params.id}:`, error)
+    if (error.message === 'FORBIDDEN') {
+        return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
+    }
     return NextResponse.json(
       { message: 'Erro no servidor ao atualizar o acordo.' },
       { status: 500 },
@@ -94,6 +107,8 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
+    // 4. Obter o usuário autenticado que tem permissão para deletar
+    const user = await requirePermission('financial_delete');
     const validation = paramsSchema.safeParse(params)
     if (!validation.success) {
       return NextResponse.json(
@@ -102,14 +117,20 @@ export async function DELETE(
       )
     }
 
-    await FinancialService.deleteFinancialAgreement(validation.data.id)
+    await FinancialService.deleteFinancialAgreement(
+        validation.data.id, 
+        user // 5. Passar o usuário como argumento
+    );
 
     return NextResponse.json(
       { message: 'Acordo deletado com sucesso.' },
       { status: 200 },
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Falha ao deletar acordo ${params.id}:`, error)
+     if (error.message === 'FORBIDDEN') {
+        return NextResponse.json({ message: 'Acesso negado.' }, { status: 403 });
+    }
     return NextResponse.json(
       { message: 'Erro no servidor ao deletar o acordo.' },
       { status: 500 },
