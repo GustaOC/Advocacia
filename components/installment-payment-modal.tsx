@@ -1,4 +1,4 @@
-// components/installment-payment-modal.tsx - VERSÃO CORRIGIDA
+// components/installment-payment-modal.tsx - VERSÃO CORRIGIDA E ALINHADA À API
 
 "use client";
 
@@ -37,7 +37,7 @@ interface Installment {
 
 interface PaymentData {
   amount_paid: number;
-  payment_date: string; // ✅ CORREÇÃO: Sempre string, nunca undefined
+  payment_date: string; // ✅ Sempre string, nunca undefined
   payment_method: string;
   payment_reference: string;
   late_fee_paid: number;
@@ -70,14 +70,12 @@ export function InstallmentPaymentModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // ✅ CORREÇÃO: Função getCurrentDate para garantir sempre string
-  const getCurrentDate = (): string => {
-    return new Date().toISOString().split('T')[0];
-  };
+  // ✅ Sempre retorna string (YYYY-MM-DD) sem risco de undefined
+  const getCurrentDate = (): string => new Date().toISOString().slice(0, 10);
 
   const [paymentData, setPaymentData] = useState<PaymentData>({
     amount_paid: 0,
-    payment_date: getCurrentDate(), // ✅ CORREÇÃO: Usando função que sempre retorna string
+    payment_date: getCurrentDate(), // ✅ Usa função que sempre retorna string
     payment_method: 'pix',
     payment_reference: '',
     late_fee_paid: 0,
@@ -125,11 +123,11 @@ export function InstallmentPaymentModal({
   }, [installment, agreementData]);
 
   const handleChange = (field: keyof PaymentData, value: any) => {
-    // ✅ CORREÇÃO: Garantir que payment_date sempre seja string
+    // ✅ Garante que payment_date é sempre string (YYYY-MM-DD)
     if (field === 'payment_date') {
       setPaymentData(prev => ({ 
         ...prev, 
-        [field]: value || new Date().toISOString().split('T')[0] 
+        [field]: value || getCurrentDate(),
       }));
     } else {
       setPaymentData(prev => ({ ...prev, [field]: value }));
@@ -140,16 +138,15 @@ export function InstallmentPaymentModal({
     mutationFn: (data: PaymentData) => {
       if (!installment || !agreementData) throw new Error("Dados insuficientes");
       
-      // ✅ CORREÇÃO: Garantir que paymentDate sempre seja string
-      const paymentDate = data.payment_date || new Date().toISOString().split('T')[0];
-      
-      return apiClient.recordInstallmentPayment(String(agreementData.id), {
-        installmentId: String(installment.id),
-        amount: data.amount_paid,
-        paymentDate: paymentDate, // Agora garantidamente string
-        paymentMethod: data.payment_method,
-        reference: data.payment_reference,
-        notes: data.notes
+      // ✅ Garante string
+      const paymentDate = data.payment_date || getCurrentDate();
+
+      // ✅ Alinha com assinatura do apiClient.recordInstallmentPayment(installmentId, { amount_paid, payment_date, payment_method, notes? })
+      return apiClient.recordInstallmentPayment(String(installment.id), {
+        amount_paid: data.amount_paid,
+        payment_date: paymentDate,
+        payment_method: data.payment_method,
+        notes: data.notes,
       });
     },
     onSuccess: () => {
@@ -184,7 +181,7 @@ export function InstallmentPaymentModal({
       return;
     }
 
-    // ✅ CORREÇÃO: Validação melhorada para data
+    // ✅ Validação de data robusta
     if (!paymentData.payment_date || paymentData.payment_date.trim() === '') {
       toast({ 
         title: "Data obrigatória", 
