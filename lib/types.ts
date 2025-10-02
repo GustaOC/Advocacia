@@ -1,5 +1,8 @@
 // lib/types.ts
 
+import { z } from 'zod';
+import { EnhancedAgreementSchema, InstallmentSchema, PaymentSchema } from './schemas';
+
 // Interface unificada para Entidades (Clientes, Executados, etc.)
 // Adicionamos os novos campos sugeridos para um cadastro mais completo.
 export interface Entity {
@@ -72,3 +75,22 @@ export interface Case {
   down_payment?: number | null;
   installment_due_date?: string | null;
 }
+
+// --- TIPOS ADICIONADOS PARA CORRIGIR O ERRO DE BUILD ---
+
+// Tipo para um único pagamento, inferido do schema
+export type Payment = z.infer<typeof PaymentSchema>;
+
+// Tipo para uma única parcela que INCLUI seus pagamentos
+export type InstallmentWithPayments = z.infer<typeof InstallmentSchema> & {
+  payments?: Payment[];
+};
+
+// Tipo principal para o Acordo Financeiro, que INCLUI parcelas com seus pagamentos
+// e os detalhes do devedor, credor e caso.
+export type FinancialAgreement = z.infer<typeof EnhancedAgreementSchema> & {
+  installments?: InstallmentWithPayments[];
+  debtor?: { id: string; name: string };
+  creditor?: { id: string; name: string };
+  cases?: { id: string; case_number: string };
+};
