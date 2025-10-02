@@ -1,4 +1,4 @@
-// gustioc/advocacia/Advocacia-d92d5295fd1f928d4587d3584d317470ec35dac5/components/financial-notifications-system.tsx
+// components/financial-notifications-system.tsx
 
 'use client'
 
@@ -37,6 +37,7 @@ import {
 import { NotificationRuleSchema } from '@/lib/schemas' // Usando o schema que já criamos
 import { useToast } from '@/hooks/use-toast'
 
+// O tipo do formulário é inferido do schema (evita divergência entre obrigatório/opcional)
 type NotificationRule = z.infer<typeof NotificationRuleSchema>
 
 // Mock de dados e hooks para simular a interação com a API
@@ -49,24 +50,24 @@ const mockRules: NotificationRule[] = [
 // Simulação de hooks que seriam criados em `use-financials.ts`
 const useGetNotificationRules = () => ({ data: mockRules, isLoading: false })
 const useCreateNotificationRule = () => {
-    const { toast } = useToast();
-    return { 
-        mutate: (data: NotificationRule, { onSuccess }: { onSuccess?: () => void } = {}) => {
-            console.log('Criando nova regra:', data)
-            toast({ title: "Sucesso!", description: "Nova regra de notificação criada." })
-            onSuccess?.();
-        },
-        isPending: false 
-    }
+  const { toast } = useToast();
+  return {
+    mutate: (data: NotificationRule, { onSuccess }: { onSuccess?: () => void } = {}) => {
+      console.log('Criando nova regra:', data)
+      toast({ title: "Sucesso!", description: "Nova regra de notificação criada." })
+      onSuccess?.();
+    },
+    isPending: false
+  }
 }
 const useDeleteNotificationRule = () => {
-    const { toast } = useToast();
-    return { 
-        mutate: (id: string) => {
-            console.log('Deletando regra ID:', id)
-            toast({ title: "Sucesso!", description: "Regra deletada." })
-        }
+  const { toast } = useToast();
+  return {
+    mutate: (id: string) => {
+      console.log('Deletando regra ID:', id)
+      toast({ title: "Sucesso!", description: "Regra deletada." })
     }
+  }
 }
 
 export function FinancialNotificationsSystem() {
@@ -81,9 +82,10 @@ export function FinancialNotificationsSystem() {
     register,
     formState: { errors },
     reset,
-  } = useForm<NotificationRule>({
+  } = useForm({
     resolver: zodResolver(NotificationRuleSchema),
     // ✅ Este defaultValues agora é a única fonte do valor inicial, o que é o correto.
+    //    Mantemos `is_active` definido para evitar `undefined` quando o schema for obrigatório.
     defaultValues: {
       name: '',
       days_before_due: 3,
@@ -129,34 +131,47 @@ export function FinancialNotificationsSystem() {
               <div className="space-y-1">
                 <Label htmlFor="name">Nome da Regra</Label>
                 <Input id="name" {...register('name')} placeholder="Ex: Lembrete de 3 dias via WhatsApp" />
-                {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
+                {errors.name && <p className="text-red-500 text-xs">{String(errors.name.message)}</p>}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="days_before_due">Disparar quantos dias antes do vencimento?</Label>
-                <Input id="days_before_due" type="number" {...register('days_before_due')} />
-                {errors.days_before_due && <p className="text-red-500 text-xs">{errors.days_before_due.message}</p>}
+                <Input id="days_before_due" type="number" {...register('days_before_due', { valueAsNumber: true })} />
+                {errors.days_before_due && <p className="text-red-500 text-xs">{String(errors.days_before_due.message)}</p>}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="message_template">Modelo da Mensagem</Label>
                 <Textarea id="message_template" {...register('message_template')} rows={4} />
-                 <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Use placeholders como [DEVEDOR], [VALOR_PARCELA], [VENCIMENTO].
                 </p>
-                {errors.message_template && <p className="text-red-500 text-xs">{errors.message_template.message}</p>}
+                {errors.message_template && <p className="text-red-500 text-xs">{String(errors.message_template.message)}</p>}
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                    <Controller name="is_active" control={control} render={({ field }) => (
-                         <Switch id="is_active" checked={field.value} onCheckedChange={field.onChange} />
-                    )}/>
-                    <Label htmlFor="is_active">Regra Ativa</Label>
+                  <Controller
+                    name="is_active"
+                    control={control}
+                    render={({ field }) => (
+                      <Switch id="is_active" checked={!!field.value} onCheckedChange={field.onChange} />
+                    )}
+                  />
+                  <Label htmlFor="is_active">Regra Ativa</Label>
                 </div>
                 <div className="flex gap-2">
-                    <Button type="button" variant="ghost" onClick={() => { setFormVisible(false); reset(); }}>Cancelar</Button>
-                    <Button type="submit" disabled={createRuleMutation.isPending}>
-                        {createRuleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Salvar Regra
-                    </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setFormVisible(false)
+                      reset()
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={createRuleMutation.isPending}>
+                    {createRuleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar Regra
+                  </Button>
                 </div>
               </div>
             </form>
@@ -185,25 +200,28 @@ export function FinancialNotificationsSystem() {
                   </TableCell>
                   <TableCell className="text-right">
                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 text-destructive"/>Tem certeza?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Esta ação não pode ser desfeita. A regra de notificação será permanentemente deletada.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteRuleMutation.mutate(rule.id!)}>
-                                Sim, deletar
-                            </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center">
+                            <AlertTriangle className="mr-2 text-destructive" />
+                            Tem certeza?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A regra de notificação será permanentemente deletada.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteRuleMutation.mutate(rule.id!)}>
+                            Sim, deletar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
                     </AlertDialog>
                   </TableCell>
                 </TableRow>
