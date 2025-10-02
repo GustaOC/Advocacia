@@ -18,7 +18,7 @@ export async function GET(
       return NextResponse.json({ error: 'ID do acordo inválido.' }, { status: 400 });
     }
 
-    const installments = await FinancialService.getInstallmentsByAgreementId(agreementId);
+    const installments = await FinancialService.getInstallmentsByAgreement(params.id);
     return NextResponse.json(installments);
 
   } catch (error) {
