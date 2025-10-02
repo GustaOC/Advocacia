@@ -89,7 +89,7 @@ export type InstallmentWithPayments = z.infer<typeof InstallmentSchema> & {
 // Tipo principal para o Acordo Financeiro, que INCLUI parcelas com seus pagamentos
 // e os detalhes do devedor, credor e caso.
 export type FinancialAgreement = z.infer<typeof EnhancedAgreementSchema> & {
-  installments?: InstallmentWithPayments[];
+  installments?: InstallmentWithPayments[]; // Esta linha já estava aqui, o que é bom.
   debtor?: { id: string; name: string };
   creditor?: { id: string; name: string };
   cases?: { id: string; case_number: string };
