@@ -14,7 +14,9 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const user = await requireAuth(); // Ou requirePermission("READ_PETITION") se necessário
-    const petition = await petitionService.getPetitionById(parseInt(params.id), user);
+
+    // CORREÇÃO: A ordem dos parâmetros foi invertida para (user, id) e o id é passado como string.
+    const petition = await petitionService.getPetitionById(user, params.id);
     
     if (!petition) {
       return NextResponse.json(
