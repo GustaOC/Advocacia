@@ -26,23 +26,19 @@ export async function POST(
       );
     }
 
-    // 2) Monta payload com defaults SÓ com dados válidos
+    // 2) Monta payload com defaults
     const rawAmount = body.amount_paid ?? installment.amount;
     const amountNumber = Number(rawAmount);
 
-    // Normaliza método (enum do schema é uppercase)
     const methodRaw: unknown = body.payment_method ?? 'PIX';
-    const paymentMethod =
-      typeof methodRaw === 'string' ? methodRaw.toUpperCase() : 'PIX';
+    const paymentMethod = typeof methodRaw === 'string' ? methodRaw.toUpperCase() : 'PIX';
 
-    // Normaliza data (schema usa z.coerce.date, mas vamos passar ISO válido)
     const dateRaw: unknown = body.payment_date ?? new Date();
-    const paymentDate =
-      dateRaw instanceof Date
-        ? dateRaw.toISOString()
-        : typeof dateRaw === 'string'
-          ? dateRaw
-          : new Date().toISOString();
+    const paymentDate = dateRaw instanceof Date
+      ? dateRaw.toISOString()
+      : typeof dateRaw === 'string'
+        ? dateRaw
+        : new Date().toISOString();
 
     const paymentData = {
       installment_id: installmentId,
@@ -58,7 +54,6 @@ export async function POST(
       return NextResponse.json(
         {
           error: 'Dados de pagamento inválidos',
-          // Devolvemos também o payload normalizado para facilitar o debug no Network tab
           input: paymentData,
           details: parsed.error.flatten(),
         },
@@ -71,6 +66,7 @@ export async function POST(
       parsed.data,
       user
     );
+    
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Falha ao registrar pagamento:', error);

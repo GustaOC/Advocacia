@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
     await requirePermission('financial_view');
     const user = await getSessionUser();
 
+    if (!user) {
+      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    }
+
     // Parse seguro dos parâmetros com fallback
     const url = new URL(request.url);
     const parsed = QuerySchema.parse({
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`📅 Buscando parcelas para ${month}/${year} - Usuário: ${user.id}`);
 
-    // CORREÇÃO: Buscar via service com tratamento robusto
+    // Buscar via service
     const installments = await FinancialService.getInstallmentsByMonthYear(year, month, user);
 
     console.log(`✅ Retornando ${installments.length} parcelas para o front-end`);

@@ -2,16 +2,24 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { AuthUser } from "@/lib/auth";
-import { logAudit } from "./auditService";
 import { Installment, Payment, PaymentSchema } from "@/lib/schemas";
 
-/** YYYY-MM-DD em UTC, a partir de string | Date */
+// Função auxiliar para auditoria
+async function logAudit(action: string, user: AuthUser, data: any) {
+  try {
+    console.log(`📝 [AUDIT] ${action}:`, { userId: user.id, data });
+  } catch (e) {
+    console.warn("⚠️ Falha ao registrar auditoria:", e);
+  }
+}
+
+/** YYYY-MM-DD baseado na data local (sem UTC) */
 function toIsoDateOnly(d: string | Date): string {
   const date = d instanceof Date ? d : new Date(d);
-  const utc = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  );
-  return utc.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** Converte string | Date para Date (mantém compat c/ tipos existentes) */
@@ -47,7 +55,7 @@ export type MonthlyInstallmentDTO = {
 export class FinancialService {
   /**
    * PARCELAS POR MÊS/ANO
-   * - Busca parcelas no intervalo UTC [1º dia, 1º dia do mês seguinte)
+   * - Busca parcelas no intervalo [1º dia, 1º dia do mês seguinte) em datas locais
    * - Resolve relacionamentos com queries planas (sem nested select)
    * - Tolera falhas parciais (segue com dados parciais)
    */
@@ -58,9 +66,9 @@ export class FinancialService {
   ): Promise<MonthlyInstallmentDTO[]> {
     const supabase = createAdminClient();
 
-    // 1) Janela de datas em UTC (YYYY-MM-DD)
-    const startStr = toIsoDateOnly(new Date(Date.UTC(year, month - 1, 1)));
-    const endStr = toIsoDateOnly(new Date(Date.UTC(year, month, 1)));
+    // 1) Janela de datas em YYYY-MM-DD (local)
+    const startStr = toIsoDateOnly(new Date(year, month - 1, 1));
+    const endStr = toIsoDateOnly(new Date(year, month, 1));
 
     console.log(`🔍 Buscando parcelas do período [${startStr}, ${endStr})`);
 
@@ -263,31 +271,31 @@ export class FinancialService {
       return [];
     }
 
+    console.log(`📊 [DEBUG] Total de parcelas no banco: ${allInstallments?.length ?? 0}`);
+
     const monthInstallments =
       allInstallments?.filter((inst) => {
         try {
           const d = new Date(inst.due_date);
           return (
-            d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month
+            d.getFullYear() === year && d.getMonth() + 1 === month
           );
         } catch {
           return false;
         }
       }) ?? [];
 
-    console.log(
-      `📅 [DEBUG] Parcelas do mês ${month}/${year}:`,
-      monthInstallments
-    );
-    console.log(
-      `📊 [DEBUG] Acordos com parcelas neste mês:`,
+    console.log(`📅 [DEBUG] Parcelas do mês ${month}/${year}: ${monthInstallments.length}`);
+    console.log(`📊 [DEBUG] Acordos com parcelas neste mês:`, 
       [...new Set(monthInstallments.map((i) => i.agreement_id))]
     );
 
     return monthInstallments;
   }
 
-  /** Parcelas por acordo */
+  /**
+   * Parcelas por acordo
+   */
   static async getInstallmentsByAgreement(
     agreementId: string
   ): Promise<Installment[]> {
@@ -321,7 +329,48 @@ export class FinancialService {
   }
 
   /**
-   * Registrar pagamento de parcela
+   * Buscar parcela por ID (usado na validação de pagamentos)
+   */
+  static async getInstallmentById(installmentId: string): Promise<Installment | null> {
+    const supabase = createAdminClient();
+    
+    const { data, error } = await supabase
+      .from("financial_installments")
+      .select("id, agreement_id, installment_number, amount, due_date, status, created_at, updated_at")
+      .eq("id", installmentId)
+      .single();
+
+    if (error) {
+      console.error(`Erro ao buscar parcela ${installmentId}:`, error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      agreement_id: data.agreement_id ?? undefined,
+      installment_number: Number(data.installment_number),
+      amount: Number(data.amount),
+      due_date: toDate(data.due_date),
+      status: data.status,
+      created_at: data.created_at ? new Date(data.created_at) : undefined,
+      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
+    } as Installment;
+  }
+
+  /**
+   * Registrar pagamento de parcela (assinatura compatível com a rota de API)
+   */
+  static async recordPaymentForInstallment(
+    data: z.infer<typeof PaymentSchema>,
+    authUser: AuthUser
+  ): Promise<Payment> {
+    return this.recordPayment(authUser, data);
+  }
+
+  /**
+   * Registrar pagamento de parcela (método interno)
    * - Insere pagamento
    * - Atualiza status da parcela (best effort)
    * - Registra auditoria (best effort)

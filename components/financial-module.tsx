@@ -233,27 +233,28 @@ function MonthlyInstallmentsTab() {
 
   // ===== Função segura para extrair nomes das partes =====
   const getPartiesInfo = (installment: MonthlyInstallment) => {
-    if (!installment?.agreement) return { clientName: 'Cliente N/A', executedName: 'Executado N/A' };
-    const agreement: any = installment.agreement;
+  if (!installment?.agreement) return { clientName: 'Cliente N/A', executedName: 'Executado N/A' };
+  const agreement: any = installment.agreement;
 
-    const clientName =
-      agreement?.debtor?.name ||
-      agreement?.client_entities?.name ||
-      agreement?.debtor_id?.name ||
-      'Cliente N/A';
+  // Nome do cliente (devedor)
+  const clientName = agreement?.debtor?.name || 'Cliente N/A';
 
-    let executedName = 'Executado N/A';
-    const parties = agreement?.cases?.case_parties as any[] | undefined;
-    if (Array.isArray(parties)) {
-      const executed = parties.find((p: any) => ['Executado', 'EXECUTADO', 'Executada'].includes(p?.role));
-      executedName = executed?.entities?.name || 'Executado N/A';
+  // Nome do executado (busca nas partes do processo)
+  let executedName = 'Executado N/A';
+  const caseParties = agreement?.cases?.case_parties;
+  
+  if (Array.isArray(caseParties) && caseParties.length > 0) {
+    const executedParty = caseParties.find((p: any) => 
+      p?.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role)
+    );
+    
+    if (executedParty?.entities?.name) {
+      executedName = executedParty.entities.name;
     }
-    if (executedName === 'Executado N/A') {
-      executedName = agreement?.executed_party?.name || agreement?.executed_name || 'Executado N/A';
-    }
+  }
 
-    return { clientName, executedName };
-  };
+  return { clientName, executedName };
+};
 
   return (
     <div className="space-y-6">
