@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO FINAL E CORRIGIDA
+// components/financial-module.tsx - VERSÃO COM DESIGN APERFEIÇOADO
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +16,7 @@ import {
   Plus, DollarSign, Send, Loader2, AlertCircle, RefreshCw, TrendingUp, Receipt, CheckCircle,
   FileText, Calendar, CreditCard, Search, Eye, Edit, Users, Scale, Store,
   FileSignature, Handshake, Clock, ChevronDown, ChevronRight, Calculator,
-  Phone, Mail, Banknote
+  Phone, Mail, Banknote, Sparkles, Zap, Target, ArrowUp, ArrowDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient, type FinancialAgreement, type MonthlyInstallment } from "@/lib/api-client";
@@ -86,7 +86,7 @@ const calculateInstallmentInfo = (agreement: FinancialAgreement) => {
   return { installmentValue, nextDueDate: nextDueDate.toISOString().split('T')[0], daysUntilDue };
 };
 
-// ===================== STATS =====================
+// ===================== STATS COM DESIGN APERFEIÇOADO =====================
 function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   const stats = useMemo(() => {
     const totalValue = agreements.reduce((sum, a) => sum + (a.total_amount || 0), 0);
@@ -95,10 +95,42 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
     const overdueAgreements = agreements.filter(a => a.status === 'defaulted').length;
 
     return [
-      { label: "Valor Total em Acordos", value: formatCurrency(totalValue), icon: DollarSign, color: "text-blue-600", bg: "from-blue-50 to-blue-100", trend: "+5.2%" },
-      { label: "Acordos Ativos", value: String(activeAgreements), icon: TrendingUp, color: "text-green-600", bg: "from-green-50 to-green-100", trend: `${activeAgreements} de ${agreements.length}` },
-      { label: "Total de Parcelas", value: String(totalInstallments), icon: Calculator, color: "text-purple-600", bg: "from-purple-50 to-purple-100", trend: `${agreements.length} acordos` },
-      { label: "Parcelas em Atraso", value: String(overdueAgreements), icon: AlertCircle, color: "text-red-600", bg: "from-red-50 to-red-100", trend: overdueAgreements > 0 ? "Atenção!" : "Em dia" },
+      { 
+        label: "Valor Total em Acordos", 
+        value: formatCurrency(totalValue), 
+        icon: DollarSign, 
+        color: "text-blue-600", 
+        bg: "from-blue-50 to-blue-100", 
+        trend: "+5.2%",
+        gradient: "from-blue-500 to-indigo-600"
+      },
+      { 
+        label: "Acordos Ativos", 
+        value: String(activeAgreements), 
+        icon: TrendingUp, 
+        color: "text-green-600", 
+        bg: "from-green-50 to-green-100", 
+        trend: `${activeAgreements} de ${agreements.length}`,
+        gradient: "from-emerald-500 to-teal-600"
+      },
+      { 
+        label: "Total de Parcelas", 
+        value: String(totalInstallments), 
+        icon: Calculator, 
+        color: "text-purple-600", 
+        bg: "from-purple-50 to-purple-100", 
+        trend: `${agreements.length} acordos`,
+        gradient: "from-purple-500 to-pink-600"
+      },
+      { 
+        label: "Parcelas em Atraso", 
+        value: String(overdueAgreements), 
+        icon: AlertCircle, 
+        color: "text-red-600", 
+        bg: "from-red-50 to-red-100", 
+        trend: overdueAgreements > 0 ? "Atenção!" : "Em dia",
+        gradient: "from-red-500 to-rose-600"
+      },
     ];
   }, [agreements]);
 
@@ -107,20 +139,35 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
       {stats.map((stat, index) => {
         const StatIcon = stat.icon as any;
         return (
-          <Card key={index} className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
+          <Card key={index} className="group hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 border-0 bg-white relative overflow-hidden">
             <div className={`absolute inset-0 bg-gradient-to-br ${stat.bg} opacity-10 group-hover:opacity-20 transition-opacity`} />
+            <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
             <CardContent className="p-6 relative z-10">
               <div className="flex items-start justify-between">
                 <div className="space-y-2">
-                  <p className="text-sm text-slate-600 font-medium">{stat.label}</p>
-                  <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+                  <p className="text-sm text-slate-600 font-medium flex items-center gap-2">
+                    {stat.label}
+                    <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
+                  </p>
+                  <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
                   <div className="flex items-center space-x-1">
-                    <TrendingUp className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-green-600 font-medium">{stat.trend}</span>
+                    {stat.trend.includes('+') ? (
+                      <ArrowUp className="w-4 h-4 text-green-500" />
+                    ) : stat.trend.includes('-') ? (
+                      <ArrowDown className="w-4 h-4 text-red-500" />
+                    ) : (
+                      <Target className="w-4 h-4 text-blue-500" />
+                    )}
+                    <span className={`text-sm font-medium ${
+                      stat.trend.includes('+') ? 'text-green-600' : 
+                      stat.trend.includes('Atenção') ? 'text-red-600' : 'text-blue-600'
+                    }`}>
+                      {stat.trend}
+                    </span>
                   </div>
                 </div>
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
-                  <StatIcon className={`w-6 h-6 ${stat.color}`} />
+                <div className={`p-3 rounded-2xl bg-gradient-to-br ${stat.gradient} shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500`}>
+                  <StatIcon className="w-6 h-6 text-white" />
                 </div>
               </div>
             </CardContent>
@@ -131,7 +178,7 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   );
 }
 
-// ===================== MONTHLY INSTALLMENTS =====================
+// ===================== MONTHLY INSTALLMENTS COM DESIGN APERFEIÇOADO =====================
 function MonthlyInstallmentsTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -222,14 +269,14 @@ function MonthlyInstallmentsTab() {
 
   const getStatusBadge = (status: MonthlyInstallment['status']) => {
     const variants = {
-      'PAGA': { label: 'Paga', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
-      'PENDENTE': { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
-      'ATRASADA': { label: 'Atrasada', className: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
+      'PAGA': { label: 'Paga', className: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg', icon: CheckCircle },
+      'PENDENTE': { label: 'Pendente', className: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg', icon: Clock },
+      'ATRASADA': { label: 'Atrasada', className: 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg', icon: AlertCircle },
     };
     const key = normalizeStatus(status);
     const { label, className, icon: Icon } = variants[key];
     return (
-      <Badge className={`${className} flex items-center gap-1 font-semibold`}>
+      <Badge className={`${className} flex items-center gap-1 font-semibold border-0 px-3 py-1`}>
         <Icon className="h-3 w-3" />{label}
       </Badge>
     );
@@ -238,8 +285,9 @@ function MonthlyInstallmentsTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total a Receber no Mês</p>
@@ -249,8 +297,9 @@ function MonthlyInstallmentsTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total Recebido no Mês</p>
@@ -260,8 +309,9 @@ function MonthlyInstallmentsTab() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Balanço do Mês</p>
@@ -273,13 +323,13 @@ function MonthlyInstallmentsTab() {
         </Card>
       </div>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex items-center gap-3">
-              <Label>Mês:</Label>
+              <Label className="text-slate-700 font-semibold">Mês:</Label>
               <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Mês" /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)}>
@@ -288,9 +338,9 @@ function MonthlyInstallmentsTab() {
                   ))}
                 </SelectContent>
               </Select>
-              <Label>Ano:</Label>
+              <Label className="text-slate-700 font-semibold">Ano:</Label>
               <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
-                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectTrigger className="w-[120px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Ano" /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 5 }, (_, i) => (
                     <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
@@ -304,17 +354,17 @@ function MonthlyInstallmentsTab() {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Vencimento</TableHead>
-                <TableHead>Partes</TableHead>
-                <TableHead>Processo</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
+                <TableHead className="text-slate-700 font-bold">Vencimento</TableHead>
+                <TableHead className="text-slate-700 font-bold">Partes</TableHead>
+                <TableHead className="text-slate-700 font-bold">Processo</TableHead>
+                <TableHead className="text-slate-700 font-bold">Valor</TableHead>
+                <TableHead className="text-slate-700 font-bold">Status</TableHead>
+                <TableHead className="text-right text-slate-700 font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -346,11 +396,11 @@ function MonthlyInstallmentsTab() {
                   const caseNumber = inst.agreement?.cases?.case_number || 'N/A';
                   
                   return (
-                    <TableRow key={inst.id}>
+                    <TableRow key={inst.id} className="group hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-transparent transition-all duration-200">
                       <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span className="text-sm" title={`Cliente: ${clientName}`}>{clientName}</span>
+                          <span className="text-sm text-slate-900 group-hover:text-purple-700 transition-colors" title={`Cliente: ${clientName}`}>{clientName}</span>
                           <span className="text-xs text-slate-500" title={`Executado: ${executedName}`}>vs {executedName}</span>
                         </div>
                       </TableCell>
@@ -363,7 +413,7 @@ function MonthlyInstallmentsTab() {
                             size="sm"
                             onClick={() => payInstallmentMutation.mutate(inst.id)}
                             disabled={payInstallmentMutation.isPending}
-                            className="bg-green-600 hover:bg-green-700"
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl"
                           >
                             {payInstallmentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4 mr-2" />}
                             Dar Baixa
@@ -382,7 +432,7 @@ function MonthlyInstallmentsTab() {
   );
 }
 
-// ===================== AGREEMENTS TAB =====================
+// ===================== AGREEMENTS TAB COM DESIGN APERFEIÇOADO =====================
 function renderAgreementTypeIcon(type: string | null | undefined) {
   const typeStr = type || 'N/A';
   const iconMap = {
@@ -410,24 +460,24 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      'active': { label: 'Ativo', className: 'bg-green-100 text-green-800 border-green-200' },
-      'completed': { label: 'Concluído', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-      'defaulted': { label: 'Em Atraso', className: 'bg-red-100 text-red-800 border-red-200' },
-      'cancelled': { label: 'Cancelado', className: 'bg-gray-100 text-gray-800 border-gray-200' }
+      'active': { label: 'Ativo', className: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg' },
+      'completed': { label: 'Concluído', className: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' },
+      'defaulted': { label: 'Em Atraso', className: 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg' },
+      'cancelled': { label: 'Cancelado', className: 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-lg' }
     } as const;
-    const cfg = (variants as any)[status] || { label: status, className: 'bg-gray-100 text-gray-800 border-gray-200' };
-    return <Badge className={`${cfg.className} border font-semibold`}>{cfg.label}</Badge>;
+    const cfg = (variants as any)[status] || { label: status, className: 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-lg' };
+    return <Badge className={`${cfg.className} border-0 px-3 py-1 font-semibold`}>{cfg.label}</Badge>;
   };
 
   return (
-    <Card className={`mb-4 border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-200 border-0 shadow-md`}>
+    <Card className={`mb-4 border-l-4 border-l-blue-500 hover:shadow-2xl transition-all duration-300 border-0 shadow-lg group cursor-pointer ${isExpanded ? 'bg-gradient-to-br from-white to-slate-50' : 'bg-white'}`}>
       <CardContent className="p-0">
-        <div className="p-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={onToggle}>
+        <div className="p-6 hover:bg-slate-50/50 transition-colors" onClick={onToggle}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+              {isExpanded ? <ChevronDown className="h-5 w-5 text-slate-500 group-hover:text-purple-600 transition-colors" /> : <ChevronRight className="h-5 w-5 text-slate-500 group-hover:text-purple-600 transition-colors" />}
               <div>
-                <h4 className="font-semibold text-slate-900">{agreement.entities?.name || 'Cliente não informado'}</h4>
+                <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{agreement.entities?.name || 'Cliente não informado'}</h4>
                 <p className="text-sm text-slate-500">{agreement.cases?.case_number || 'Sem número'}</p>
               </div>
             </div>
@@ -442,7 +492,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
         </div>
 
         {isExpanded && (
-          <div className="px-4 pb-4 border-t bg-slate-50/50">
+          <div className="px-6 pb-6 border-t bg-slate-50/50">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
               <div className="space-y-3">
                 <h5 className="font-semibold text-slate-700 flex items-center"><FileText className="h-4 w-4 mr-2" />Informações do Acordo</h5>
@@ -484,9 +534,9 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
               </div>
             )}
             <div className="flex justify-end space-x-2 border-t pt-3 mt-3">
-              <Button size="sm" variant="outline"><Eye className="h-4 w-4 mr-1" />Visualizar</Button>
-              <Button size="sm" variant="outline"><Edit className="h-4 w-4 mr-1" />Editar</Button>
-              <Button size="sm" onClick={() => onSendMessage(agreement)} className="bg-blue-600 hover:bg-blue-700">
+              <Button size="sm" variant="outline" className="border-2 border-slate-200 rounded-xl"><Eye className="h-4 w-4 mr-1" />Visualizar</Button>
+              <Button size="sm" variant="outline" className="border-2 border-slate-200 rounded-xl"><Edit className="h-4 w-4 mr-1" />Editar</Button>
+              <Button size="sm" onClick={() => onSendMessage(agreement)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg rounded-xl">
                 <Send className="h-4 w-4 mr-1" />Enviar Cobrança
               </Button>
             </div>
@@ -528,16 +578,16 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
 
   return (
     <div className="space-y-6">
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                <Input placeholder="Buscar por cliente, processo ou executado..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                <Input placeholder="Buscar por cliente, processo ou executado..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 h-12 bg-white border-2 border-slate-200 focus:border-purple-400 rounded-xl" />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos Status</SelectItem>
                   <SelectItem value="active">Ativo</SelectItem>
@@ -547,7 +597,7 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
                 </SelectContent>
               </Select>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Tipo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos Tipos</SelectItem>
                   <SelectItem value="Judicial">Judicial</SelectItem>
@@ -558,16 +608,16 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setExpandedAgreements(new Set())}>Recolher Todos</Button>
-              <Button variant="outline" onClick={() => setExpandedAgreements(new Set(filteredAgreements.map(a => a.id)))}>Expandir Todos</Button>
-              <Button onClick={onNewAgreement} className="bg-slate-900 hover:bg-slate-800"><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button>
+              <Button variant="outline" onClick={() => setExpandedAgreements(new Set())} className="border-2 border-slate-200 rounded-xl">Recolher Todos</Button>
+              <Button variant="outline" onClick={() => setExpandedAgreements(new Set(filteredAgreements.map(a => a.id)))} className="border-2 border-slate-200 rounded-xl">Expandir Todos</Button>
+              <Button onClick={onNewAgreement} className="bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 shadow-lg rounded-xl"><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-4">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
+        <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-600">Mostrando {filteredAgreements.length} de {agreements.length} acordos</span>
             <span className="text-sm font-semibold text-slate-900">Valor Total: {formatCurrency(filteredAgreements.reduce((sum, a) => sum + (a.total_amount || 0), 0))}</span>
@@ -577,7 +627,7 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
 
       <div className="space-y-0">
         {filteredAgreements.length === 0 ? (
-          <Card className="border-0 shadow-lg">
+          <Card className="border-0 shadow-xl">
             <CardContent className="text-center py-12">
               <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3>
@@ -596,7 +646,7 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
   );
 }
 
-// ===================== ALVARÁS =====================
+// ===================== ALVARÁS COM DESIGN APERFEIÇOADO =====================
 function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAsReceived: (id: number) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -622,8 +672,9 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total em Alvarás</p>
@@ -633,8 +684,9 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Pendentes de Recebimento</p>
@@ -644,8 +696,9 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Taxa de Recebimento</p>
@@ -657,15 +710,15 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
         </Card>
       </div>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+              <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 h-12 bg-white border-2 border-slate-200 focus:border-purple-400 rounded-xl" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="received">Recebidos</SelectItem>
@@ -678,18 +731,30 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
 
       <div className="space-y-4">
         {filteredAlvaras.map((alvara) => (
-          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-lg`}>
+          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <div className="flex items-center space-x-3"><h4 className="font-semibold text-slate-900">Processo {alvara.case_number}</h4><Badge variant={alvara.received ? "default" : "secondary"}>{alvara.received ? "Recebido" : "Pendente"}</Badge></div>
+                  <div className="flex items-center space-x-3">
+                    <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">Processo {alvara.case_number}</h4>
+                    <Badge variant={alvara.received ? "default" : "secondary"} className={alvara.received ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white" : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"}>
+                      {alvara.received ? "Recebido" : "Pendente"}
+                    </Badge>
+                  </div>
                   <p className="text-sm text-slate-600"><strong>Credor:</strong> {alvara.creditor_name || 'Não informado'}</p>
                   <p className="text-sm text-slate-600"><strong>Vara:</strong> {alvara.court || 'Não informado'}</p>
-                  <div className="flex items-center space-x-4 text-sm text-slate-600"><span><strong>Expedição:</strong> {formatDate(alvara.issue_date)}</span>{alvara.received_date && (<span><strong>Recebimento:</strong> {formatDate(alvara.received_date)}</span>)}</div>
+                  <div className="flex items-center space-x-4 text-sm text-slate-600">
+                    <span><strong>Expedição:</strong> {formatDate(alvara.issue_date)}</span>
+                    {alvara.received_date && (<span><strong>Recebimento:</strong> {formatDate(alvara.received_date)}</span>)}
+                  </div>
                 </div>
                 <div className="text-right space-y-2">
                   <p className="text-2xl font-bold text-green-600">{formatCurrency(alvara.value)}</p>
-                  {!alvara.received && (<Button size="sm" onClick={() => onMarkAsReceived(alvara.id)} className="bg-green-600 hover:bg-green-700"><CheckCircle className="h-4 w-4 mr-1" />Marcar como Recebido</Button>)}
+                  {!alvara.received && (
+                    <Button size="sm" onClick={() => onMarkAsReceived(alvara.id)} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl">
+                      <CheckCircle className="h-4 w-4 mr-1" />Marcar como Recebido
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -700,7 +765,7 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
   );
 }
 
-// ===================== OVERDUE =====================
+// ===================== OVERDUE COM DESIGN APERFEIÇOADO =====================
 function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallments: OverdueInstallment[], onSendMessage: (i: OverdueInstallment) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -717,16 +782,17 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
   const totalOverdueValue = useMemo(() => filtered.reduce((s, i) => s + i.value, 0), [filtered]);
 
   const getPriorityBadge = (days: number) => {
-    if (days > 30) return <Badge variant="destructive">Urgente ({days} dias)</Badge>;
-    if (days > 15) return <Badge variant="outline">Moderado ({days} dias)</Badge>;
-    return <Badge variant="secondary">Recente ({days} dias)</Badge>;
+    if (days > 30) return <Badge className="bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg border-0">Urgente ({days} dias)</Badge>;
+    if (days > 15) return <Badge variant="outline" className="border-orange-500 text-orange-600">Moderado ({days} dias)</Badge>;
+    return <Badge variant="secondary" className="bg-slate-200 text-slate-700">Recente ({days} dias)</Badge>;
   };
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-rose-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Valor Total em Atraso</p>
@@ -736,8 +802,9 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Parcelas em Atraso</p>
@@ -747,8 +814,9 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-pink-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Atraso Médio</p>
@@ -760,15 +828,15 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
         </Card>
       </div>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-              <Input placeholder="Buscar por cliente ou processo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+              <Input placeholder="Buscar por cliente ou processo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 h-12 bg-white border-2 border-slate-200 focus:border-purple-400 rounded-xl" />
             </div>
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Prioridade" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
                 <SelectItem value="urgent">Urgente (+30 dias)</SelectItem>
@@ -782,11 +850,14 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
 
       <div className="space-y-4">
         {filtered.map((installment) => (
-          <Card key={installment.id} className="border-l-4 border-l-red-500 border-0 shadow-lg">
+          <Card key={installment.id} className="border-l-4 border-l-red-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-3"><h4 className="font-semibold text-slate-900">{installment.client_name}</h4>{getPriorityBadge(installment.days_overdue)}</div>
+                  <div className="flex items-center space-x-3">
+                    <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{installment.client_name}</h4>
+                    {getPriorityBadge(installment.days_overdue)}
+                  </div>
                   <p className="text-sm text-slate-600"><strong>Processo:</strong> {installment.case_number} | <strong> Parcela:</strong> {installment.installment_number}</p>
                   <p className="text-sm text-slate-600"><strong>Vencimento:</strong> {formatDate(installment.due_date)}</p>
                   {installment.client_contact && (
@@ -799,7 +870,9 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
                 <div className="text-right space-y-2">
                   <p className="text-2xl font-bold text-red-600">{formatCurrency(installment.value)}</p>
                   <p className="text-sm text-slate-600">de {formatCurrency(installment.total_agreement_value)}</p>
-                  <Button size="sm" onClick={() => onSendMessage(installment)} className="bg-blue-600 hover:bg-blue-700"><Send className="h-4 w-4 mr-1" />Enviar Cobrança</Button>
+                  <Button size="sm" onClick={() => onSendMessage(installment)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg rounded-xl">
+                    <Send className="h-4 w-4 mr-1" />Enviar Cobrança
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -810,7 +883,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
   );
 }
 
-// ===================== EXPENSES =====================
+// ===================== EXPENSES COM DESIGN APERFEIÇOADO =====================
 function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expenses: Expense[], onAddExpense: () => void, onToggleExpenseStatus: (id: number) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -832,8 +905,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-slate-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total de Despesas</p>
@@ -843,8 +917,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Despesas Pagas</p>
@@ -854,8 +929,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Despesas Pendentes</p>
@@ -865,8 +941,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
-          <CardContent className="p-6">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 opacity-10 group-hover:opacity-20 transition-opacity"></div>
+          <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total de Itens</p>
@@ -878,16 +955,16 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
         </Card>
       </div>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                <Input placeholder="Buscar despesas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+                <Input placeholder="Buscar despesas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 h-12 bg-white border-2 border-slate-200 focus:border-purple-400 rounded-xl" />
               </div>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Categoria" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="Fixo">Fixo</SelectItem>
@@ -896,7 +973,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="paid">Pago</SelectItem>
@@ -904,18 +981,26 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={onAddExpense} className="bg-slate-900 hover:bg-slate-800"><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
+            <Button onClick={onAddExpense} className="bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 shadow-lg rounded-xl h-12">
+              <Plus className="mr-2 h-4 w-4" /> Nova Despesa
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="space-y-4">
         {filteredExpenses.map((expense) => (
-          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-lg`}>
+          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-3"><h4 className="font-semibold text-slate-900">{expense.description}</h4><Badge variant={expense.status === 'paid' ? "default" : "secondary"}>{expense.status === 'paid' ? "Pago" : "Pendente"}</Badge><Badge variant="outline">{expense.category}</Badge></div>
+                  <div className="flex items-center gap-3">
+                    <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{expense.description}</h4>
+                    <Badge variant={expense.status === 'paid' ? "default" : "secondary"} className={expense.status === 'paid' ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white" : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"}>
+                      {expense.status === 'paid' ? "Pago" : "Pendente"}
+                    </Badge>
+                    <Badge variant="outline" className="border-slate-300 text-slate-700">{expense.category}</Badge>
+                  </div>
                   <div className="flex items-center gap-4 text-sm text-slate-600">
                     <span><strong>Data:</strong> {formatDate(expense.date)}</span>
                     {expense.due_date && (<span><strong>Vencimento:</strong> {formatDate(expense.due_date)}</span>)}
@@ -926,8 +1011,10 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
                 <div className="text-right space-y-2">
                   <p className="text-2xl font-bold text-slate-900">{formatCurrency(expense.value)}</p>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onToggleExpenseStatus(expense.id)}>{expense.status === 'paid' ? 'Marcar Pendente' : 'Marcar Pago'}</Button>
-                    <Button size="sm" variant="outline"><Edit className="h-4 w-4" /></Button>
+                    <Button size="sm" variant="outline" onClick={() => onToggleExpenseStatus(expense.id)} className="border-2 border-slate-200 rounded-xl">
+                      {expense.status === 'paid' ? 'Marcar Pendente' : 'Marcar Pago'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-2 border-slate-200 rounded-xl"><Edit className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </div>
@@ -939,7 +1026,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   );
 }
 
-// ===================== ROOT =====================
+// ===================== ROOT COM DESIGN APERFEIÇOADO =====================
 export function FinancialModule() {
   const { toast } = useToast();
 
@@ -999,12 +1086,12 @@ export function FinancialModule() {
 
   if (error) {
     return (
-      <Card className="border-0 shadow-lg border-red-200">
+      <Card className="border-0 shadow-xl border-red-200 bg-white/80 backdrop-blur-sm">
         <CardContent className="p-8 text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-red-700 mb-2">Erro ao carregar dados financeiros</h3>
           <p className="text-red-600 mb-4">{error.message}</p>
-          <Button onClick={() => refetch()} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={() => refetch()} className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 shadow-lg rounded-xl">
             <RefreshCw className="mr-2 h-4 w-4" /> Tentar Novamente
           </Button>
         </CardContent>
@@ -1014,9 +1101,9 @@ export function FinancialModule() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-slate-500" />
+      <div className="flex justify-center items-center h-96 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-500 mx-auto" />
           <p className="text-slate-600 font-medium">Carregando dados financeiros...</p>
         </div>
       </div>
@@ -1025,27 +1112,33 @@ export function FinancialModule() {
 
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Módulo Financeiro</h2>
-            <p className="text-slate-300 text-lg">Controle total sobre acordos, alvarás, e despesas</p>
+      {/* Header Premium */}
+      <div className="relative bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 rounded-3xl p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-10"></div>
+        <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="relative z-10">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-4xl font-bold mb-3">Módulo Financeiro</h2>
+              <p className="text-emerald-100 text-xl">Controle total sobre acordos, alvarás, e despesas</p>
+            </div>
+            <Button onClick={() => refetch()} className="bg-white text-emerald-900 hover:bg-slate-100 shadow-lg rounded-xl">
+              <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Dados
+            </Button>
           </div>
-          <Button onClick={() => refetch()} className="bg-white text-slate-900 hover:bg-slate-100">
-            <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Dados
-          </Button>
         </div>
       </div>
 
       <FinancialStats agreements={safeAgreements} />
 
       <Tabs defaultValue="monthly_installments" className="space-y-6">
-        <TabsList className="grid grid-cols-5 w-full">
-          <TabsTrigger value="monthly_installments" className="flex items-center gap-2"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
-          <TabsTrigger value="acordos" className="flex items-center gap-2"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2">{safeAgreements.length}</Badge></TabsTrigger>
-          <TabsTrigger value="alvaras" className="flex items-center gap-2"><Receipt className="h-4 w-4" /><span>Alvarás</span><Badge variant="secondary" className="ml-2">{alvaras.length}</Badge></TabsTrigger>
-          <TabsTrigger value="atraso" className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2">{overdueInstallments.length}</Badge></TabsTrigger>
-          <TabsTrigger value="despesas" className="flex items-center gap-2"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2">{expenses.length}</Badge></TabsTrigger>
+        <TabsList className="grid grid-cols-5 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
+          <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
+          <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
+          <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{alvaras.length}</Badge></TabsTrigger>
+          <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
+          <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
         </TabsList>
 
         <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
@@ -1069,15 +1162,20 @@ export function FinancialModule() {
       </Tabs>
 
       <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Enviar Lembrete para {selectedRecipient?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-2xl bg-white/95 backdrop-blur-lg border-0 shadow-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center text-2xl font-bold"><Send className="mr-2 h-5 w-5" /> Enviar Lembrete para {selectedRecipient?.name}</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              {selectedRecipient?.type === 'acordo' ? 'Lembrete de parcela em atraso' : 'Lembrete de parcela em atraso'}
+            </DialogDescription>
+          </DialogHeader>
           <div className="py-4">
-            <Label htmlFor="message">Conteúdo da Mensagem</Label>
-            <Textarea id="message" value={messageText} onChange={e => setMessageText(e.target.value)} className="min-h-[150px] mt-2" />
+            <Label htmlFor="message" className="text-slate-700 font-semibold">Conteúdo da Mensagem</Label>
+            <Textarea id="message" value={messageText} onChange={e => setMessageText(e.target.value)} className="min-h-[150px] mt-2 bg-white border-2 border-slate-200 rounded-xl" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMessageModalOpen(false)}>Cancelar</Button>
-            <Button onClick={() => { toast({ title: "Mensagem Enviada!", description: `Lembrete enviado para ${selectedRecipient?.name}` }); setMessageModalOpen(false); }}>
+            <Button variant="outline" onClick={() => setMessageModalOpen(false)} className="border-2 border-slate-200 rounded-xl">Cancelar</Button>
+            <Button onClick={() => { toast({ title: "Mensagem Enviada!", description: `Lembrete enviado para ${selectedRecipient?.name}` }); setMessageModalOpen(false); }} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg rounded-xl">
               <Send className="mr-2 h-4 w-4" /> Enviar Mensagem
             </Button>
           </DialogFooter>
