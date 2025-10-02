@@ -8,7 +8,7 @@ import {
   Users, FileText, DollarSign, Calendar, CheckSquare, BarChart2,
   Briefcase, LogOut, Settings, Scale, FileCode, Bell, TrendingUp,
   Activity, AlertCircle, Clock, Star, Menu, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, Sparkles, Zap, Shield, Award, Target
+  ArrowUp, ArrowDown, Sparkles, Zap, Shield, Award, Target, FileSearch
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +26,7 @@ import { NotificationsDropdown } from "./notifications-dropdown"
 import { SystemSettingsModal } from './system-settings-modal'
 import { UserSettingsModal } from './user-settings-modal'
 import { TemplatesModule } from "./templates-module"
+import CruzamentoPage from "@/app/dashboard/cruzamento/page"; // <-- CORREÇÃO: Importa o novo componente
 
 interface GlobalFilters {
   cases?: { status: string };
@@ -46,6 +47,7 @@ const menuItems = [
     { value: "overview", label: "Dashboard", icon: BarChart2, description: "Visão geral do escritório", color: "from-blue-500 to-indigo-600" },
     { value: "entities", label: "Clientes", icon: Users, description: "Gerenciar clientes e partes", color: "from-emerald-500 to-teal-600" },
     { value: "cases", label: "Processos", icon: Briefcase, description: "Acompanhar processos jurídicos", color: "from-purple-500 to-pink-600" },
+    { value: "cruzamento", label: "Cruzamento de Listas", icon: FileSearch, description: "Comparar pagamentos e judicializados", color: "from-cyan-500 to-teal-600" }, // <-- CORREÇÃO: Adicionada vírgula
     { value: "petitions", label: "Petições", icon: FileText, description: "Documentos e petições", color: "from-amber-500 to-orange-600" },
     { value: "templates", label: "Modelos", icon: FileCode, description: "Templates de documentos", color: "from-cyan-500 to-blue-600" },
     { value: "financial", label: "Financeiro", icon: DollarSign, description: "Controle financeiro", color: "from-green-500 to-emerald-600" },
@@ -289,8 +291,8 @@ function ModernLayout({ children, activeTab, setActiveTab, handleLogout, onUserS
             <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
                 <div className="absolute inset-0" style={{
                     backgroundImage: `radial-gradient(circle at 20% 80%, blue 0%, transparent 50%),
-                                     radial-gradient(circle at 80% 20%, purple 0%, transparent 50%),
-                                     radial-gradient(circle at 40% 40%, pink 0%, transparent 50%)`,
+                                      radial-gradient(circle at 80% 20%, purple 0%, transparent 50%),
+                                      radial-gradient(circle at 40% 40%, pink 0%, transparent 50%)`,
                 }}></div>
             </div>
 
@@ -598,6 +600,7 @@ export function Dashboard() {
     overview: null, // Handled directly in ModernLayout
     entities: <EntitiesModule />,
     cases: <CasesModule initialFilters={globalFilters.cases} />,
+    cruzamento: <CruzamentoPage />, // <-- CORREÇÃO: Adicionada a nova página ao conteúdo das abas
     petitions: <PetitionsModule />,
     templates: <TemplatesModule />,
     financial: <FinancialModule />,
