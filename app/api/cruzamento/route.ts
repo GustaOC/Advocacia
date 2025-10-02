@@ -26,6 +26,19 @@ const normalizeString = (str: string) => {
     .replace(/\s+/g, ' ');           // Garante espaços simples
 };
 
+// Função para converter data serial do Excel para string
+const excelDateToString = (serial: number): string => {
+  const utc_days = Math.floor(serial - 25569);
+  const utc_value = utc_days * 86400;
+  const date_info = new Date(utc_value * 1000);
+  
+  const day = String(date_info.getUTCDate()).padStart(2, '0');
+  const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+  const year = date_info.getUTCFullYear();
+  
+  return `${day}/${month}/${year}`;
+};
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -64,7 +77,12 @@ export async function POST(request: Request) {
 
     // --- 2. Processar arquivo de PAGAMENTOS ---
     const pagamentosBuffer = await pagamentosFile.arrayBuffer();
-    const pagamentosWorkbook = XLSX.read(pagamentosBuffer, { type: 'buffer' });
+    const pagamentosWorkbook = XLSX.read(pagamentosBuffer, { 
+      type: 'buffer',
+      cellDates: true,  // Tenta converter datas automaticamente
+      cellNF: false,
+      cellStyles: false
+    });
     const pagamentosSheetName = pagamentosWorkbook.SheetNames[0];
 
     if (!pagamentosSheetName) {
@@ -75,7 +93,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `A planilha '${pagamentosSheetName}' não pôde ser lida.` }, { status: 400 });
     }
     
-    const pagamentosData: any[][] = XLSX.utils.sheet_to_json(pagamentosSheet, { header: 1 });
+    const pagamentosData: any[][] = XLSX.utils.sheet_to_json(pagamentosSheet, { 
+      header: 1,
+      raw: false,  // Retorna valores formatados como strings
+      dateNF: 'dd/mm/yyyy'
+    });
     
     const resultados: ResultadoCruzamento[] = [];
     let totalValor = 0;
@@ -84,22 +106,58 @@ export async function POST(request: Request) {
     let dataAtual: string | null = null; 
     const dateRegex = /(\d{2}\/\d{2}\/\d{4})/; // Expressão regular para encontrar datas no formato dd/mm/yyyy
 
-    pagamentosData.forEach(row => {
-        let isDateRow = false;
+    console.log('Iniciando processamento de pagamentos...');
+    console.log('Total de linhas encontradas:', pagamentosData.length);
+
+    pagamentosData.forEach((row, rowIndex) => {
+        // Verifica se alguma célula da linha contém "Data:"
+        let dataEncontrada = false;
         
-        // Itera sobre as células da linha para encontrar a data
-        for (const cell of row) {
-            if (typeof cell === 'string' && cell.toUpperCase().includes('DATA:')) {
-                const match = cell.match(dateRegex);
+        for (let i = 0; i < row.length; i++) {
+            const cell = row[i];
+            const cellStr = String(cell || '').trim();
+            
+            // Se encontrar "Data:", procura a data na célula anterior ou atual
+            if (cellStr.toUpperCase() === 'DATA:') {
+                // Procura a data na célula anterior (i-1)
+                if (i > 0) {
+                    const prevCell = String(row[i - 1] || '').trim();
+                    const match = prevCell.match(dateRegex);
+                    if (match && match[0]) {
+                        dataAtual = match[0];
+                        dataEncontrada = true;
+                        console.log(`✓✓✓ DATA CAPTURADA: ${dataAtual} (linha ${rowIndex + 1}, encontrada na célula ${i - 1})`);
+                        break;
+                    }
+                }
+                
+                // Se não encontrou antes, procura na próxima célula (i+1)
+                if (!dataEncontrada && i < row.length - 1) {
+                    const nextCell = String(row[i + 1] || '').trim();
+                    const match = nextCell.match(dateRegex);
+                    if (match && match[0]) {
+                        dataAtual = match[0];
+                        dataEncontrada = true;
+                        console.log(`✓✓✓ DATA CAPTURADA: ${dataAtual} (linha ${rowIndex + 1}, encontrada na célula ${i + 1})`);
+                        break;
+                    }
+                }
+            }
+            
+            // Também verifica se a célula atual já tem "Data: DD/MM/YYYY" junto
+            if (cellStr.toUpperCase().includes('DATA:')) {
+                const match = cellStr.match(dateRegex);
                 if (match && match[0]) {
                     dataAtual = match[0];
-                    isDateRow = true;
-                    break; 
+                    dataEncontrada = true;
+                    console.log(`✓✓✓ DATA CAPTURADA: ${dataAtual} (linha ${rowIndex + 1}, na mesma célula)`);
+                    break;
                 }
             }
         }
         
-        if (isDateRow) return;
+        // Se encontrou data, pula para próxima linha
+        if (dataEncontrada) return;
         
         // Procura pela linha de transação
         const descriptionCell = row[0]; // Descrição na coluna A
@@ -115,6 +173,13 @@ export async function POST(request: Request) {
 
                 if (nomesJudicializados.has(nomeNormalizado)) {
                     const valor = parseFloat(String(valueCell || '0').replace(',', '.')) || 0;
+                    
+                    if (!dataAtual) {
+                        console.warn(`⚠ ATENÇÃO: Match encontrado na linha ${rowIndex + 1} mas SEM DATA: ${nomeCliente} - R$ ${valor.toFixed(2)}`);
+                    } else {
+                        console.log(`✓ Match encontrado na linha ${rowIndex + 1}: ${nomeCliente} - R$ ${valor.toFixed(2)} - Data: ${dataAtual}`);
+                    }
+                    
                     resultados.push({
                         data: dataAtual,
                         nome: nomeCliente,
@@ -125,6 +190,9 @@ export async function POST(request: Request) {
             }
         }
     });
+
+    console.log(`Processamento finalizado. Total de correspondências: ${resultados.length}`);
+    console.log(`Valor total: R$ ${totalValor.toFixed(2)}`);
 
     const responseData: ApiResponse = {
         resultados: resultados,
