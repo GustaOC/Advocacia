@@ -1,4 +1,4 @@
-// app/api/petitions/route.ts - VERSÃO COMPLETA
+// app/api/petitions/route.ts - VERSÃO CORRIGIDA
 
 import { NextResponse, NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth";
@@ -18,11 +18,13 @@ export async function GET(request: Request) {
 
     // Se foi fornecido case_id, busca petições do caso específico
     if (caseId) {
-      petitions = await petitionService.getPetitionsByCase(caseId, user);
+      // CORREÇÃO: A ordem dos argumentos foi trocada para (user, caseId)
+      petitions = await petitionService.getPetitionsByCase(user, caseId);
     }
     // Se foi fornecido status, busca petições por status
     else if (status) {
-      petitions = await petitionService.getPetitionsByStatus(status, user);
+      // CORREÇÃO: A ordem dos argumentos foi trocada para (user, status)
+      petitions = await petitionService.getPetitionsByStatus(user, status);
     }
     // Senão, busca todas as petições
     else {
@@ -45,7 +47,8 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth(); // Ou requirePermission("CREATE_PETITION") se necessário
     const body = await request.json();
 
-    const newPetition = await petitionService.createPetition(body, user);
+    // CORREÇÃO: A ordem dos argumentos foi trocada para (user, body)
+    const newPetition = await petitionService.createPetition(user, body);
     return NextResponse.json(newPetition, { status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
