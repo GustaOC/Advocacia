@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO OTIMIZADA E ROBUSTA
+// components/financial-module.tsx - VERSÃO FINAL E CORRIGIDA
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -138,7 +138,7 @@ function MonthlyInstallmentsTab() {
   const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
   const [isPending, startTransition] = useTransition();
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data: installments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
     queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month],
     queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
     retry: 3,
@@ -147,31 +147,42 @@ function MonthlyInstallmentsTab() {
     placeholderData: (prev) => prev,
   });
 
-  const installments: MonthlyInstallment[] = useMemo(() => {
-    if (!data) return [] as MonthlyInstallment[];
+  // ✅ FUNÇÃO HELPER ROBUSTA PARA EXTRAIR NOMES DAS PARTES
+  const getPartiesInfo = (installment: MonthlyInstallment) => {
+    // A API agora retorna a estrutura correta: installment -> agreement -> cases -> case_parties
+    const caseParties = installment.agreement?.cases?.case_parties;
 
-    let rawList: any[] = [];
-    if (Array.isArray(data)) rawList = data as any[];
-    else if (data && typeof data === 'object' && Array.isArray((data as any).installments)) rawList = (data as any).installments;
-    else if (data && typeof data === 'object' && Array.isArray((data as any).items)) rawList = (data as any).items;
-    else return [] as MonthlyInstallment[];
+    // Fallback inicial
+    let clientName = installment.agreement?.debtor?.name || 'Cliente N/A';
+    let executedName = 'Executado N/A';
 
-    return rawList.map((it: any) => ({
-      ...it,
-      id: Number(it.id) || 0,
-      amount: Number(it.amount) || 0,
-      due_date: it.due_date || it.dueDate || new Date().toISOString().split('T')[0],
-      status: normalizeStatus(it.status),
-      agreement: it.agreement || null,
-    })) as MonthlyInstallment[];
-  }, [data]);
+    if (Array.isArray(caseParties) && caseParties.length > 0) {
+      const clientParty = caseParties.find((p: any) =>
+        p.role && ['Cliente', 'CLIENTE'].includes(p.role)
+      );
+      if (clientParty?.entities?.name) {
+        clientName = clientParty.entities.name;
+      }
+
+      const executedParty = caseParties.find((p: any) =>
+        p.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role)
+      );
+      if (executedParty?.entities?.name) {
+        executedName = executedParty.entities.name;
+      }
+    }
+    return { clientName, executedName };
+  };
 
   const { totalToReceive, totalReceived } = useMemo(() => {
-    return installments.reduce(
+    return (installments || []).reduce(
       (acc, installment) => {
         const amount = Number(installment.amount) || 0;
-        const status = normalizeStatus(installment.status);
-        if (status === 'PAGA') acc.totalReceived += amount; else acc.totalToReceive += amount;
+        if (normalizeStatus(installment.status) === 'PAGA') {
+          acc.totalReceived += amount;
+        } else {
+          acc.totalToReceive += amount;
+        }
         return acc;
       },
       { totalToReceive: 0, totalReceived: 0 }
@@ -179,8 +190,8 @@ function MonthlyInstallmentsTab() {
   }, [installments]);
 
   const payInstallmentMutation = useMutation({
-    mutationFn: async (installmentId: number) => {
-      const value = installments.find(i => i.id === installmentId)?.amount ?? 0;
+    mutationFn: (installmentId: number) => {
+      const value = (installments || []).find(i => i.id === installmentId)?.amount ?? 0;
       return apiClient.recordInstallmentPayment(String(installmentId), {
         amount_paid: value,
         payment_date: new Date().toISOString(),
@@ -189,19 +200,16 @@ function MonthlyInstallmentsTab() {
     },
     onMutate: async (installmentId) => {
       await queryClient.cancelQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
-      const prev = queryClient.getQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month]);
-      // otimista: marca como PAGA
-      queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], (old: any) => {
-        const mapList = (list: any[]) => list.map((i) => i.id === installmentId ? { ...i, status: 'PAGA' } : i);
-        if (Array.isArray(old)) return mapList(old);
-        if (old && Array.isArray(old.installments)) return { ...old, installments: mapList(old.installments) };
-        if (old && Array.isArray(old.items)) return { ...old, items: mapList(old.items) };
-        return old;
-      });
-      return { prev };
+      const previousInstallments = queryClient.getQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month]);
+      queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], (oldData: any) =>
+        (oldData || []).map((i: any) => (i.id === installmentId ? { ...i, status: 'PAGA' } : i))
+      );
+      return { previousInstallments };
     },
-    onError: (err, _id, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], ctx.prev);
+    onError: (err, _vars, context) => {
+      if (context?.previousInstallments) {
+        queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], context.previousInstallments);
+      }
       toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
     },
     onSuccess: () => {
@@ -221,40 +229,15 @@ function MonthlyInstallmentsTab() {
       'PAGA': { label: 'Paga', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
       'PENDENTE': { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
       'ATRASADA': { label: 'Atrasada', className: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
-    } as const;
-    const key = (status as StatusUI) in variants ? (status as StatusUI) : 'PENDENTE';
-    const { label, className, icon: Icon } = variants[key as keyof typeof variants];
+    };
+    const key = normalizeStatus(status);
+    const { label, className, icon: Icon } = variants[key];
     return (
       <Badge className={`${className} flex items-center gap-1 font-semibold`}>
         <Icon className="h-3 w-3" />{label}
       </Badge>
     );
   };
-
-  // ===== Função segura para extrair nomes das partes =====
-  const getPartiesInfo = (installment: MonthlyInstallment) => {
-  if (!installment?.agreement) return { clientName: 'Cliente N/A', executedName: 'Executado N/A' };
-  const agreement: any = installment.agreement;
-
-  // Nome do cliente (devedor)
-  const clientName = agreement?.debtor?.name || 'Cliente N/A';
-
-  // Nome do executado (busca nas partes do processo)
-  let executedName = 'Executado N/A';
-  const caseParties = agreement?.cases?.case_parties;
-  
-  if (Array.isArray(caseParties) && caseParties.length > 0) {
-    const executedParty = caseParties.find((p: any) => 
-      p?.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role)
-    );
-    
-    if (executedParty?.entities?.name) {
-      executedName = executedParty.entities.name;
-    }
-  }
-
-  return { clientName, executedName };
-};
 
   return (
     <div className="space-y-6">
@@ -308,7 +291,7 @@ function MonthlyInstallmentsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && (
+              {isLoading || isPending ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2 text-slate-600">
@@ -316,9 +299,7 @@ function MonthlyInstallmentsTab() {
                     </div>
                   </TableCell>
                 </TableRow>
-              )}
-
-              {isError && (
+              ) : isError ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-red-600">
                     <div className="flex items-center justify-center gap-2">
@@ -326,52 +307,46 @@ function MonthlyInstallmentsTab() {
                     </div>
                   </TableCell>
                 </TableRow>
-              )}
-
-              {!isLoading && !isError && installments.length === 0 && (
+              ) : installments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                     Nenhuma parcela encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
+              ) : (
+                installments.map((inst) => {
+                  const { clientName, executedName } = getPartiesInfo(inst);
+                  const caseNumber = inst.agreement?.cases?.case_number || 'N/A';
+                  
+                  return (
+                    <TableRow key={inst.id}>
+                      <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span className="text-sm" title={`Cliente: ${clientName}`}>{clientName}</span>
+                          <span className="text-xs text-slate-500" title={`Executado: ${executedName}`}>vs {executedName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{caseNumber}</TableCell>
+                      <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
+                      <TableCell>{getStatusBadge(inst.status)}</TableCell>
+                      <TableCell className="text-right">
+                        {normalizeStatus(inst.status) !== 'PAGA' && (
+                          <Button
+                            size="sm"
+                            onClick={() => payInstallmentMutation.mutate(inst.id)}
+                            disabled={payInstallmentMutation.isPending}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            {payInstallmentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4 mr-2" />}
+                            Dar Baixa
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
-
-              {!isLoading && installments.map((inst) => {
-                const { clientName, executedName } = getPartiesInfo(inst);
-                const caseNumber = (inst as any)?.agreement?.cases?.case_number || 'N/A';
-
-                return (
-                  <TableRow key={inst.id}>
-                    <TableCell className="font-mono">{formatDate(inst.due_date as any)}</TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex flex-col">
-                        <span className="text-sm">{clientName}</span>
-                        <span className="text-xs text-slate-500">vs {executedName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{caseNumber}</TableCell>
-                    <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
-                    <TableCell>{getStatusBadge(inst.status)}</TableCell>
-                    <TableCell className="text-right">
-                      {normalizeStatus(inst.status) !== 'PAGA' && (
-                        <Button
-                          size="sm"
-                          onClick={() => payInstallmentMutation.mutate(inst.id)}
-                          disabled={payInstallmentMutation.isPending}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          {payInstallmentMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Banknote className="h-4 w-4 mr-2" />
-                          )}
-                          Dar Baixa
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
             </TableBody>
           </Table>
         </CardContent>

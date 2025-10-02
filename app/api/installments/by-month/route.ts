@@ -1,64 +1,61 @@
-// app/api/installments/by-month/route.ts
+// app/api/installments/by-month/route.ts - VERSÃO FINALÍSSIMA
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { FinancialService } from '@/lib/services/financialService';
-import { getSessionUser, requirePermission } from '@/lib/auth';
-import { z } from 'zod';
+import { cookies } from 'next/headers';
 
-/**
- * Validação forte dos parâmetros
- */
-const QuerySchema = z.object({
-  year: z.coerce.number().int().min(2000).max(2100).optional(),
-  month: z.coerce.number().int().min(1).max(12).optional(),
-});
+export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
+  const cookieStore = cookies();
+  const supabase = createSupabaseServerClient(); 
+
+  const { searchParams } = new URL(req.url);
+  const year = searchParams.get('year');
+  const month = searchParams.get('month');
+
+  if (!year || !month) {
+    return NextResponse.json({ error: 'Ano e mês são obrigatórios' }, { status: 400 });
+  }
+
+  const yearNum = parseInt(year);
+  const monthNum = parseInt(month);
+  if (isNaN(yearNum) || isNaN(monthNum)) {
+    return NextResponse.json({ error: 'Ano e mês devem ser números válidos' }, { status: 400 });
+  }
+
+  const startDate = new Date(yearNum, monthNum - 1, 1).toISOString();
+  const endDate = new Date(yearNum, monthNum, 0).toISOString();
+
   try {
-    console.log('🔍 Iniciando busca de parcelas do mês...');
-    
-    // Autorização
-    await requirePermission('financial_view');
-    const user = await getSessionUser();
+    const { data: installments, error } = await supabase
+      .from('financial_installments')
+      .select(`
+        *,
+        agreement:financial_agreements (
+          *,
+          debtor:entities!fk_financial_agreements_debtor (id, name), 
+          cases (
+            case_number,
+            case_parties (
+              role,
+              entities (id, name)
+            )
+          )
+        )
+      `)
+      .gte('due_date', startDate)
+      .lte('due_date', endDate)
+      .order('due_date', { ascending: true });
 
-    if (!user) {
-      return NextResponse.json({ error: 'Usuário não autenticado.' }, { status: 401 });
+    if (error) {
+      console.error('Erro detalhado do Supabase:', error);
+      throw new Error(`Falha na consulta ao Supabase: ${error.message}`);
     }
 
-    // Parse seguro dos parâmetros com fallback
-    const url = new URL(request.url);
-    const parsed = QuerySchema.parse({
-      year: url.searchParams.get('year'),
-      month: url.searchParams.get('month'),
-    });
+    return NextResponse.json(installments);
 
-    const now = new Date();
-    const year = parsed.year ?? now.getUTCFullYear();
-    const month = parsed.month ?? (now.getUTCMonth() + 1);
-
-    console.log(`📅 Buscando parcelas para ${month}/${year} - Usuário: ${user.id}`);
-
-    // Buscar via service
-    const installments = await FinancialService.getInstallmentsByMonthYear(year, month, user);
-
-    console.log(`✅ Retornando ${installments.length} parcelas para o front-end`);
-
-    return NextResponse.json(installments, { status: 200 });
-    
   } catch (error: any) {
-    console.error('❌ ERRO em /api/installments/by-month:', error);
-    
-    // Tratamento explícito de erro de auth
-    if (error?.message === 'UNAUTHORIZED' || error?.message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
-    }
-
-    return NextResponse.json(
-      { 
-        error: 'Erro no servidor ao buscar parcelas.', 
-        details: String(error?.message ?? error),
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
-      { status: 500 }
-    );
+    console.error('Erro ao buscar parcelas:', error.message);
+    return NextResponse.json({ error: 'Falha ao buscar dados das parcelas.', details: error.message }, { status: 500 });
   }
 }
