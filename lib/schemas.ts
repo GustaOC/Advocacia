@@ -112,8 +112,10 @@ export const EnhancedAgreementSchema = z
       required_error: 'A data final é obrigatória.',
       invalid_type_error: 'Forneça uma data final válida.',
     }),
-    status: AgreementStatus.default('ATIVO'),
-    agreement_type: AgreementType.default('SOMENTE_PARCELADO'),
+    // ***** CORREÇÃO 1 APLICADA AQUI *****
+    status: AgreementStatus.default('ATIVO').optional(),
+    // ***** CORREÇÃO 2 APLICADA AQUI *****
+    agreement_type: AgreementType.default('SOMENTE_PARCELADO').optional(),
     notes: z.string().optional().nullable(),
     installments: z.array(InstallmentSchema).optional(),
   })
@@ -129,9 +131,6 @@ export const EnhancedAgreementSchema = z
     },
   )
   .superRefine((data, ctx) => {
-    // CORREÇÃO APLICADA AQUI:
-    // Adicionada uma verificação explícita para a existência da primeira parcela
-    // para satisfazer a análise estrita de tipos do TypeScript.
     if (data.installments && data.installments.length > 0) {
       const firstInstallment = data.installments[0]
       if (firstInstallment && firstInstallment.due_date < data.start_date) {
@@ -236,9 +235,6 @@ export const RoleSchema = z.object({
 })
 
 export const CaseSchema = z.object({
-  // ***** CORREÇÃO APLICADA AQUI *****
-  // O tipo do 'id' foi alterado de z.number() para z.string() para ser consistente
-  // com os dados do componente e outros schemas do projeto.
   id: z.string().optional(),
   title: z.string().min(1, 'Título é obrigatório').optional(),
   case_number: z.string().min(1, 'Número do processo é obrigatório').nullable(),
@@ -249,7 +245,7 @@ export const CaseSchema = z.object({
     'Finalizado',
     'Arquivado',
     'Suspenso',
-    'Acordo',
+    'Acordo'
   ]),
   lawyer_id: z.string().optional().nullable(),
   
