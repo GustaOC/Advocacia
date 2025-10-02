@@ -235,20 +235,21 @@ export const RoleSchema = z.object({
   permissions: z.array(z.string()),
 })
 
-// *** CORREÇÃO APLICADA AQUI ***
-// O CaseSchema foi completado com todos os campos do formulário para garantir
-// que os dados não se percam durante a validação nas atualizações.
 export const CaseSchema = z.object({
-  id: z.number().optional(),
+  // ***** CORREÇÃO APLICADA AQUI *****
+  // O tipo do 'id' foi alterado de z.number() para z.string() para ser consistente
+  // com os dados do componente e outros schemas do projeto.
+  id: z.string().optional(),
   title: z.string().min(1, 'Título é obrigatório').optional(),
   case_number: z.string().min(1, 'Número do processo é obrigatório').nullable(),
   debtor_id: z.string().min(1, 'Devedor é obrigatório'),
   creditor_id: z.string().min(1, 'Credor é obrigatório'),
   status: z.enum([
-    'Em andamento', 
-    'Acordo', 
-    'Extinto', 
-    'Pago'
+    'Em Andamento',
+    'Finalizado',
+    'Arquivado',
+    'Suspenso',
+    'Acordo',
   ]),
   lawyer_id: z.string().optional().nullable(),
   
@@ -334,5 +335,3 @@ export const ChangePasswordSchema = z
     message: 'As senhas não coincidem',
     path: ['confirmPassword'],
   })
-
-  
