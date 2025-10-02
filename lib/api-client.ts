@@ -22,17 +22,17 @@ export interface Entity {
 }
 
 export interface Case {
-    id: number;
-    case_number: string | null;
-    title: string;
-    status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
-    value: number | null;
-    // 'court' foi removido para alinhar com o banco de dados
-    created_at: string;
-    priority: 'Alta' | 'Média' | 'Baixa';
-    description?: string | null;
-    case_parties: { role: string; entities: { id: number; name: string; } }[];
-    action_type?: string;
+  id: number;
+  case_number: string | null;
+  title: string;
+  status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
+  value: number | null;
+  // 'court' foi removido para alinhar com o banco de dados
+  created_at: string;
+  priority: 'Alta' | 'Média' | 'Baixa';
+  description?: string | null;
+  case_parties: { role: string; entities: { id: number; name: string } }[];
+  action_type?: string;
 }
 
 interface AgreementEntity {
@@ -97,6 +97,22 @@ export interface FinancialAgreement {
   guarantor_entities: AgreementEntity | null;
   // CORREÇÃO: Removido o campo 'court' que não existe no BD.
   cases: { case_number: string | null; title: string; status: string } | null;
+
+  // >>> ADIÇÃO PARA CORRIGIR O BUILD <<<
+  // O componente `financial-agreement-details-modal.tsx` acessa `agreement.installments`
+  // e `inst.payments`, então tipamos aqui.
+  installments?: Installment[];
+}
+
+// *** NOVA INTERFACE ADICIONADA ***
+// Define a estrutura de um pagamento de parcela (usado pelo componente).
+export interface Payment {
+  id: string;
+  installment_id: string;
+  amount_paid: number;
+  payment_date: string; // ISO
+  payment_method?: string | null;
+  notes?: string | null;
 }
 
 // *** NOVA INTERFACE ADICIONADA ***
@@ -108,28 +124,29 @@ export interface Installment {
   amount: number;
   due_date: string;
   status: 'PENDENTE' | 'PAGA' | 'ATRASADA' | 'RENEGOCIADA' | 'CANCELADA';
+  // Pagamentos já efetuados nessa parcela (usado no reduce do componente)
+  payments?: Payment[];
 }
 
 // *** NOVA INTERFACE ADICIONADA PARA A NOVA FUNCIONALIDADE ***
 export interface MonthlyInstallment {
-  id: number;
-  due_date: string;
-  amount: number;
-  status: 'PENDENTE' | 'PAGA' | 'ATRASADA';
-  agreement: {
-    id: number;
-    cases: {
-      case_number: string | null;
-      title: string;
+  id: number;
+  due_date: string;
+  amount: number;
+  status: 'PENDENTE' | 'PAGA' | 'ATRASADA';
+  agreement: {
+    id: number;
+    cases: {
+      case_number: string | null;
+      title: string;
       // >>> LINHA ADICIONADA PARA CORRIGIR O ERRO <<<
-      case_parties: { role: string; entities: { name: string } }[]; 
-    } | null;
+      case_parties: { role: string; entities: { name: string } }[];
+    } | null;
     debtor: {
-    name: string;
-    } | null;
-  } | null;
+      name: string;
+    } | null;
+  } | null;
 }
-
 
 // ============================================================================
 // INSTÂNCIA DO AXIOS (sem alterações)
@@ -223,7 +240,9 @@ export class ApiClient {
       down_payment: Number(data.entry_value ?? data.down_payment ?? 0),
       number_of_installments: Number(data.installments ?? data.number_of_installments ?? 1),
       start_date: data.start_date ?? new Date().toISOString(),
-      end_date: data.end_date ?? new Date(new Date().setMonth(new Date().getMonth() + (Number(data.installments ?? 1)))).toISOString(),
+      end_date:
+        data.end_date ??
+        new Date(new Date().setMonth(new Date().getMonth() + Number(data.installments ?? 1))).toISOString(),
       status: data.status ?? 'ATIVO',
       agreement_type: data.agreement_type ?? 'SOMENTE_PARCELADO',
       notes: data.notes ?? null,
@@ -232,7 +251,7 @@ export class ApiClient {
     // Caso o front gere a lista de parcelas, já repassa no formato esperado
     if (Array.isArray(data.installments_list)) {
       payload.installments = data.installments_list.map((it: any, idx: number) => ({
-        installment_number: Number(it.installment_number ?? (idx + 1)),
+        installment_number: Number(it.installment_number ?? idx + 1),
         amount: Number(it.amount),
         due_date: it.due_date,
         status: it.status ?? 'PENDENTE',
@@ -243,10 +262,16 @@ export class ApiClient {
   }
   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-  async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> { return instance.get(`/financial-agreements/${id}`); }
-  async updateFinancialAgreement(id: string, data: Partial<FinancialAgreement>): Promise<FinancialAgreement> { return instance.put(`/financial-agreements/${id}`, data); }
-  async deleteFinancialAgreement(id: string): Promise<boolean> { return instance.delete(`/financial-agreements/${id}`); }
-  
+  async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> {
+    return instance.get(`/financial-agreements/${id}`);
+  }
+  async updateFinancialAgreement(id: string, data: Partial<FinancialAgreement>): Promise<FinancialAgreement> {
+    return instance.put(`/financial-agreements/${id}`, data);
+  }
+  async deleteFinancialAgreement(id: string): Promise<boolean> {
+    return instance.delete(`/financial-agreements/${id}`);
+  }
+
   async getFinancialReports(
     startDate: string, endDate: string, reportType: string
   ): Promise<any> {
@@ -262,34 +287,45 @@ export class ApiClient {
     });
     return response as unknown as Blob;
   }
-  
+
   // *** MÉTODOS ATUALIZADOS E CORRIGIDOS ***
-  async getAgreementInstallments(agreementId: number): Promise<Installment[]> { 
-    return instance.get(`/financial-agreements/${agreementId}/installments`); 
+  async getAgreementInstallments(agreementId: number): Promise<Installment[]> {
+    return instance.get(`/financial-agreements/${agreementId}/installments`);
   }
 
-  async recordInstallmentPayment(installmentId: string, paymentData: { amount_paid: number; payment_date: string; payment_method: string; notes?: string; }): Promise<any> { 
-    return instance.post(`/installments/${installmentId}/pay`, paymentData); 
+  async recordInstallmentPayment(
+    installmentId: string,
+    paymentData: { amount_paid: number; payment_date: string; payment_method: string; notes?: string }
+  ): Promise<any> {
+    return instance.post(`/installments/${installmentId}/pay`, paymentData);
   }
-  
-  async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> { return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data); }
+
+  async renegotiateFinancialAgreement(agreementId: string, data: any): Promise<FinancialAgreement> {
+    return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
+  }
 
   // *** NOVO MÉTODO ADICIONADO ***
   async getInstallmentsByMonth(year: number, month: number): Promise<MonthlyInstallment[]> {
     return instance.get(`/installments/by-month`, { params: { year, month } });
   }
-  
+
   // Métodos de Autenticação
   async getCurrentUser(): Promise<any> { return instance.get('/auth/me'); }
   async logout(): Promise<void> {
     await instance.post('/auth/logout');
     if (typeof window !== 'undefined') window.location.href = '/login';
   }
-  async setPassword(data: { code: string; password: string }): Promise<void> { return instance.post('/auth/set-password', data); }
+  async setPassword(data: { code: string; password: string }): Promise<void> {
+    return instance.post('/auth/set-password', data);
+  }
 
   // Métodos de Notificações
-  async getNotifications(userId: string): Promise<{ notifications: any[] }> { return instance.get(`/notifications?user_id=${userId}`); }
-  async getUnreadNotificationCount(userId: string): Promise<{ count: number }> { return instance.get(`/notifications/count?user_id=${userId}`); }
+  async getNotifications(userId: string): Promise<{ notifications: any[] }> {
+    return instance.get(`/notifications?user_id=${userId}`);
+  }
+  async getUnreadNotificationCount(userId: string): Promise<{ count: number }> {
+    return instance.get(`/notifications/count?user_id=${userId}`);
+  }
 
   // Métodos Utilitários
   validateFinancialAgreement(data: Partial<FinancialAgreement>): string[] {
@@ -301,11 +337,11 @@ export class ApiClient {
     return errors;
   }
 
-  calculateAgreementInfo(data: { totalValue: number; entryValue: number; installments: number; }) {
+  calculateAgreementInfo(data: { totalValue: number; entryValue: number; installments: number }) {
     const remainingValue = data.totalValue - data.entryValue;
     const installmentValue = data.installments > 0 ? remainingValue / data.installments : 0;
     return { remainingValue, installmentValue, entryPercentage: (data.entryValue / data.totalValue) * 100 };
-  }
+    }
 }
 
 // ============================================================================
