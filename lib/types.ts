@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { EnhancedAgreementSchema, InstallmentSchema, PaymentSchema } from './schemas';
 
 // Interface unificada para Entidades (Clientes, Executados, etc.)
-// Adicionamos os novos campos sugeridos para um cadastro mais completo.
 export interface Entity {
   id: string;
   name: string;
@@ -23,20 +22,20 @@ export interface Entity {
   address_complement?: string | null;
   district?: string | null;
   city?: string | null;
-  state?: string | null; // Adicionado
+  state?: string | null;
   zip_code?: string | null;
 
-  // Informações Pessoais (campos novos)
+  // Informações Pessoais
   birth_date?: string | null;
   marital_status?: 'Solteiro(a)' | 'Casado(a)' | 'Divorciado(a)' | 'Viúvo(a)' | 'União Estável' | null;
   profession?: string | null;
   nationality?: string | null;
 
-  // Documentos Adicionais (campos novos)
+  // Documentos Adicionais
   rg?: string | null;
   cnh?: string | null;
 
-  // Filiação (campos novos)
+  // Filiação
   mother_name?: string | null;
   father_name?: string | null;
 
@@ -76,20 +75,21 @@ export interface Case {
   installment_due_date?: string | null;
 }
 
-// --- TIPOS ADICIONADOS PARA CORRIGIR O ERRO DE BUILD ---
+// --- TIPOS CORRIGIDOS PARA O BUILD ---
 
 // Tipo para um único pagamento, inferido do schema
 export type Payment = z.infer<typeof PaymentSchema>;
 
-// Tipo para uma única parcela que INCLUI seus pagamentos
+// Tipo para uma única parcela que INCLUI seus pagamentos.
+// ***** CORREÇÃO: Este tipo agora pode ser simplificado, mas o mantemos para consistência se for usado em outros lugares. *****
 export type InstallmentWithPayments = z.infer<typeof InstallmentSchema> & {
   payments?: Payment[];
 };
 
-// Tipo principal para o Acordo Financeiro, que INCLUI parcelas com seus pagamentos
-// e os detalhes do devedor, credor e caso.
+// Tipo principal para o Acordo Financeiro.
+// ***** CORREÇÃO: Removida a propriedade 'installments' duplicada. *****
+// O tipo agora é inferido corretamente do EnhancedAgreementSchema.
 export type FinancialAgreement = z.infer<typeof EnhancedAgreementSchema> & {
-  installments?: InstallmentWithPayments[]; // Esta linha já estava aqui, o que é bom.
   debtor?: { id: string; name: string };
   creditor?: { id: string; name: string };
   cases?: { id: string; case_number: string };
