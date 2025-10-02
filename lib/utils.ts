@@ -92,3 +92,42 @@ export function debugCookies(): void {
       .filter(cookie => cookie.includes('sb-') || cookie.includes('auth'))
   })
 }
+
+// --- FUNÇÕES ADICIONADAS PARA CORRIGIR O ERRO DE BUILD ---
+
+/**
+ * Formata uma string de data ou objeto Date para o formato "dd/mm/aaaa".
+ * @param dateString A data a ser formatada.
+ * @returns A data formatada ou 'N/A' se a data for inválida.
+ */
+export function formatDate(dateString: string | Date | null | undefined): string {
+  if (!dateString) {
+    return 'N/A';
+  }
+  try {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'UTC', // Adicionado para consistência
+    });
+  } catch (error) {
+    console.error("Erro ao formatar data:", error);
+    return 'Data inválida';
+  }
+}
+
+/**
+ * Formata um número como moeda brasileira (BRL).
+ * @param amount O valor a ser formatado.
+ * @returns O valor formatado como string, ex: "R$ 1.234,56".
+ */
+export function formatCurrency(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined) {
+    return 'R$ 0,00';
+  }
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(amount);
+}
