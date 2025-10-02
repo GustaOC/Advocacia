@@ -1,5 +1,4 @@
 // components/petitions-module.tsx 
-
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
@@ -7,10 +6,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "./ui/badge";
 import { format } from "date-fns";
+import { Loader2, FileText, TrendingUp, Clock, CheckCircle, AlertCircle } from "lucide-react";
 
 const fetchPetitions = async () => {
   return apiClient.getPetitions();
 };
+
+function PetitionsStats({ petitions }: { petitions: any[] }) {
+  const stats = [
+    { label: "Total de Petições", value: petitions.length.toString(), icon: FileText, color: "text-blue-600", bg: "from-blue-50 to-blue-100", trend: "+8%" },
+    { label: "Em Andamento", value: petitions.filter(p => p.status?.toLowerCase() === 'em andamento').length.toString(), icon: Clock, color: "text-orange-600", bg: "from-orange-50 to-orange-100", trend: "+5%" },
+    { label: "Concluídas", value: petitions.filter(p => p.status?.toLowerCase() === 'concluída').length.toString(), icon: CheckCircle, color: "text-green-600", bg: "from-green-50 to-green-100", trend: "+12%" },
+    { label: "Pendentes", value: petitions.filter(p => p.status?.toLowerCase() === 'pendente').length.toString(), icon: AlertCircle, color: "text-red-600", bg: "from-red-50 to-red-100", trend: "+3%" },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {stats.map((stat, index) => {
+        const StatIcon = stat.icon;
+        return (
+          <Card key={index} className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-0 bg-white relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-br ${stat.bg} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white to-transparent rounded-full transform translate-x-8 -translate-y-8"></div>
+            <CardContent className="p-6 relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-600 font-medium">{stat.label}</p>
+                  <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
+                  <div className="flex items-center space-x-1">
+                    <TrendingUp className="w-4 h-4 text-green-500" />
+                    <span className="text-sm text-green-600 font-medium">{stat.trend}</span>
+                  </div>
+                </div>
+                <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
+                  <StatIcon className={`w-6 h-6 ${stat.color}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
 
 export function PetitionsModule() {
   const { data: petitions, isLoading, isError, error } = useQuery({
@@ -18,42 +56,85 @@ export function PetitionsModule() {
     queryFn: fetchPetitions,
   });
 
-  if (isLoading) return <div>Carregando petições...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-96 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-500 mx-auto" />
+          <p className="text-slate-600 font-medium">Carregando petições...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isError) return <div>Erro ao carregar petições: {error.message}</div>;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Gerenciamento de Petições</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Caso Associado</TableHead>
-              <TableHead>Autor</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Data de Criação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {petitions && petitions.length > 0 ? (
-              petitions.map((petition) => (
-                <TableRow key={petition.id}>
-                  <TableCell>{petition.cases?.title || 'N/A'}</TableCell>
-                  <TableCell>{petition.employees?.name || 'N/A'}</TableCell>
-                  <TableCell><Badge>{petition.status}</Badge></TableCell>
-                  <TableCell>{format(new Date(petition.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center">Nenhuma petição encontrada.</TableCell>
+    <div className="space-y-6">
+      <div className="relative bg-gradient-to-br from-amber-900 via-orange-800 to-amber-900 rounded-3xl p-8 text-white overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-10"></div>
+        <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="relative z-10">
+          <h2 className="text-4xl font-bold mb-3">Gerenciamento de Petições</h2>
+          <p className="text-amber-100 text-xl">Organize e acompanhe todas as petições do escritório.</p>
+        </div>
+      </div>
+
+      {petitions && petitions.length > 0 && <PetitionsStats petitions={petitions} />}
+
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+          <CardTitle className="text-2xl font-bold text-slate-900">Lista de Petições</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
+                <TableHead className="text-slate-700 font-bold">Caso Associado</TableHead>
+                <TableHead className="text-slate-700 font-bold">Autor</TableHead>
+                <TableHead className="text-slate-700 font-bold">Status</TableHead>
+                <TableHead className="text-slate-700 font-bold">Data de Criação</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {petitions && petitions.length > 0 ? (
+                petitions.map((petition) => (
+                  <TableRow key={petition.id} className="group hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-transparent transition-all duration-200">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 group-hover:scale-110 transition-transform">
+                          <FileText className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <span className="font-medium group-hover:text-amber-700 transition-colors">{petition.cases?.title || 'N/A'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-600">{petition.employees?.name || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Badge className={`${
+                        petition.status?.toLowerCase() === 'concluída' ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                        petition.status?.toLowerCase() === 'em andamento' ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
+                        'bg-gradient-to-r from-yellow-500 to-orange-500'
+                      } text-white border-0 shadow-lg`}>
+                        {petition.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-slate-600">{format(new Date(petition.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-16">
+                    <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhuma petição encontrada</h3>
+                    <p className="text-slate-500">Não há petições cadastradas no momento.</p>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

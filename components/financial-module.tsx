@@ -147,12 +147,8 @@ function MonthlyInstallmentsTab() {
     placeholderData: (prev) => prev,
   });
 
-  // ✅ FUNÇÃO HELPER ROBUSTA PARA EXTRAIR NOMES DAS PARTES
   const getPartiesInfo = (installment: MonthlyInstallment) => {
-    // A API agora retorna a estrutura correta: installment -> agreement -> cases -> case_parties
     const caseParties = installment.agreement?.cases?.case_parties;
-
-    // Fallback inicial
     let clientName = installment.agreement?.debtor?.name || 'Cliente N/A';
     let executedName = 'Executado N/A';
 
@@ -241,42 +237,73 @@ function MonthlyInstallmentsTab() {
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total a Receber no Mês</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(totalToReceive)}</p></div><DollarSign className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total Recebido no Mês</p><p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p></div><CheckCircle className="h-8 w-8 text-green-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Balanço do Mês</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived - totalToReceive)}</p></div><TrendingUp className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Total a Receber no Mês</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalToReceive)}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Total Recebido no Mês</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Balanço do Mês</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived - totalToReceive)}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
-        <div className="flex items-center gap-3">
-          <Label>Mês:</Label>
-          <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mês" /></SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 12 }, (_, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>
-                  {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Label>Ano:</Label>
-          <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
-            <SelectTrigger className="w-[120px]"><SelectValue placeholder="Ano" /></SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 5 }, (_, i) => (
-                <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
-                  {new Date().getFullYear() - i}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex items-center gap-3">
+              <Label>Mês:</Label>
+              <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Label>Ano:</Label>
+              <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
+                      {new Date().getFullYear() - i}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Tabela */}
       <Card className="border-0 shadow-lg">
         <CardContent className="p-0">
           <Table>
@@ -393,7 +420,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
   };
 
   return (
-    <Card className="mb-4 border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-200">
+    <Card className={`mb-4 border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-200 border-0 shadow-md`}>
       <CardContent className="p-0">
         <div className="p-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={onToggle}>
           <div className="flex items-center justify-between">
@@ -501,50 +528,62 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 p-4 bg-slate-50 rounded-lg">
-        <div className="flex flex-col sm:flex-row gap-3 flex-1">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-            <Input placeholder="Buscar por cliente, processo ou executado..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <Input placeholder="Buscar por cliente, processo ou executado..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Status</SelectItem>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="defaulted">Em Atraso</SelectItem>
+                  <SelectItem value="cancelled">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Tipos</SelectItem>
+                  <SelectItem value="Judicial">Judicial</SelectItem>
+                  <SelectItem value="Extrajudicial">Extrajudicial</SelectItem>
+                  <SelectItem value="Em Audiência">Em Audiência</SelectItem>
+                  <SelectItem value="Pela Loja">Pela Loja</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setExpandedAgreements(new Set())}>Recolher Todos</Button>
+              <Button variant="outline" onClick={() => setExpandedAgreements(new Set(filteredAgreements.map(a => a.id)))}>Expandir Todos</Button>
+              <Button onClick={onNewAgreement} className="bg-slate-900 hover:bg-slate-800"><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button>
+            </div>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Status</SelectItem>
-              <SelectItem value="active">Ativo</SelectItem>
-              <SelectItem value="completed">Concluído</SelectItem>
-              <SelectItem value="defaulted">Em Atraso</SelectItem>
-              <SelectItem value="cancelled">Cancelado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Tipos</SelectItem>
-              <SelectItem value="Judicial">Judicial</SelectItem>
-              <SelectItem value="Extrajudicial">Extrajudicial</SelectItem>
-              <SelectItem value="Em Audiência">Em Audiência</SelectItem>
-              <SelectItem value="Pela Loja">Pela Loja</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setExpandedAgreements(new Set())}>Recolher Todos</Button>
-          <Button variant="outline" onClick={() => setExpandedAgreements(new Set(filteredAgreements.map(a => a.id)))}>Expandir Todos</Button>
-          <Button onClick={onNewAgreement}><Plus className="mr-2 h-4 w-4" /> Novo Acordo</Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-600">Mostrando {filteredAgreements.length} de {agreements.length} acordos</span>
+            <span className="text-sm font-semibold text-slate-900">Valor Total: {formatCurrency(filteredAgreements.reduce((sum, a) => sum + (a.total_amount || 0), 0))}</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-0">
-        <div className="mb-4 text-sm text-slate-600 bg-white p-3 rounded-lg border">
-          <div className="flex items-center justify-between">
-            <span>Mostrando {filteredAgreements.length} de {agreements.length} acordos</span>
-            <span className="font-semibold">Valor Total: {formatCurrency(filteredAgreements.reduce((sum, a) => sum + (a.total_amount || 0), 0))}</span>
-          </div>
-        </div>
-
         {filteredAgreements.length === 0 ? (
-          <Card><CardContent className="text-center py-12"><FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" /><h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3><p className="text-slate-500">Tente ajustar os filtros de busca.</p></CardContent></Card>
+          <Card className="border-0 shadow-lg">
+            <CardContent className="text-center py-12">
+              <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3>
+              <p className="text-slate-500">Tente ajustar os filtros de busca.</p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-2">
             {filteredAgreements.map((agreement) => (
@@ -583,29 +622,63 @@ function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAs
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total em Alvarás</p><p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p></div><Receipt className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Pendentes de Recebimento</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingValue)}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Taxa de Recebimento</p><p className="text-2xl font-bold text-green-600">{alvaras.length > 0 ? ((alvaras.filter(a => a.received).length / alvaras.length) * 100).toFixed(1) : 0}%</p></div><TrendingUp className="h-8 w-8 text-green-600" /></div></CardContent></Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Total em Alvarás</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p>
+              </div>
+              <Receipt className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Pendentes de Recebimento</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingValue)}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Taxa de Recebimento</p>
+                <p className="text-2xl font-bold text-green-600">{alvaras.length > 0 ? ((alvaras.filter(a => a.received).length / alvaras.length) * 100).toFixed(1) : 0}%</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-          <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="received">Recebidos</SelectItem>
-            <SelectItem value="pending">Pendentes</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="received">Recebidos</SelectItem>
+                <SelectItem value="pending">Pendentes</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-4">
         {filteredAlvaras.map((alvara) => (
-          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'}`}>
+          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-lg`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -652,30 +725,64 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Valor Total em Atraso</p><p className="text-2xl font-bold text-red-600">{formatCurrency(totalOverdueValue)}</p></div><AlertCircle className="h-8 w-8 text-red-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Parcelas em Atraso</p><p className="text-2xl font-bold text-orange-600">{filtered.length}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Atraso Médio</p><p className="text-2xl font-bold text-purple-600">{filtered.length > 0 ? Math.round(filtered.reduce((s, i) => s + i.days_overdue, 0) / filtered.length) : 0} dias</p></div><Calendar className="h-8 w-8 text-purple-600" /></div></CardContent></Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Valor Total em Atraso</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOverdueValue)}</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Parcelas em Atraso</p>
+                <p className="text-2xl font-bold text-orange-600">{filtered.length}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Atraso Médio</p>
+                <p className="text-2xl font-bold text-purple-600">{filtered.length > 0 ? Math.round(filtered.reduce((s, i) => s + i.days_overdue, 0) / filtered.length) : 0} dias</p>
+              </div>
+              <Calendar className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 rounded-lg">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-          <Input placeholder="Buscar por cliente ou processo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
-        </div>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="urgent">Urgente (+30 dias)</SelectItem>
-            <SelectItem value="moderate">Moderado (15-30 dias)</SelectItem>
-            <SelectItem value="recent">Recente (-15 dias)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+              <Input placeholder="Buscar por cliente ou processo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            </div>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="urgent">Urgente (+30 dias)</SelectItem>
+                <SelectItem value="moderate">Moderado (15-30 dias)</SelectItem>
+                <SelectItem value="recent">Recente (-15 dias)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-4">
         {filtered.map((installment) => (
-          <Card key={installment.id} className="border-l-4 border-l-red-500">
+          <Card key={installment.id} className="border-l-4 border-l-red-500 border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
@@ -725,42 +832,86 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total de Despesas</p><p className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses)}</p></div><CreditCard className="h-8 w-8 text-slate-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Despesas Pagas</p><p className="text-2xl font-bold text-green-600">{formatCurrency(paidExpenses)}</p></div><CheckCircle className="h-8 w-8 text-green-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Despesas Pendentes</p><p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingExpenses)}</p></div><Clock className="h-8 w-8 text-orange-600" /></div></CardContent></Card>
-        <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-600">Total de Itens</p><p className="text-2xl font-bold text-blue-600">{filteredExpenses.length}</p></div><FileText className="h-8 w-8 text-blue-600" /></div></CardContent></Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Total de Despesas</p>
+                <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses)}</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-slate-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Despesas Pagas</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(paidExpenses)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Despesas Pendentes</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingExpenses)}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-lg group hover:shadow-xl transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 font-medium">Total de Itens</p>
+                <p className="text-2xl font-bold text-blue-600">{filteredExpenses.length}</p>
+              </div>
+              <FileText className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 p-4 bg-slate-50 rounded-lg">
-        <div className="flex flex-col sm:flex-row gap-3 flex-1">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-            <Input placeholder="Buscar despesas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                <Input placeholder="Buscar despesas..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+              </div>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="Fixo">Fixo</SelectItem>
+                  <SelectItem value="Variável">Variável</SelectItem>
+                  <SelectItem value="Software">Software</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="paid">Pago</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={onAddExpense} className="bg-slate-900 hover:bg-slate-800"><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="Fixo">Fixo</SelectItem>
-              <SelectItem value="Variável">Variável</SelectItem>
-              <SelectItem value="Software">Software</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="paid">Pago</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button onClick={onAddExpense}><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
-      </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-4">
         {filteredExpenses.map((expense) => (
-          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'}`}>
+          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-lg`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
@@ -848,7 +999,7 @@ export function FinancialModule() {
 
   if (error) {
     return (
-      <Card className="border-red-200">
+      <Card className="border-0 shadow-lg border-red-200">
         <CardContent className="p-8 text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-red-700 mb-2">Erro ao carregar dados financeiros</h3>
@@ -865,8 +1016,8 @@ export function FinancialModule() {
     return (
       <div className="flex justify-center items-center h-96">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-          <p className="text-gray-500">Carregando dados financeiros...</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-slate-500" />
+          <p className="text-slate-600 font-medium">Carregando dados financeiros...</p>
         </div>
       </div>
     );
@@ -874,13 +1025,13 @@ export function FinancialModule() {
 
   return (
     <div className="space-y-8">
-      <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl p-6 text-white overflow-hidden">
-        <div className="relative z-10 flex justify-between items-center">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white">
+        <div className="flex justify-between items-center">
           <div>
             <h2 className="text-3xl font-bold mb-2">Módulo Financeiro</h2>
-            <p className="text-slate-100">Controle total sobre acordos, alvarás, e despesas</p>
+            <p className="text-slate-300 text-lg">Controle total sobre acordos, alvarás, e despesas</p>
           </div>
-          <Button onClick={() => refetch()} className="bg-white/10 text-white hover:bg-white/20">
+          <Button onClick={() => refetch()} className="bg-white text-slate-900 hover:bg-slate-100">
             <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Dados
           </Button>
         </div>
@@ -917,7 +1068,6 @@ export function FinancialModule() {
         <TabsContent value="despesas"><ExpensesTab expenses={expenses} onAddExpense={() => toast({ title: "Em desenvolvimento", description: "Funcionalidade de adicionar despesa será implementada em breve." })} onToggleExpenseStatus={(id) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'paid' ? 'pending' : 'paid' } : e))} /></TabsContent>
       </Tabs>
 
-      {/* Modal: Enviar Lembrete */}
       <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Enviar Lembrete para {selectedRecipient?.name}</DialogTitle></DialogHeader>
@@ -934,7 +1084,6 @@ export function FinancialModule() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Novo Acordo */}
       <FinancialAgreementModal isOpen={isAgreementModalOpen} onClose={() => setAgreementModalOpen(false)} caseData={selectedCaseForAgreement} />
     </div>
   );
