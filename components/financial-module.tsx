@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO COM DESIGN APERFEIÇOADO
+// components/financial-module.tsx - VERSÃO COM DESIGN APERFEIÇOADO E NOVA ABA
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -19,7 +19,7 @@ import {
   Phone, Mail, Banknote, Sparkles, Zap, Target, ArrowUp, ArrowDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiClient, type FinancialAgreement, type MonthlyInstallment } from "@/lib/api-client";
+import { apiClient, type FinancialAgreement, type MonthlyInstallment, type ReceivedPayment } from "@/lib/api-client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { FinancialAgreementModal } from "@/components/financial-agreement-modal";
 
@@ -177,6 +177,136 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
     </div>
   );
 }
+
+// ===================== TAB "RECEBIDOS DO MÊS" (NOVA) =====================
+function ReceivedPaymentsTab() {
+  const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+  const [isPending, startTransition] = useTransition();
+
+  const { data: payments = [], isLoading, isError, error } = useQuery<ReceivedPayment[]>({
+    queryKey: ['receivedPayments', selectedDate.year, selectedDate.month],
+    queryFn: () => apiClient.getReceivedByMonth(selectedDate.year, selectedDate.month),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+
+  const totalReceived = useMemo(() => {
+    return (payments || []).reduce((acc, payment) => acc + (Number(payment.amount_paid) || 0), 0);
+  }, [payments]);
+
+  const handleDateChange = (type: 'month' | 'year', value: string) => {
+    startTransition(() => setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) })));
+  };
+  
+  const getPaymentMethodBadge = (method: string | null | undefined) => {
+    const methodStr = (method || 'outros').toLowerCase();
+    const config = {
+      pix: { label: 'PIX', className: 'bg-emerald-100 text-emerald-800' },
+      boleto: { label: 'Boleto', className: 'bg-orange-100 text-orange-800' },
+      transferencia: { label: 'Transf.', className: 'bg-blue-100 text-blue-800' },
+      cartao_credito: { label: 'Crédito', className: 'bg-purple-100 text-purple-800' },
+      dinheiro: { label: 'Dinheiro', className: 'bg-green-100 text-green-800' },
+      default: { label: methodStr, className: 'bg-slate-100 text-slate-800' }
+    };
+    const { label, className } = (config as any)[methodStr] || config.default;
+    return <Badge className={`${className} border-0`}>{label}</Badge>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex items-center gap-3">
+              <Label className="text-slate-700 font-semibold">Mês:</Label>
+              <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Label className="text-slate-700 font-semibold">Ano:</Label>
+              <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
+                <SelectTrigger className="w-[120px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
+                      {new Date().getFullYear() - i}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 flex items-center justify-end">
+                <div className="text-right">
+                    <p className="text-sm text-slate-600 font-medium">Total Recebido no Mês</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p>
+                </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
+                <TableHead className="text-slate-700 font-bold">Data Pag.</TableHead>
+                <TableHead className="text-slate-700 font-bold">Cliente</TableHead>
+                <TableHead className="text-slate-700 font-bold">Processo</TableHead>
+                <TableHead className="text-slate-700 font-bold">Parcela</TableHead>
+                <TableHead className="text-slate-700 font-bold">Método</TableHead>
+                <TableHead className="text-right text-slate-700 font-bold">Valor Recebido</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading || isPending ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex items-center justify-center gap-2 text-slate-600">
+                      <Loader2 className="h-6 w-6 animate-spin" /> Carregando recebimentos...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-red-600">
+                    <div className="flex items-center justify-center gap-2">
+                      <AlertCircle className="h-6 w-6" /> Erro ao carregar dados: {String(error?.message || 'desconhecido')}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : payments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                    Nenhum pagamento recebido no período selecionado.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                payments.map((payment) => (
+                  <TableRow key={payment.id} className="group hover:bg-gradient-to-r hover:from-green-50/50 hover:to-transparent transition-all duration-200">
+                    <TableCell className="font-mono">{formatDate(payment.payment_date)}</TableCell>
+                    <TableCell className="font-medium text-slate-900 group-hover:text-green-700 transition-colors">{payment.client_name}</TableCell>
+                    <TableCell>{payment.case_number || 'N/A'}</TableCell>
+                    <TableCell className="text-center">{payment.installment_number}</TableCell>
+                    <TableCell>{getPaymentMethodBadge(payment.payment_method)}</TableCell>
+                    <TableCell className="text-right font-semibold text-green-700">{formatCurrency(payment.amount_paid)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 
 // ===================== MONTHLY INSTALLMENTS COM DESIGN APERFEIÇOADO =====================
 function MonthlyInstallmentsTab() {
@@ -1133,15 +1263,17 @@ export function FinancialModule() {
       <FinancialStats agreements={safeAgreements} />
 
       <Tabs defaultValue="monthly_installments" className="space-y-6">
-        <TabsList className="grid grid-cols-5 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
-          <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
-          <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
-          <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{alvaras.length}</Badge></TabsTrigger>
-          <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
-          <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
+        <TabsList className="grid grid-cols-6 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
+            <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
+            <TabsTrigger value="received_payments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Banknote className="h-4 w-4" /><span>Recebidos do Mês</span></TabsTrigger>
+            <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
+            <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{alvaras.length}</Badge></TabsTrigger>
+            <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
+            <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
         </TabsList>
 
         <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
+        <TabsContent value="received_payments"><ReceivedPaymentsTab /></TabsContent>
         <TabsContent value="acordos">
           <AgreementsTab
             agreements={safeAgreements}

@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO COMPLETA E ATUALIZADA
+// lib/api-client.ts - VERSÃO CORRIGIDA COM AS SUAS ESTRUTURAS ORIGINAIS
 
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
@@ -27,7 +27,6 @@ export interface Case {
   title: string;
   status: 'Em andamento' | 'Acordo' | 'Extinto' | 'Pago';
   value: number | null;
-  // 'court' foi removido para alinhar com o banco de dados
   created_at: string;
   priority: 'Alta' | 'Média' | 'Baixa';
   description?: string | null;
@@ -95,17 +94,10 @@ export interface FinancialAgreement {
   client_entities: AgreementEntity | null;
   executed_entities: AgreementEntity | null;
   guarantor_entities: AgreementEntity | null;
-  // CORREÇÃO: Removido o campo 'court' que não existe no BD.
   cases: { case_number: string | null; title: string; status: string } | null;
-
-  // >>> ADIÇÃO PARA CORRIGIR O BUILD <<<
-  // O componente `financial-agreement-details-modal.tsx` acessa `agreement.installments`
-  // e `inst.payments`, então tipamos aqui.
   installments?: Installment[];
 }
 
-// *** NOVA INTERFACE ADICIONADA ***
-// Define a estrutura de um pagamento de parcela (usado pelo componente).
 export interface Payment {
   id: string;
   installment_id: string;
@@ -115,8 +107,6 @@ export interface Payment {
   notes?: string | null;
 }
 
-// *** NOVA INTERFACE ADICIONADA ***
-// Define a estrutura de uma parcela para o frontend.
 export interface Installment {
   id: string;
   agreement_id: number;
@@ -124,11 +114,9 @@ export interface Installment {
   amount: number;
   due_date: string;
   status: 'PENDENTE' | 'PAGA' | 'ATRASADA' | 'RENEGOCIADA' | 'CANCELADA';
-  // Pagamentos já efetuados nessa parcela (usado no reduce do componente)
   payments?: Payment[];
 }
 
-// *** NOVA INTERFACE ADICIONADA PARA A NOVA FUNCIONALIDADE ***
 export interface MonthlyInstallment {
   id: number;
   due_date: string;
@@ -139,7 +127,6 @@ export interface MonthlyInstallment {
     cases: {
       case_number: string | null;
       title: string;
-      // >>> LINHA ADICIONADA PARA CORRIGIR O ERRO <<<
       case_parties: { role: string; entities: { name: string } }[];
     } | null;
     debtor: {
@@ -147,6 +134,18 @@ export interface MonthlyInstallment {
     } | null;
   } | null;
 }
+
+// *** NOVA INTERFACE PARA A ABA "RECEBIDOS DO MÊS" ***
+export interface ReceivedPayment {
+  id: number;
+  payment_date: string;
+  amount_paid: number;
+  payment_method: string | null;
+  installment_number: number;
+  client_name: string;
+  case_number: string | null;
+}
+
 
 // ============================================================================
 // INSTÂNCIA DO AXIOS (sem alterações)
@@ -225,17 +224,11 @@ export class ApiClient {
   async getFinancialStats(): Promise<FinancialStats> { return instance.get('/financial-agreements/stats'); }
   async getOverdueAgreements(): Promise<FinancialAgreement[]> { return instance.get('/financial-agreements/overdue'); }
 
-  // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-  // CORRIGIDO: mapeia formulário → schema da API (EnhancedAgreementSchema)
   async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
-    // Campos esperados pelo formulário do modal:
-    // - case_id, client_entity_id, agreement_type, total_value, entry_value, installments, status, start_date?, end_date?, notes?
-    // A API espera (EnhancedAgreementSchema):
-    // - case_id, debtor_id, creditor_id, total_amount, down_payment, number_of_installments, start_date, end_date, status, agreement_type, notes, installments?
     const payload: any = {
       case_id: String(data.case_id),
-      debtor_id: String(data.client_entity_id), // No sistema atual, o "Cliente" é tratado como devedor (debtor_id)
-      creditor_id: String(data.creditor_id ?? data.client_entity_id), // ajuste se houver campo específico de credor
+      debtor_id: String(data.client_entity_id), 
+      creditor_id: String(data.creditor_id ?? data.client_entity_id),
       total_amount: Number(data.total_value ?? data.total_amount),
       down_payment: Number(data.entry_value ?? data.down_payment ?? 0),
       number_of_installments: Number(data.installments ?? data.number_of_installments ?? 1),
@@ -248,7 +241,6 @@ export class ApiClient {
       notes: data.notes ?? null,
     };
 
-    // Caso o front gere a lista de parcelas, já repassa no formato esperado
     if (Array.isArray(data.installments_list)) {
       payload.installments = data.installments_list.map((it: any, idx: number) => ({
         installment_number: Number(it.installment_number ?? idx + 1),
@@ -260,7 +252,6 @@ export class ApiClient {
 
     return instance.post('/financial-agreements', payload);
   }
-  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
   async getFinancialAgreementDetails(id: string): Promise<FinancialAgreement | null> {
     return instance.get(`/financial-agreements/${id}`);
@@ -288,7 +279,6 @@ export class ApiClient {
     return response as unknown as Blob;
   }
 
-  // *** MÉTODOS ATUALIZADOS E CORRIGIDOS ***
   async getAgreementInstallments(agreementId: number): Promise<Installment[]> {
     return instance.get(`/financial-agreements/${agreementId}/installments`);
   }
@@ -304,9 +294,13 @@ export class ApiClient {
     return instance.post(`/financial-agreements/${agreementId}/renegotiate`, data);
   }
 
-  // *** NOVO MÉTODO ADICIONADO ***
   async getInstallmentsByMonth(year: number, month: number): Promise<MonthlyInstallment[]> {
     return instance.get(`/installments/by-month`, { params: { year, month } });
+  }
+
+  // *** NOVO MÉTODO PARA A ABA "RECEBIDOS DO MÊS" ***
+  async getReceivedByMonth(year: number, month: number): Promise<ReceivedPayment[]> {
+    return instance.get('/payments/by-month', { params: { year, month } });
   }
 
   // Métodos de Autenticação

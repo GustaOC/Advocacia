@@ -398,7 +398,7 @@ export class FinancialService {
               ).toISOString(),
           payment_method: parsed.payment_method,
           notes: parsed.notes ?? null,
-          created_by: authUser.id,
+          // created_by: authUser.id, // <<<<<<< LINHA REMOVIDA
         },
       ])
       .select(
