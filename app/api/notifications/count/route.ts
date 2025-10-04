@@ -1,38 +1,32 @@
-// app/api/notifications/count/route.ts 
-import { type NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
-import { requireAuth } from "@/lib/auth";
+// app/api/notifications/count/route.ts
 
-export async function GET(request: NextRequest) {
+import { NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { getSessionUser } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic' // CORREÇÃO APLICADA
+
+export async function GET() {
   try {
-    const user = await requireAuth();
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("user_id") || user.id;
+    const user = await getSessionUser()
+    if (!user) {
+      return new Response('Unauthorized', { status: 401 })
+    }
 
-    const supabase = createAdminClient();
-    
+    const supabase = createSupabaseServerClient()
     const { count, error } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("is_read", false);
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false)
 
     if (error) {
-      console.error("[API Notifications Count] Erro Supabase:", error);
-      throw error;
+      throw error
     }
 
-    return NextResponse.json({ 
-      count: count || 0,
-    });
-
+    return NextResponse.json({ count: count ?? 0 })
   } catch (error: any) {
-    if (error.message === "UNAUTHORIZED" || error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-    }
-    console.error("[API Notifications Count] Erro inesperado:", error);
-    return NextResponse.json({ 
-      error: error.message || "Erro interno do servidor", 
-    }, { status: 500 });
+    console.error('[NOTIFICATIONS COUNT GET]', error)
+    return new Response(error.message, { status: 500 })
   }
 }

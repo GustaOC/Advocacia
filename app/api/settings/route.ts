@@ -1,57 +1,50 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
-import { requirePermission } from "@/lib/auth"
+// app/api/settings/route.ts
+
+import { NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { requirePermission } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic' // CORREÇÃO APLICADA
 
 export async function GET() {
   try {
-    await requirePermission("SETTINGS_VIEW")
-
-    const supabase = await createAdminClient()
-    const { data: settings, error } = await supabase.from("system_settings").select("*").order("key")
-
+    // CORREÇÃO: Chamada de permissão ajustada
+    await requirePermission('settings:read')
+    const supabase = createSupabaseServerClient()
+    const { data, error } = await supabase.from('settings').select('*')
     if (error) throw error
-
-    // Convert to key-value object
-    const settingsObject =
-      settings?.reduce(
-        (acc, setting) => {
-          acc[setting.key] = setting.value
-          return acc
-        },
-        {} as Record<string, string>
-      ) || {}
-
-    return NextResponse.json({ settings: settingsObject })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro interno" }, { status: 500 })
+    return NextResponse.json(data)
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN' || error.message === 'UNAUTHORIZED') {
+      return new Response(error.message, { status: 403 })
+    }
+    console.error('[SETTINGS GET]', error)
+    return new Response(error.message, { status: 500 })
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(req: Request) {
   try {
-    await requirePermission("SETTINGS_MANAGE")
+    // CORREÇÃO: Chamada de permissão ajustada
+    await requirePermission('settings:update')
+    const settings = await req.json()
+    const supabase = createSupabaseServerClient()
 
-    const { settings } = await request.json()
-
-    if (!settings || typeof settings !== "object") {
-      return NextResponse.json({ error: "Settings object é obrigatório" }, { status: 400 })
-    }
-
-    const supabase = await createAdminClient()
-
-    // Update each setting
-    const updates = Object.entries(settings).map(([key, value]) =>
-      supabase.from("system_settings").upsert({
-        key,
-        value: String(value),
-        updated_at: new Date().toISOString(),
-      })
+    const updates = settings.map((s: { id: string; value: any }) =>
+      supabase.from('settings').update({ value: s.value }).eq('id', s.id)
     )
 
-    await Promise.all(updates)
+    const results = await Promise.all(updates)
+    const error = results.find((r) => r.error)
 
-    return NextResponse.json({ message: "Configurações atualizadas com sucesso" })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro interno" }, { status: 500 })
+    if (error) throw error.error
+
+    return NextResponse.json({ message: 'Settings updated' })
+  } catch (error: any) {
+    if (error.message === 'FORBIDDEN' || error.message === 'UNAUTHORIZED') {
+      return new Response(error.message, { status: 403 })
+    }
+    console.error('[SETTINGS PUT]', error)
+    return new Response(error.message, { status: 500 })
   }
 }
