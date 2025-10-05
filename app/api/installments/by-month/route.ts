@@ -1,4 +1,4 @@
-// app/api/installments/by-month/route.ts - VERSÃO FINALÍSSIMA
+// app/api/installments/by-month/route.ts - VERSÃO FINALÍSSIMA (corrigida)
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const cookieStore = cookies();
+  const cookieStore = cookies(); // mantido caso seja usado por middlewares/autenticação
   const supabase = createSupabaseServerClient(); 
 
   const { searchParams } = new URL(req.url);
@@ -23,8 +23,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Ano e mês devem ser números válidos' }, { status: 400 });
   }
 
-  const startDate = new Date(yearNum, monthNum - 1, 1).toISOString();
-  const endDate = new Date(yearNum, monthNum, 0).toISOString();
+  // ---- CORREÇÃO DE BORDA/UTC ----
+  // Janela correta: [1º dia 00:00 UTC, 1º dia do mês seguinte 00:00 UTC)
+  const monthStartUTC = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0)).toISOString();
+  const nextMonthStartUTC = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0, 0)).toISOString();
 
   try {
     const { data: installments, error } = await supabase
@@ -43,8 +45,8 @@ export async function GET(req: NextRequest) {
           )
         )
       `)
-      .gte('due_date', startDate)
-      .lte('due_date', endDate)
+      .gte('due_date', monthStartUTC)   // >= início do mês
+      .lt('due_date', nextMonthStartUTC) // < início do mês seguinte (exclusivo)
       .order('due_date', { ascending: true });
 
     if (error) {
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(installments);
 
   } catch (error: any) {
-    console.error('Erro ao buscar parcelas:', error.message);
-    return NextResponse.json({ error: 'Falha ao buscar dados das parcelas.', details: error.message }, { status: 500 });
+    console.error('Erro ao buscar parcelas:', error?.message || error);
+    return NextResponse.json({ error: 'Falha ao buscar dados das parcelas.', details: error?.message }, { status: 500 });
   }
 }
