@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO OTIMIZADA E CORRIGIDA
+
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -19,11 +19,15 @@ import {
   Phone, Mail, Banknote, Sparkles, Zap, Target, ArrowUp, ArrowDown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiClient, type FinancialAgreement, type MonthlyInstallment, type ReceivedPayment, type Alvara } from "@/lib/api-client";
+import { apiClient, type FinancialAgreement, type MonthlyInstallment } from "@/lib/api-client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { FinancialAgreementModal } from "@/components/financial-agreement-modal";
 
 // ===================== TIPOS & UTILS =====================
+interface Alvara {
+  id: number; case_id: number; case_number: string; value: number; received: boolean;
+  issue_date: string; received_date?: string | null; creditor_name?: string; court?: string;
+}
 interface Expense {
   id: number; description: string; category: string; value: number; date: string;
   status: 'pending' | 'paid'; due_date?: string; payment_method?: string; notes?: string;
@@ -49,22 +53,26 @@ const formatCurrency = (value: number | null | undefined) => {
 };
 
 const formatDate = (dateString: string | null | undefined) => {
-  if (!dateString) return "Data não informada";
+  if (!dateString) return "Data nÃ£o informada";
   const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return "Data inválida";
+  if (Number.isNaN(d.getTime())) return "Data invÃ¡lida";
   return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 };
 
 // ===================== MOCKS =====================
+const mockAlvaras: Alvara[] = [
+  { id: 1, case_id: 2, case_number: '002/2024', value: 8500, received: true, issue_date: '2024-08-15', received_date: '2024-09-01', creditor_name: 'JoÃ£o Silva', court: '1Âª Vara CÃ­vel' },
+  { id: 2, case_id: 4, case_number: '004/2024', value: 12300, received: false, issue_date: '2024-09-10', creditor_name: 'Maria Santos', court: '2Âª Vara CÃ­vel' },
+];
 const mockExpenses: Expense[] = [
-  { id: 1, description: 'Aluguel Escritório', category: 'Fixo', value: 2500, date: '2025-09-05', status: 'paid', payment_method: 'Transferência Bancária' },
-  { id: 2, description: 'Software Jurídico', category: 'Software', value: 250, date: '2025-09-10', status: 'pending', due_date: '2025-09-15' },
+  { id: 1, description: 'Aluguel EscritÃ³rio', category: 'Fixo', value: 2500, date: '2025-09-05', status: 'paid', payment_method: 'TransferÃªncia BancÃ¡ria' },
+  { id: 2, description: 'Software JurÃ­dico', category: 'Software', value: 250, date: '2025-09-10', status: 'pending', due_date: '2025-09-15' },
 ];
 const mockOverdueInstallments: OverdueInstallment[] = [
   { id: 1, agreement_id: 1, client_name: 'Carlos Mendes', case_number: '001/2024', installment_number: 3, value: 1200, due_date: '2024-08-15', days_overdue: 42, total_agreement_value: 15000, client_contact: { phone: '(11) 99999-1234', email: 'carlos@email.com' } },
 ];
 
-// ===================== CÁLCULOS & HELPERS =====================
+// ===================== CÃLCULOS & HELPERS =====================
 const calculateInstallmentInfo = (agreement: FinancialAgreement) => {
   const totalValue = agreement.total_amount || 0;
   const entryValue = agreement.down_payment || 0;
@@ -78,7 +86,7 @@ const calculateInstallmentInfo = (agreement: FinancialAgreement) => {
   return { installmentValue, nextDueDate: nextDueDate.toISOString().split('T')[0], daysUntilDue };
 };
 
-// ===================== STATS COM DESIGN APERFEIÇOADO =====================
+// ===================== STATS COM DESIGN APERFEIÃ‡OADO =====================
 function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   const stats = useMemo(() => {
     const totalValue = agreements.reduce((sum, a) => sum + (a.total_amount || 0), 0);
@@ -120,7 +128,7 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
         icon: AlertCircle, 
         color: "text-red-600", 
         bg: "from-red-50 to-red-100", 
-        trend: overdueAgreements > 0 ? "Atenção!" : "Em dia",
+        trend: overdueAgreements > 0 ? "AtenÃ§Ã£o!" : "Em dia",
         gradient: "from-red-500 to-rose-600"
       },
     ];
@@ -152,7 +160,7 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
                     )}
                     <span className={`text-sm font-medium ${
                       stat.trend.includes('+') ? 'text-green-600' : 
-                      stat.trend.includes('Atenção') ? 'text-red-600' : 'text-blue-600'
+                      stat.trend.includes('AtenÃ§Ã£o') ? 'text-red-600' : 'text-blue-600'
                     }`}>
                       {stat.trend}
                     </span>
@@ -170,155 +178,94 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   );
 }
 
-// ===================== TAB "RECEBIDOS DO MÊS" =====================
-function ReceivedPaymentsTab() {
+// ===================== MONTHLY INSTALLMENTS COM DESIGN APERFEIÃ‡OADO =====================
+function MonthlyInstallmentsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
   const [isPending, startTransition] = useTransition();
 
-  const { data: payments = [], isLoading, isError, error } = useQuery<ReceivedPayment[]>({
-    queryKey: ['receivedPayments', selectedDate.year, selectedDate.month],
-    queryFn: () => apiClient.getReceivedByMonth(selectedDate.year, selectedDate.month),
+  const { data: installments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
+    queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month],
+    queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
+    retry: 3,
+    retryDelay: 1000,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
 
-  const totalReceived = useMemo(() => {
-    return (payments || []).reduce((acc, payment) => acc + (Number(payment.amount_paid) || 0), 0);
-  }, [payments]);
+  const getPartiesInfo = (installment: MonthlyInstallment) => {
+    const caseParties = installment.agreement?.cases?.case_parties;
+    let clientName = installment.agreement?.debtor?.name || 'Cliente N/A';
+    let executedName = 'Executado N/A';
+
+    if (Array.isArray(caseParties) && caseParties.length > 0) {
+      const clientParty = caseParties.find((p: any) =>
+        p.role && ['Cliente', 'CLIENTE'].includes(p.role)
+      );
+      if (clientParty?.entities?.name) {
+        clientName = clientParty.entities.name;
+      }
+
+      const executedParty = caseParties.find((p: any) =>
+        p.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role)
+      );
+      if (executedParty?.entities?.name) {
+        executedName = executedParty.entities.name;
+      }
+    }
+    return { clientName, executedName };
+  };
+
+  const { totalToReceive, totalReceived } = useMemo(() => {
+    return (installments || []).reduce(
+      (acc, installment) => {
+        const amount = Number(installment.amount) || 0;
+        if (normalizeStatus(installment.status) === 'PAGA') {
+          acc.totalReceived += amount;
+        } else {
+          acc.totalToReceive += amount;
+        }
+        return acc;
+      },
+      { totalToReceive: 0, totalReceived: 0 }
+    );
+  }, [installments]);
+
+  const payInstallmentMutation = useMutation({
+    mutationFn: (installmentId: number) => {
+      const value = (installments || []).find(i => i.id === installmentId)?.amount ?? 0;
+      return apiClient.recordInstallmentPayment(String(installmentId), {
+        amount_paid: value,
+        payment_date: new Date().toISOString(),
+        payment_method: 'pix',
+      });
+    },
+    onMutate: async (installmentId) => {
+      await queryClient.cancelQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
+      const previousInstallments = queryClient.getQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month]);
+      queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], (oldData: any) =>
+        (oldData || []).map((i: any) => (i.id === installmentId ? { ...i, status: 'PAGA' } : i))
+      );
+      return { previousInstallments };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previousInstallments) {
+        queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], context.previousInstallments);
+      }
+      toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
+    },
+    onSuccess: () => {
+      toast({ title: "Sucesso!", description: "Parcela marcada como paga." });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
+    }
+  });
 
   const handleDateChange = (type: 'month' | 'year', value: string) => {
     startTransition(() => setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) })));
   };
-
-  const getPaymentMethodBadge = (method: string | null | undefined) => {
-    const methodStr = (method || 'outros').toLowerCase();
-    const config = {
-      pix: { label: 'PIX', className: 'bg-emerald-100 text-emerald-800' },
-      boleto: { label: 'Boleto', className: 'bg-orange-100 text-orange-800' },
-      transferencia: { label: 'Transf.', className: 'bg-blue-100 text-blue-800' },
-      cartao_credito: { label: 'Crédito', className: 'bg-purple-100 text-purple-800' },
-      dinheiro: { label: 'Dinheiro', className: 'bg-green-100 text-green-800' },
-      default: { label: methodStr, className: 'bg-slate-100 text-slate-800' }
-    };
-    const { label, className } = (config as any)[methodStr] || config.default;
-    return <Badge className={`${className} border-0`}>{label}</Badge>;
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex items-center gap-3">
-              <Label className="text-slate-700 font-semibold">Mês:</Label>
-              <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
-                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>
-                      {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Label className="text-slate-700 font-semibold">Ano:</Label>
-              <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
-                <SelectTrigger className="w-[120px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 5 }, (_, i) => (
-                    <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
-                      {new Date().getFullYear() - i}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 flex items-center justify-end">
-                <div className="text-right">
-                    <p className="text-sm text-slate-600 font-medium">Total Recebido no Mês</p>
-                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p>
-                </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
-                <TableHead className="text-slate-700 font-bold">Data Pag.</TableHead>
-                <TableHead className="text-slate-700 font-bold">Cliente</TableHead>
-                <TableHead className="text-slate-700 font-bold">Processo</TableHead>
-                <TableHead className="text-slate-700 font-bold">Parcela</TableHead>
-                <TableHead className="text-slate-700 font-bold">Método</TableHead>
-                <TableHead className="text-right text-slate-700 font-bold">Valor Recebido</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading || isPending ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2 text-slate-600">
-                      <Loader2 className="h-6 w-6 animate-spin" /> Carregando recebimentos...
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : isError ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-red-600">
-                    <div className="flex items-center justify-center gap-2">
-                      <AlertCircle className="h-6 w-6" /> Erro ao carregar dados: {String(error?.message || 'desconhecido')}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : payments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                    Nenhum pagamento recebido no período selecionado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                payments.map((payment) => (
-                  <TableRow key={payment.id} className="group hover:bg-gradient-to-r hover:from-green-50/50 hover:to-transparent transition-all duration-200">
-                    <TableCell className="font-mono">{formatDate(payment.payment_date)}</TableCell>
-                    <TableCell className="font-medium text-slate-900 group-hover:text-green-700 transition-colors">{payment.client_name}</TableCell>
-                    <TableCell>{payment.case_number || 'N/A'}</TableCell>
-                    <TableCell className="text-center">{payment.installment_number}</TableCell>
-                    <TableCell>{getPaymentMethodBadge(payment.payment_method)}</TableCell>
-                    <TableCell className="text-right font-semibold text-green-700">{formatCurrency(payment.amount_paid)}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ===================== COMPONENTE DE CARD PARA PARCELAS =====================
-function AgreementInstallmentsCard({ agreement, installments, onPay }: {
-  agreement: FinancialAgreement;
-  installments: MonthlyInstallment[];
-  onPay: (installmentId: number) => void;
-}) {
-  const { clientName, executedName } = useMemo(() => {
-    const caseParties = (agreement as any).cases?.case_parties;
-    let client = (agreement as any).debtor?.name || 'Cliente N/A';
-    let executed = 'Executado N/A';
-
-    if (Array.isArray(caseParties) && caseParties.length > 0) {
-      const clientParty = caseParties.find(p => p.role && ['Cliente', 'CLIENTE'].includes(p.role));
-      if (clientParty?.entities?.name) client = clientParty.entities.name;
-
-      const executedParty = caseParties.find(p => p.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role));
-      if (executedParty?.entities?.name) executed = executedParty.entities.name;
-    }
-    return { clientName: client, executedName: executed };
-  }, [agreement]);
 
   const getStatusBadge = (status: MonthlyInstallment['status']) => {
     const variants = {
@@ -328,144 +275,13 @@ function AgreementInstallmentsCard({ agreement, installments, onPay }: {
     };
     const key = normalizeStatus(status);
     const { label, className, icon: Icon } = variants[key];
-    return <Badge className={`${className} flex items-center gap-1 font-semibold border-0 px-3 py-1`}><Icon className="h-3 w-3" />{label}</Badge>;
+    return (
+      <Badge className={`${className} flex items-center gap-1 font-semibold border-0 px-3 py-1`}>
+        <Icon className="h-3 w-3" />{label}
+      </Badge>
+    );
   };
 
-  return (
-    <Card className="border-l-4 border-l-purple-500 border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
-      <CardContent className="p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h4 className="font-semibold text-slate-900">{clientName} vs {executedName}</h4>
-            <p className="text-sm text-slate-500 font-mono">{agreement.cases?.case_number || 'Sem número'}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_amount)}</p>
-            <p className="text-sm text-slate-500">{agreement.number_of_installments} parcelas</p>
-          </div>
-        </div>
-        {installments.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/50">
-                <TableHead className="font-semibold">Vencimento</TableHead>
-                <TableHead className="font-semibold">Valor</TableHead>
-                <TableHead className="font-semibold">Status</TableHead>
-                <TableHead className="text-right font-semibold">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {installments.map(inst => (
-                <TableRow key={inst.id} className="hover:bg-slate-50/30">
-                  <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
-                  <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
-                  <TableCell>{getStatusBadge(inst.status)}</TableCell>
-                  <TableCell className="text-right">
-                    {normalizeStatus(inst.status) !== 'PAGA' && (
-                      <Button 
-                        size="sm" 
-                        onClick={() => onPay(inst.id)} 
-                        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg rounded-xl"
-                      >
-                        <Banknote className="h-4 w-4 mr-2" /> Dar Baixa
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="text-center py-6 text-slate-500 text-sm bg-slate-50 rounded-lg border border-slate-200">
-            Nenhuma parcela com vencimento neste mês.
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ===================== PARCELAS DO MÊS COM LÓGICA CORRIGIDA =====================
-function MonthlyInstallmentsTab() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
-  const [isPending, startTransition] = useTransition();
-
-  const { data: allInstallments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
-    queryKey: ['allInstallments'],
-    queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
-    staleTime: 60 * 1000, 
-    refetchOnWindowFocus: false,
-  });
-
-  const groupedData = useMemo(() => {
-    const agreementsMap = new Map<number, { agreement: FinancialAgreement; monthlyInstallments: MonthlyInstallment[] }>();
-
-    allInstallments.forEach(inst => {
-      if (inst.agreement && !agreementsMap.has(inst.agreement.id)) {
-        agreementsMap.set(inst.agreement.id, {
-          // CORREÇÃO: Usamos uma "conversão dupla" para forçar o TypeScript a aceitar o tipo,
-          // já que os tipos são muito diferentes para uma conversão direta.
-          agreement: inst.agreement as unknown as FinancialAgreement,
-          monthlyInstallments: [],
-        });
-      }
-    });
-
-    const month = selectedDate.month - 1;
-    const year = selectedDate.year;
-    allInstallments.forEach(inst => {
-      if (inst.agreement) {
-        const dueDate = new Date(inst.due_date);
-        if (dueDate.getUTCFullYear() === year && dueDate.getUTCMonth() === month) {
-          agreementsMap.get(inst.agreement.id)?.monthlyInstallments.push(inst);
-        }
-      }
-    });
-
-    return Array.from(agreementsMap.values());
-  }, [allInstallments, selectedDate]);
-
-  const { totalToReceive, totalReceived } = useMemo(() => {
-    let toReceive = 0;
-    let received = 0;
-    groupedData.forEach(({ monthlyInstallments }) => {
-      monthlyInstallments.forEach(inst => {
-        const amount = Number(inst.amount) || 0;
-        if (normalizeStatus(inst.status) === 'PAGA') {
-          received += amount;
-        } else {
-          toReceive += amount;
-        }
-      });
-    });
-    return { totalToReceive: toReceive, totalReceived: received };
-  }, [groupedData]);
-
-  const payInstallmentMutation = useMutation({
-    mutationFn: (installmentId: number) => {
-      const installment = allInstallments.find(i => i.id === installmentId);
-      if (!installment) throw new Error("Parcela não encontrada");
-      return apiClient.recordInstallmentPayment(String(installmentId), {
-        amount_paid: installment.amount,
-        payment_date: new Date().toISOString(),
-        payment_method: 'pix',
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Sucesso!", description: "Parcela marcada como paga." });
-      queryClient.invalidateQueries({ queryKey: ['allInstallments'] });
-    },
-    onError: (err) => {
-      toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
-    },
-  });
-
-  const handleDateChange = (type: 'month' | 'year', value: string) => {
-    startTransition(() => setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) })));
-  };
-  
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -474,7 +290,7 @@ function MonthlyInstallmentsTab() {
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-600 font-medium">Total a Receber no Mês</p>
+                <p className="text-sm text-slate-600 font-medium">Total a Receber no MÃªs</p>
                 <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalToReceive)}</p>
               </div>
               <DollarSign className="h-8 w-8 text-orange-600" />
@@ -486,7 +302,7 @@ function MonthlyInstallmentsTab() {
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-600 font-medium">Total Recebido no Mês</p>
+                <p className="text-sm text-slate-600 font-medium">Total Recebido no MÃªs</p>
                 <p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceived)}</p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-600" />
@@ -498,7 +314,7 @@ function MonthlyInstallmentsTab() {
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-600 font-medium">Balanço do Mês</p>
+                <p className="text-sm text-slate-600 font-medium">BalanÃ§o do MÃªs</p>
                 <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived - totalToReceive)}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-blue-600" />
@@ -511,9 +327,9 @@ function MonthlyInstallmentsTab() {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex items-center gap-3">
-              <Label className="text-slate-700 font-semibold">Mês:</Label>
+              <Label className="text-slate-700 font-semibold">MÃªs:</Label>
               <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
-                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="MÃªs" /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)}>
@@ -537,54 +353,92 @@ function MonthlyInstallmentsTab() {
           </div>
         </CardContent>
       </Card>
-      
-      <div className="space-y-4">
-        {(isLoading || isPending) ? (
-          <Card className="border-0 shadow-xl">
-            <CardContent className="text-center py-8">
-              <div className="flex items-center justify-center gap-2 text-slate-600">
-                <Loader2 className="h-6 w-6 animate-spin" /> Carregando parcelas...
-              </div>
-            </CardContent>
-          </Card>
-        ) : isError ? (
-          <Card className="border-0 shadow-xl border-red-200">
-            <CardContent className="text-center py-8 text-red-600">
-              <div className="flex items-center justify-center gap-2">
-                <AlertCircle className="h-6 w-6" /> Erro ao carregar dados: {String(error?.message)}
-              </div>
-            </CardContent>
-          </Card>
-        ) : groupedData.length === 0 ? (
-          <Card className="border-0 shadow-xl">
-            <CardContent className="text-center py-12">
-              <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3>
-              <p className="text-slate-500">Nenhum acordo com parcelas para o período selecionado.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          groupedData.map(({ agreement, monthlyInstallments }) => (
-            <AgreementInstallmentsCard
-              key={agreement.id}
-              agreement={agreement}
-              installments={monthlyInstallments}
-              onPay={(id) => payInstallmentMutation.mutate(id)}
-            />
-          ))
-        )}
-      </div>
+
+      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
+                <TableHead className="text-slate-700 font-bold">Vencimento</TableHead>
+                <TableHead className="text-slate-700 font-bold">Partes</TableHead>
+                <TableHead className="text-slate-700 font-bold">Processo</TableHead>
+                <TableHead className="text-slate-700 font-bold">Valor</TableHead>
+                <TableHead className="text-slate-700 font-bold">Status</TableHead>
+                <TableHead className="text-right text-slate-700 font-bold">AÃ§Ãµes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading || isPending ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex items-center justify-center gap-2 text-slate-600">
+                      <Loader2 className="h-6 w-6 animate-spin" /> Carregando parcelas...
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-red-600">
+                    <div className="flex items-center justify-center gap-2">
+                      <AlertCircle className="h-6 w-6" /> Erro ao carregar parcelas: {String(error?.message || 'desconhecido')}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : installments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                    Nenhuma parcela encontrada para o perÃ­odo selecionado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                installments.map((inst) => {
+                  const { clientName, executedName } = getPartiesInfo(inst);
+                  const caseNumber = inst.agreement?.cases?.case_number || 'N/A';
+                  
+                  return (
+                    <TableRow key={inst.id} className="group hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-transparent transition-all duration-200">
+                      <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span className="text-sm text-slate-900 group-hover:text-purple-700 transition-colors" title={`Cliente: ${clientName}`}>{clientName}</span>
+                          <span className="text-xs text-slate-500" title={`Executado: ${executedName}`}>vs {executedName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{caseNumber}</TableCell>
+                      <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
+                      <TableCell>{getStatusBadge(inst.status)}</TableCell>
+                      <TableCell className="text-right">
+                        {normalizeStatus(inst.status) !== 'PAGA' && (
+                          <Button
+                            size="sm"
+                            onClick={() => payInstallmentMutation.mutate(inst.id)}
+                            disabled={payInstallmentMutation.isPending}
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl"
+                          >
+                            {payInstallmentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4 mr-2" />}
+                            Dar Baixa
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// ===================== AGREEMENTS TAB COM DESIGN APERFEIÇOADO =====================
+// ===================== AGREEMENTS TAB COM DESIGN APERFEIÃ‡OADO =====================
 function renderAgreementTypeIcon(type: string | null | undefined) {
   const typeStr = type || 'N/A';
   const iconMap = {
     'Judicial': { icon: Scale, color: 'text-blue-600', label: 'Judicial' },
     'Extrajudicial': { icon: FileSignature, color: 'text-green-600', label: 'Extrajudicial' },
-    'Em Audiência': { icon: Handshake, color: 'text-purple-600', label: 'Em Audiência' },
+    'Em AudiÃªncia': { icon: Handshake, color: 'text-purple-600', label: 'Em AudiÃªncia' },
     'Pela Loja': { icon: Store, color: 'text-orange-600', label: 'Pela Loja' }
   } as const;
   const config = (iconMap as any)[typeStr] || { icon: FileText, color: 'text-gray-600', label: typeStr };
@@ -607,7 +461,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
   const getStatusBadge = (status: string) => {
     const variants = {
       'active': { label: 'Ativo', className: 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg' },
-      'completed': { label: 'Concluído', className: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' },
+      'completed': { label: 'ConcluÃ­do', className: 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' },
       'defaulted': { label: 'Em Atraso', className: 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg' },
       'cancelled': { label: 'Cancelado', className: 'bg-gradient-to-r from-slate-500 to-slate-600 text-white shadow-lg' }
     } as const;
@@ -623,8 +477,8 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
             <div className="flex items-center space-x-4">
               {isExpanded ? <ChevronDown className="h-5 w-5 text-slate-500 group-hover:text-purple-600 transition-colors" /> : <ChevronRight className="h-5 w-5 text-slate-500 group-hover:text-purple-600 transition-colors" />}
               <div>
-                <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{agreement.entities?.name || 'Cliente não informado'}</h4>
-                <p className="text-sm text-slate-500">{agreement.cases?.case_number || 'Sem número'}</p>
+                <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{agreement.entities?.name || 'Cliente nÃ£o informado'}</h4>
+                <p className="text-sm text-slate-500">{agreement.cases?.case_number || 'Sem nÃºmero'}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -641,21 +495,21 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
           <div className="px-6 pb-6 border-t bg-slate-50/50">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
               <div className="space-y-3">
-                <h5 className="font-semibold text-slate-700 flex items-center"><FileText className="h-4 w-4 mr-2" />Informações do Acordo</h5>
+                <h5 className="font-semibold text-slate-700 flex items-center"><FileText className="h-4 w-4 mr-2" />InformaÃ§Ãµes do Acordo</h5>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-slate-600">Tipo:</span><div>{renderAgreementTypeIcon(agreement.agreement_type)}</div></div>
                   <div className="flex justify-between"><span className="text-slate-600">Valor de Entrada:</span><span className="font-medium">{formatCurrency(agreement.down_payment || 0)}</span></div>
                   <div className="flex justify-between"><span className="text-slate-600">Valor Restante:</span><span className="font-medium">{formatCurrency((agreement.total_amount || 0) - (agreement.down_payment || 0))}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Nº de Parcelas:</span><span className="font-medium">{agreement.number_of_installments || 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">NÂº de Parcelas:</span><span className="font-medium">{agreement.number_of_installments || 'N/A'}</span></div>
                 </div>
               </div>
               <div className="space-y-3">
                 <h5 className="font-semibold text-slate-700 flex items-center"><Calendar className="h-4 w-4 mr-2" />Cronograma</h5>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-slate-600">Valor da Parcela:</span><span className="font-bold text-green-600">{formatCurrency(installmentValue)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Próximo Vencimento:</span><span className="font-medium">{formatDate(nextDueDate)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Dias até Vencimento:</span><Badge variant={daysUntilDue <= 7 ? "destructive" : daysUntilDue <= 15 ? "outline" : "secondary"}>{daysUntilDue} dias</Badge></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Possui Alvará:</span><Badge variant={agreement.has_alvara ? "default" : "outline"}>{agreement.has_alvara ? "Sim" : "Não"}</Badge></div>
+                  <div className="flex justify-between"><span className="text-slate-600">PrÃ³ximo Vencimento:</span><span className="font-medium">{formatDate(nextDueDate)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Dias atÃ© Vencimento:</span><Badge variant={daysUntilDue <= 7 ? "destructive" : daysUntilDue <= 15 ? "outline" : "secondary"}>{daysUntilDue} dias</Badge></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Possui AlvarÃ¡:</span><Badge variant={agreement.has_alvara ? "default" : "outline"}>{agreement.has_alvara ? "Sim" : "NÃ£o"}</Badge></div>
                 </div>
               </div>
               <div className="space-y-3">
@@ -668,14 +522,14 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
                   </div>
                   <div>
                     <span className="text-slate-600">Executado:</span>
-                    <p className="font-medium text-slate-700">{(agreement as any)?.executed_entities?.name || 'Não informado'}</p>
+                    <p className="font-medium text-slate-700">{(agreement as any)?.executed_entities?.name || 'NÃ£o informado'}</p>
                   </div>
                 </div>
               </div>
             </div>
             {agreement.notes && (
               <div className="border-t pt-3 mt-3">
-                <h6 className="font-semibold text-slate-700 mb-2">Observações:</h6>
+                <h6 className="font-semibold text-slate-700 mb-2">ObservaÃ§Ãµes:</h6>
                 <p className="text-sm text-slate-600 bg-white p-3 rounded-lg border">{agreement.notes}</p>
               </div>
             )}
@@ -683,7 +537,7 @@ function AgreementDetailsCard({ agreement, isExpanded, onToggle, onSendMessage }
               <Button size="sm" variant="outline" className="border-2 border-slate-200 rounded-xl"><Eye className="h-4 w-4 mr-1" />Visualizar</Button>
               <Button size="sm" variant="outline" className="border-2 border-slate-200 rounded-xl"><Edit className="h-4 w-4 mr-1" />Editar</Button>
               <Button size="sm" onClick={() => onSendMessage(agreement)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg rounded-xl">
-                <Send className="h-4 w-4 mr-1" />Enviar Cobrança
+                <Send className="h-4 w-4 mr-1" />Enviar CobranÃ§a
               </Button>
             </div>
           </div>
@@ -737,7 +591,7 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
                 <SelectContent>
                   <SelectItem value="all">Todos Status</SelectItem>
                   <SelectItem value="active">Ativo</SelectItem>
-                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="completed">ConcluÃ­do</SelectItem>
                   <SelectItem value="defaulted">Em Atraso</SelectItem>
                   <SelectItem value="cancelled">Cancelado</SelectItem>
                 </SelectContent>
@@ -748,7 +602,7 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
                   <SelectItem value="all">Todos Tipos</SelectItem>
                   <SelectItem value="Judicial">Judicial</SelectItem>
                   <SelectItem value="Extrajudicial">Extrajudicial</SelectItem>
-                  <SelectItem value="Em Audiência">Em Audiência</SelectItem>
+                  <SelectItem value="Em AudiÃªncia">Em AudiÃªncia</SelectItem>
                   <SelectItem value="Pela Loja">Pela Loja</SelectItem>
                 </SelectContent>
               </Select>
@@ -792,34 +646,15 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
   );
 }
 
-// ===================== ALVARÁS COM DESIGN APERFEIÇOADO =====================
-function AlvarasTab() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+// ===================== ALVARÃS COM DESIGN APERFEIÃ‡OADO =====================
+function AlvarasTab({ alvaras, onMarkAsReceived }: { alvaras: Alvara[], onMarkAsReceived: (id: number) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  
-  const { data: alvaras = [], isLoading, isError, error } = useQuery<Alvara[]>({
-    queryKey: ['alvaras'],
-    queryFn: () => apiClient.getAlvaras(), 
-    staleTime: 60_000,
-  });
-
-  const markAsReceivedMutation = useMutation({
-    mutationFn: (alvaraId: number) => apiClient.updateAlvaraStatus(alvaraId, true),
-    onSuccess: () => {
-      toast({ title: "Sucesso!", description: "Alvará marcado como recebido!" });
-      queryClient.invalidateQueries({ queryKey: ['alvaras'] });
-    },
-    onError: (err) => {
-      toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
-    }
-  });
 
   const filteredAlvaras = useMemo(() => {
     return alvaras.filter(alvara => {
       const searchMatch =
-        alvara.case_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alvara.case_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         alvara.creditor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         alvara.court?.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -831,8 +666,8 @@ function AlvarasTab() {
     });
   }, [alvaras, searchTerm, statusFilter]);
 
-  const totalValue = useMemo(() => filteredAlvaras.reduce((sum, a) => sum + (a.value || 0), 0), [filteredAlvaras]);
-  const pendingValue = useMemo(() => filteredAlvaras.filter(a => !a.received).reduce((sum, a) => sum + (a.value || 0), 0), [filteredAlvaras]);
+  const totalValue = useMemo(() => filteredAlvaras.reduce((sum, a) => sum + a.value, 0), [filteredAlvaras]);
+  const pendingValue = useMemo(() => filteredAlvaras.filter(a => !a.received).reduce((sum, a) => sum + a.value, 0), [filteredAlvaras]);
 
   return (
     <div className="space-y-6">
@@ -842,7 +677,7 @@ function AlvarasTab() {
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-600 font-medium">Total em Alvarás</p>
+                <p className="text-sm text-slate-600 font-medium">Total em AlvarÃ¡s</p>
                 <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p>
               </div>
               <Receipt className="h-8 w-8 text-blue-600" />
@@ -895,70 +730,42 @@ function AlvarasTab() {
       </Card>
 
       <div className="space-y-4">
-        {isLoading ? (
-          <Card className="border-0 shadow-xl">
-            <CardContent className="text-center py-8">
-              <Loader2 className="h-8 w-8 mx-auto animate-spin text-slate-500" />
-            </CardContent>
-          </Card>
-        ) : isError ? (
-          <Card className="border-0 shadow-xl border-red-200">
-            <CardContent className="text-center py-8 text-red-600">
-              Erro ao carregar alvarás: {String(error?.message)}
-            </CardContent>
-          </Card>
-        ) : filteredAlvaras.length === 0 ? (
-          <Card className="border-0 shadow-xl">
-            <CardContent className="text-center py-12">
-              <Receipt className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum alvará encontrado</h3>
-              <p className="text-slate-500">Nenhum alvará corresponde aos filtros atuais.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredAlvaras.map((alvara) => (
-            <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-3">
-                      <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">Processo {alvara.case_number}</h4>
-                      <Badge variant={alvara.received ? "default" : "secondary"} className={alvara.received ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white" : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"}>
-                        {alvara.received ? "Recebido" : "Pendente"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-slate-600"><strong>Credor:</strong> {alvara.creditor_name || 'Não informado'}</p>
-                    <p className="text-sm text-slate-600"><strong>Vara:</strong> {alvara.court || 'Não informado'}</p>
-                    <div className="flex items-center space-x-4 text-sm text-slate-600">
-                      <span><strong>Expedição:</strong> {formatDate(alvara.issue_date)}</span>
-                      {alvara.received_date && (<span><strong>Recebimento:</strong> {formatDate(alvara.received_date)}</span>)}
-                    </div>
+        {filteredAlvaras.map((alvara) => (
+          <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-3">
+                    <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">Processo {alvara.case_number}</h4>
+                    <Badge variant={alvara.received ? "default" : "secondary"} className={alvara.received ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white" : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"}>
+                      {alvara.received ? "Recebido" : "Pendente"}
+                    </Badge>
                   </div>
-                  <div className="text-right space-y-2">
-                    <p className="text-2xl font-bold text-green-600">{formatCurrency(alvara.value)}</p>
-                    {!alvara.received && (
-                      <Button
-                        size="sm"
-                        onClick={() => markAsReceivedMutation.mutate(alvara.id)}
-                        disabled={markAsReceivedMutation.isPending}
-                        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl"
-                      >
-                        {markAsReceivedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                        Marcar como Recebido
-                      </Button>
-                    )}
+                  <p className="text-sm text-slate-600"><strong>Credor:</strong> {alvara.creditor_name || 'NÃ£o informado'}</p>
+                  <p className="text-sm text-slate-600"><strong>Vara:</strong> {alvara.court || 'NÃ£o informado'}</p>
+                  <div className="flex items-center space-x-4 text-sm text-slate-600">
+                    <span><strong>ExpediÃ§Ã£o:</strong> {formatDate(alvara.issue_date)}</span>
+                    {alvara.received_date && (<span><strong>Recebimento:</strong> {formatDate(alvara.received_date)}</span>)}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
+                <div className="text-right space-y-2">
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(alvara.value)}</p>
+                  {!alvara.received && (
+                    <Button size="sm" onClick={() => onMarkAsReceived(alvara.id)} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl">
+                      <CheckCircle className="h-4 w-4 mr-1" />Marcar como Recebido
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
 }
 
-// ===================== OVERDUE COM DESIGN APERFEIÇOADO =====================
+// ===================== OVERDUE COM DESIGN APERFEIÃ‡OADO =====================
 function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallments: OverdueInstallment[], onSendMessage: (i: OverdueInstallment) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -1012,7 +819,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-600 font-medium">Atraso Médio</p>
+                <p className="text-sm text-slate-600 font-medium">Atraso MÃ©dio</p>
                 <p className="text-2xl font-bold text-purple-600">{filtered.length > 0 ? Math.round(filtered.reduce((s, i) => s + i.days_overdue, 0) / filtered.length) : 0} dias</p>
               </div>
               <Calendar className="h-8 w-8 text-purple-600" />
@@ -1064,7 +871,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
                   <p className="text-2xl font-bold text-red-600">{formatCurrency(installment.value)}</p>
                   <p className="text-sm text-slate-600">de {formatCurrency(installment.total_agreement_value)}</p>
                   <Button size="sm" onClick={() => onSendMessage(installment)} className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg rounded-xl">
-                    <Send className="h-4 w-4 mr-1" />Enviar Cobrança
+                    <Send className="h-4 w-4 mr-1" />Enviar CobranÃ§a
                   </Button>
                 </div>
               </div>
@@ -1076,7 +883,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
   );
 }
 
-// ===================== EXPENSES COM DESIGN APERFEIÇOADO =====================
+// ===================== EXPENSES COM DESIGN APERFEIÃ‡OADO =====================
 function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expenses: Expense[], onAddExpense: () => void, onToggleExpenseStatus: (id: number) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -1161,7 +968,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="Fixo">Fixo</SelectItem>
-                  <SelectItem value="Variável">Variável</SelectItem>
+                  <SelectItem value="VariÃ¡vel">VariÃ¡vel</SelectItem>
                   <SelectItem value="Software">Software</SelectItem>
                 </SelectContent>
               </Select>
@@ -1199,7 +1006,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
                     {expense.due_date && (<span><strong>Vencimento:</strong> {formatDate(expense.due_date)}</span>)}
                     {expense.payment_method && (<span><strong>Forma de Pagamento:</strong> {expense.payment_method}</span>)}
                   </div>
-                  {expense.notes && (<p className="text-sm text-slate-600"><strong>Observações:</strong> {expense.notes}</p>)}
+                  {expense.notes && (<p className="text-sm text-slate-600"><strong>ObservaÃ§Ãµes:</strong> {expense.notes}</p>)}
                 </div>
                 <div className="text-right space-y-2">
                   <p className="text-2xl font-bold text-slate-900">{formatCurrency(expense.value)}</p>
@@ -1219,7 +1026,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   );
 }
 
-// ===================== ROOT COMPONENT COM DESIGN APERFEIÇOADO =====================
+// ===================== ROOT COM DESIGN APERFEIÃ‡OADO =====================
 export function FinancialModule() {
   const { toast } = useToast();
 
@@ -1230,7 +1037,8 @@ export function FinancialModule() {
     retry: 2,
     staleTime: 10_000,
   });
-  
+
+  const [alvaras, setAlvaras] = useState<Alvara[]>(mockAlvaras);
   const [expenses, setExpenses] = useState<Expense[]>(mockExpenses);
   const [overdueInstallments] = useState<OverdueInstallment[]>(mockOverdueInstallments);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
@@ -1243,13 +1051,38 @@ export function FinancialModule() {
 
   const handleSendMessage = useCallback((agreement: FinancialAgreement) => {
     if (!agreement.entities) {
-      toast({ title: "Erro", description: "Não é possível enviar mensagem para um acordo sem cliente." });
+      toast({ title: "Erro", description: "NÃ£o Ã© possÃ­vel enviar mensagem para um acordo sem cliente." });
       return;
     }
     setSelectedRecipient({ name: agreement.entities.name, type: 'acordo' });
-    setMessageText(`Prezado(a) ${agreement.entities.name},\n\nLembramos que a parcela do seu acordo referente ao processo ${agreement.cases?.case_number || 'sem número'} está em atraso.\n\nAtenciosamente,\nCássio Miguel Advocacia`);
+    setMessageText(`Prezado(a) ${agreement.entities.name},\n\nLembramos que a parcela do seu acordo referente ao processo ${agreement.cases?.case_number || 'sem nÃºmero'} estÃ¡ em atraso.\n\nAtenciosamente,\nCÃ¡ssio Miguel Advocacia`);
     setMessageModalOpen(true);
   }, [toast]);
+
+  const handleSendOverdueMessage = useCallback((installment: OverdueInstallment) => {
+    setSelectedRecipient({ name: installment.client_name, type: 'parcela' });
+    setMessageText(`Prezado(a) ${installment.client_name},\n\nSua parcela nÂº ${installment.installment_number} do processo ${installment.case_number} estÃ¡ em atraso.\n\nAtenciosamente,\nCÃ¡ssio Miguel Advocacia`);
+    setMessageModalOpen(true);
+  }, []);
+
+  const handleMarkAsReceived = useCallback((alvaraId: number) => {
+    setAlvaras(prev => prev.map(a => a.id === alvaraId ? { ...a, received: true, received_date: new Date().toISOString().split('T')[0] } : a));
+    toast({ title: "Sucesso!", description: "AlvarÃ¡ marcado como recebido!" });
+  }, [toast]);
+
+  const handleAddExpense = useCallback(() => {
+    toast({ title: "Em desenvolvimento", description: "Funcionalidade de adicionar despesa serÃ¡ implementada em breve." });
+  }, [toast]);
+
+  const handleToggleExpenseStatus = useCallback((expenseId: number) => {
+    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, status: e.status === 'paid' ? 'pending' : 'paid' } : e));
+    toast({ title: "Sucesso!", description: "Status da despesa atualizado!" });
+  }, [toast]);
+
+  const handleSendMessageAction = useCallback(() => {
+    toast({ title: "Mensagem Enviada!", description: `Lembrete enviado para ${selectedRecipient?.name}` });
+    setMessageModalOpen(false);
+  }, [selectedRecipient, toast]);
 
   if (error) {
     return (
@@ -1287,8 +1120,8 @@ export function FinancialModule() {
         <div className="relative z-10">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-4xl font-bold mb-3">Módulo Financeiro</h2>
-              <p className="text-emerald-100 text-xl">Controle total sobre acordos, alvarás, e despesas</p>
+              <h2 className="text-4xl font-bold mb-3">MÃ³dulo Financeiro</h2>
+              <p className="text-emerald-100 text-xl">Controle total sobre acordos, alvarÃ¡s, e despesas</p>
             </div>
             <Button onClick={() => refetch()} className="bg-white text-emerald-900 hover:bg-slate-100 shadow-lg rounded-xl">
               <RefreshCw className="mr-2 h-4 w-4" /> Atualizar Dados
@@ -1300,17 +1133,15 @@ export function FinancialModule() {
       <FinancialStats agreements={safeAgreements} />
 
       <Tabs defaultValue="monthly_installments" className="space-y-6">
-        <TabsList className="grid grid-cols-6 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
-          <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
-          <TabsTrigger value="received_payments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Banknote className="h-4 w-4" /><span>Recebidos do Mês</span></TabsTrigger>
+        <TabsList className="grid grid-cols-5 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
+          <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do MÃªs</span></TabsTrigger>
           <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
-          <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span></TabsTrigger>
+          <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>AlvarÃ¡s</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{alvaras.length}</Badge></TabsTrigger>
           <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
           <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
         </TabsList>
 
         <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
-        <TabsContent value="received_payments"><ReceivedPaymentsTab /></TabsContent>
         <TabsContent value="acordos">
           <AgreementsTab
             agreements={safeAgreements}
@@ -1321,13 +1152,13 @@ export function FinancialModule() {
             }}
           />
         </TabsContent>
-        <TabsContent value="alvaras"><AlvarasTab /></TabsContent>
+        <TabsContent value="alvaras"><AlvarasTab alvaras={alvaras} onMarkAsReceived={(id) => setAlvaras(prev => prev.map(a => a.id === id ? { ...a, received: true, received_date: new Date().toISOString().split('T')[0] } : a))} /></TabsContent>
         <TabsContent value="atraso"><OverdueTab overdueInstallments={overdueInstallments} onSendMessage={(i) => {
           setSelectedRecipient({ name: i.client_name, type: 'parcela' });
-          setMessageText(`Prezado(a) ${i.client_name},\n\nSua parcela nº ${i.installment_number} do processo ${i.case_number} está em atraso.\n\nAtenciosamente,\nCássio Miguel Advocacia`);
+          setMessageText(`Prezado(a) ${i.client_name},\n\nSua parcela nÂº ${i.installment_number} do processo ${i.case_number} estÃ¡ em atraso.\n\nAtenciosamente,\nCÃ¡ssio Miguel Advocacia`);
           setMessageModalOpen(true);
         }} /></TabsContent>
-        <TabsContent value="despesas"><ExpensesTab expenses={expenses} onAddExpense={() => toast({ title: "Em desenvolvimento", description: "Funcionalidade de adicionar despesa será implementada em breve." })} onToggleExpenseStatus={(id) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'paid' ? 'pending' : 'paid' } : e))} /></TabsContent>
+        <TabsContent value="despesas"><ExpensesTab expenses={expenses} onAddExpense={() => toast({ title: "Em desenvolvimento", description: "Funcionalidade de adicionar despesa serÃ¡ implementada em breve." })} onToggleExpenseStatus={(id) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, status: e.status === 'paid' ? 'pending' : 'paid' } : e))} /></TabsContent>
       </Tabs>
 
       <Dialog open={messageModalOpen} onOpenChange={setMessageModalOpen}>
@@ -1339,7 +1170,7 @@ export function FinancialModule() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label htmlFor="message" className="text-slate-700 font-semibold">Conteúdo da Mensagem</Label>
+            <Label htmlFor="message" className="text-slate-700 font-semibold">ConteÃºdo da Mensagem</Label>
             <Textarea id="message" value={messageText} onChange={e => setMessageText(e.target.value)} className="min-h-[150px] mt-2 bg-white border-2 border-slate-200 rounded-xl" />
           </div>
           <DialogFooter>
