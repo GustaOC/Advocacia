@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO COM CORREÇÃO E MELHORIAS
+// components/financial-module.tsx - VERSÃO OTIMIZADA E CORRIGIDA
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -24,11 +24,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { FinancialAgreementModal } from "@/components/financial-agreement-modal";
 
 // ===================== TIPOS & UTILS =====================
-// O tipo Alvara agora é importado de 'api-client', mas o mantemos aqui como referência
-// interface Alvara {
-//   id: number; case_id: number; case_number: string; value: number; received: boolean;
-//   issue_date: string; received_date?: string | null; creditor_name?: string; court?: string;
-// }
 interface Expense {
   id: number; description: string; category: string; value: number; date: string;
   status: 'pending' | 'paid'; due_date?: string; payment_method?: string; notes?: string;
@@ -60,7 +55,7 @@ const formatDate = (dateString: string | null | undefined) => {
   return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 };
 
-// ===================== MOCKS (Mantidos para despesas e atrasados, pois não foram migrados ainda) =====================
+// ===================== MOCKS =====================
 const mockExpenses: Expense[] = [
   { id: 1, description: 'Aluguel Escritório', category: 'Fixo', value: 2500, date: '2025-09-05', status: 'paid', payment_method: 'Transferência Bancária' },
   { id: 2, description: 'Software Jurídico', category: 'Software', value: 250, date: '2025-09-10', status: 'pending', due_date: '2025-09-15' },
@@ -92,39 +87,39 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
     const overdueAgreements = agreements.filter(a => a.status === 'defaulted').length;
 
     return [
-      {
-        label: "Valor Total em Acordos",
-        value: formatCurrency(totalValue),
-        icon: DollarSign,
-        color: "text-blue-600",
-        bg: "from-blue-50 to-blue-100",
+      { 
+        label: "Valor Total em Acordos", 
+        value: formatCurrency(totalValue), 
+        icon: DollarSign, 
+        color: "text-blue-600", 
+        bg: "from-blue-50 to-blue-100", 
         trend: "+5.2%",
         gradient: "from-blue-500 to-indigo-600"
       },
-      {
-        label: "Acordos Ativos",
-        value: String(activeAgreements),
-        icon: TrendingUp,
-        color: "text-green-600",
-        bg: "from-green-50 to-green-100",
+      { 
+        label: "Acordos Ativos", 
+        value: String(activeAgreements), 
+        icon: TrendingUp, 
+        color: "text-green-600", 
+        bg: "from-green-50 to-green-100", 
         trend: `${activeAgreements} de ${agreements.length}`,
         gradient: "from-emerald-500 to-teal-600"
       },
-      {
-        label: "Total de Parcelas",
-        value: String(totalInstallments),
-        icon: Calculator,
-        color: "text-purple-600",
-        bg: "from-purple-50 to-purple-100",
+      { 
+        label: "Total de Parcelas", 
+        value: String(totalInstallments), 
+        icon: Calculator, 
+        color: "text-purple-600", 
+        bg: "from-purple-50 to-purple-100", 
         trend: `${agreements.length} acordos`,
         gradient: "from-purple-500 to-pink-600"
       },
-      {
-        label: "Parcelas em Atraso",
-        value: String(overdueAgreements),
-        icon: AlertCircle,
-        color: "text-red-600",
-        bg: "from-red-50 to-red-100",
+      { 
+        label: "Parcelas em Atraso", 
+        value: String(overdueAgreements), 
+        icon: AlertCircle, 
+        color: "text-red-600", 
+        bg: "from-red-50 to-red-100", 
         trend: overdueAgreements > 0 ? "Atenção!" : "Em dia",
         gradient: "from-red-500 to-rose-600"
       },
@@ -156,9 +151,9 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
                       <Target className="w-4 h-4 text-blue-500" />
                     )}
                     <span className={`text-sm font-medium ${
-                      stat.trend.includes('+') ? 'text-green-600' :
-                        stat.trend.includes('Atenção') ? 'text-red-600' : 'text-blue-600'
-                      }`}>
+                      stat.trend.includes('+') ? 'text-green-600' : 
+                      stat.trend.includes('Atenção') ? 'text-red-600' : 'text-blue-600'
+                    }`}>
                       {stat.trend}
                     </span>
                   </div>
@@ -175,7 +170,7 @@ function FinancialStats({ agreements }: { agreements: FinancialAgreement[] }) {
   );
 }
 
-// ===================== TAB "RECEBIDOS DO MÊS" (NOVA) =====================
+// ===================== TAB "RECEBIDOS DO MÊS" =====================
 function ReceivedPaymentsTab() {
   const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
   const [isPending, startTransition] = useTransition();
@@ -304,95 +299,26 @@ function ReceivedPaymentsTab() {
   );
 }
 
-
-// ===================== MONTHLY INSTALLMENTS COM DESIGN APERFEIÇOADO =====================
-function MonthlyInstallmentsTab() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
-  const [isPending, startTransition] = useTransition();
-
-  const { data: installments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
-    queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month],
-    queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
-    retry: 3,
-    retryDelay: 1000,
-    staleTime: 30_000,
-    placeholderData: (prev) => prev,
-  });
-
-  const getPartiesInfo = (installment: MonthlyInstallment) => {
-    const caseParties = installment.agreement?.cases?.case_parties;
-    let clientName = installment.agreement?.debtor?.name || 'Cliente N/A';
-    let executedName = 'Executado N/A';
+// ===================== COMPONENTE DE CARD PARA PARCELAS =====================
+function AgreementInstallmentsCard({ agreement, installments, onPay }: {
+  agreement: FinancialAgreement;
+  installments: MonthlyInstallment[];
+  onPay: (installmentId: number) => void;
+}) {
+  const { clientName, executedName } = useMemo(() => {
+    const caseParties = (agreement as any).cases?.case_parties;
+    let client = (agreement as any).debtor?.name || 'Cliente N/A';
+    let executed = 'Executado N/A';
 
     if (Array.isArray(caseParties) && caseParties.length > 0) {
-      const clientParty = caseParties.find((p: any) =>
-        p.role && ['Cliente', 'CLIENTE'].includes(p.role)
-      );
-      if (clientParty?.entities?.name) {
-        clientName = clientParty.entities.name;
-      }
+      const clientParty = caseParties.find(p => p.role && ['Cliente', 'CLIENTE'].includes(p.role));
+      if (clientParty?.entities?.name) client = clientParty.entities.name;
 
-      const executedParty = caseParties.find((p: any) =>
-        p.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role)
-      );
-      if (executedParty?.entities?.name) {
-        executedName = executedParty.entities.name;
-      }
+      const executedParty = caseParties.find(p => p.role && ['Executado', 'EXECUTADO', 'Executada', 'EXECUTADA'].includes(p.role));
+      if (executedParty?.entities?.name) executed = executedParty.entities.name;
     }
-    return { clientName, executedName };
-  };
-
-  const { totalToReceive, totalReceived } = useMemo(() => {
-    return (installments || []).reduce(
-      (acc, installment) => {
-        const amount = Number(installment.amount) || 0;
-        if (normalizeStatus(installment.status) === 'PAGA') {
-          acc.totalReceived += amount;
-        } else {
-          acc.totalToReceive += amount;
-        }
-        return acc;
-      },
-      { totalToReceive: 0, totalReceived: 0 }
-    );
-  }, [installments]);
-
-  const payInstallmentMutation = useMutation({
-    mutationFn: (installmentId: number) => {
-      const value = (installments || []).find(i => i.id === installmentId)?.amount ?? 0;
-      return apiClient.recordInstallmentPayment(String(installmentId), {
-        amount_paid: value,
-        payment_date: new Date().toISOString(),
-        payment_method: 'pix',
-      });
-    },
-    onMutate: async (installmentId) => {
-      await queryClient.cancelQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
-      const previousInstallments = queryClient.getQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month]);
-      queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], (oldData: any) =>
-        (oldData || []).map((i: any) => (i.id === installmentId ? { ...i, status: 'PAGA' } : i))
-      );
-      return { previousInstallments };
-    },
-    onError: (err, _vars, context) => {
-      if (context?.previousInstallments) {
-        queryClient.setQueryData(['monthlyInstallments', selectedDate.year, selectedDate.month], context.previousInstallments);
-      }
-      toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
-    },
-    onSuccess: () => {
-      toast({ title: "Sucesso!", description: "Parcela marcada como paga." });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['monthlyInstallments', selectedDate.year, selectedDate.month] });
-    }
-  });
-
-  const handleDateChange = (type: 'month' | 'year', value: string) => {
-    startTransition(() => setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) })));
-  };
+    return { clientName: client, executedName: executed };
+  }, [agreement]);
 
   const getStatusBadge = (status: MonthlyInstallment['status']) => {
     const variants = {
@@ -402,13 +328,144 @@ function MonthlyInstallmentsTab() {
     };
     const key = normalizeStatus(status);
     const { label, className, icon: Icon } = variants[key];
-    return (
-      <Badge className={`${className} flex items-center gap-1 font-semibold border-0 px-3 py-1`}>
-        <Icon className="h-3 w-3" />{label}
-      </Badge>
-    );
+    return <Badge className={`${className} flex items-center gap-1 font-semibold border-0 px-3 py-1`}><Icon className="h-3 w-3" />{label}</Badge>;
   };
 
+  return (
+    <Card className="border-l-4 border-l-purple-500 border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h4 className="font-semibold text-slate-900">{clientName} vs {executedName}</h4>
+            <p className="text-sm text-slate-500 font-mono">{agreement.cases?.case_number || 'Sem número'}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_amount)}</p>
+            <p className="text-sm text-slate-500">{agreement.number_of_installments} parcelas</p>
+          </div>
+        </div>
+        {installments.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/50">
+                <TableHead className="font-semibold">Vencimento</TableHead>
+                <TableHead className="font-semibold">Valor</TableHead>
+                <TableHead className="font-semibold">Status</TableHead>
+                <TableHead className="text-right font-semibold">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {installments.map(inst => (
+                <TableRow key={inst.id} className="hover:bg-slate-50/30">
+                  <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
+                  <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
+                  <TableCell>{getStatusBadge(inst.status)}</TableCell>
+                  <TableCell className="text-right">
+                    {normalizeStatus(inst.status) !== 'PAGA' && (
+                      <Button 
+                        size="sm" 
+                        onClick={() => onPay(inst.id)} 
+                        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg rounded-xl"
+                      >
+                        <Banknote className="h-4 w-4 mr-2" /> Dar Baixa
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="text-center py-6 text-slate-500 text-sm bg-slate-50 rounded-lg border border-slate-200">
+            Nenhuma parcela com vencimento neste mês.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ===================== PARCELAS DO MÊS COM LÓGICA CORRIGIDA =====================
+function MonthlyInstallmentsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+  const [isPending, startTransition] = useTransition();
+
+  const { data: allInstallments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
+    queryKey: ['allInstallments'],
+    queryFn: () => apiClient.getInstallmentsByMonth(selectedDate.year, selectedDate.month),
+    staleTime: 60 * 1000, 
+    refetchOnWindowFocus: false,
+  });
+
+  const groupedData = useMemo(() => {
+    const agreementsMap = new Map<number, { agreement: FinancialAgreement; monthlyInstallments: MonthlyInstallment[] }>();
+
+    allInstallments.forEach(inst => {
+      if (inst.agreement && !agreementsMap.has(inst.agreement.id)) {
+        agreementsMap.set(inst.agreement.id, {
+          // CORREÇÃO: Usamos uma "conversão dupla" para forçar o TypeScript a aceitar o tipo,
+          // já que os tipos são muito diferentes para uma conversão direta.
+          agreement: inst.agreement as unknown as FinancialAgreement,
+          monthlyInstallments: [],
+        });
+      }
+    });
+
+    const month = selectedDate.month - 1;
+    const year = selectedDate.year;
+    allInstallments.forEach(inst => {
+      if (inst.agreement) {
+        const dueDate = new Date(inst.due_date);
+        if (dueDate.getUTCFullYear() === year && dueDate.getUTCMonth() === month) {
+          agreementsMap.get(inst.agreement.id)?.monthlyInstallments.push(inst);
+        }
+      }
+    });
+
+    return Array.from(agreementsMap.values());
+  }, [allInstallments, selectedDate]);
+
+  const { totalToReceive, totalReceived } = useMemo(() => {
+    let toReceive = 0;
+    let received = 0;
+    groupedData.forEach(({ monthlyInstallments }) => {
+      monthlyInstallments.forEach(inst => {
+        const amount = Number(inst.amount) || 0;
+        if (normalizeStatus(inst.status) === 'PAGA') {
+          received += amount;
+        } else {
+          toReceive += amount;
+        }
+      });
+    });
+    return { totalToReceive: toReceive, totalReceived: received };
+  }, [groupedData]);
+
+  const payInstallmentMutation = useMutation({
+    mutationFn: (installmentId: number) => {
+      const installment = allInstallments.find(i => i.id === installmentId);
+      if (!installment) throw new Error("Parcela não encontrada");
+      return apiClient.recordInstallmentPayment(String(installmentId), {
+        amount_paid: installment.amount,
+        payment_date: new Date().toISOString(),
+        payment_method: 'pix',
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Sucesso!", description: "Parcela marcada como paga." });
+      queryClient.invalidateQueries({ queryKey: ['allInstallments'] });
+    },
+    onError: (err) => {
+      toast({ title: "Erro", description: (err as Error).message, variant: "destructive" });
+    },
+  });
+
+  const handleDateChange = (type: 'month' | 'year', value: string) => {
+    startTransition(() => setSelectedDate(prev => ({ ...prev, [type]: parseInt(value) })));
+  };
+  
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -480,81 +537,43 @@ function MonthlyInstallmentsTab() {
           </div>
         </CardContent>
       </Card>
-
-      <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200">
-                <TableHead className="text-slate-700 font-bold">Vencimento</TableHead>
-                <TableHead className="text-slate-700 font-bold">Partes</TableHead>
-                <TableHead className="text-slate-700 font-bold">Processo</TableHead>
-                <TableHead className="text-slate-700 font-bold">Valor</TableHead>
-                <TableHead className="text-slate-700 font-bold">Status</TableHead>
-                <TableHead className="text-right text-slate-700 font-bold">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading || isPending ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2 text-slate-600">
-                      <Loader2 className="h-6 w-6 animate-spin" /> Carregando parcelas...
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : isError ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-red-600">
-                    <div className="flex items-center justify-center gap-2">
-                      <AlertCircle className="h-6 w-6" /> Erro ao carregar parcelas: {String(error?.message || 'desconhecido')}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : installments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-slate-500">
-                    Nenhuma parcela encontrada para o período selecionado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                installments.map((inst) => {
-                  const { clientName, executedName } = getPartiesInfo(inst);
-                  const caseNumber = inst.agreement?.cases?.case_number || 'N/A';
-
-                  return (
-                    <TableRow key={inst.id} className="group hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-transparent transition-all duration-200">
-                      <TableCell className="font-mono">{formatDate(inst.due_date)}</TableCell>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span className="text-sm text-slate-900 group-hover:text-purple-700 transition-colors" title={`Cliente: ${clientName}`}>{clientName}</span>
-                          <span className="text-xs text-slate-500" title={`Executado: ${executedName}`}>vs {executedName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{caseNumber}</TableCell>
-                      <TableCell className="font-semibold text-green-700">{formatCurrency(inst.amount)}</TableCell>
-                      <TableCell>{getStatusBadge(inst.status)}</TableCell>
-                      <TableCell className="text-right">
-                        {normalizeStatus(inst.status) !== 'PAGA' && (
-                          <Button
-                            size="sm"
-                            onClick={() => payInstallmentMutation.mutate(inst.id)}
-                            disabled={payInstallmentMutation.isPending}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg rounded-xl"
-                          >
-                            {payInstallmentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4 mr-2" />}
-                            Dar Baixa
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      
+      <div className="space-y-4">
+        {(isLoading || isPending) ? (
+          <Card className="border-0 shadow-xl">
+            <CardContent className="text-center py-8">
+              <div className="flex items-center justify-center gap-2 text-slate-600">
+                <Loader2 className="h-6 w-6 animate-spin" /> Carregando parcelas...
+              </div>
+            </CardContent>
+          </Card>
+        ) : isError ? (
+          <Card className="border-0 shadow-xl border-red-200">
+            <CardContent className="text-center py-8 text-red-600">
+              <div className="flex items-center justify-center gap-2">
+                <AlertCircle className="h-6 w-6" /> Erro ao carregar dados: {String(error?.message)}
+              </div>
+            </CardContent>
+          </Card>
+        ) : groupedData.length === 0 ? (
+          <Card className="border-0 shadow-xl">
+            <CardContent className="text-center py-12">
+              <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3>
+              <p className="text-slate-500">Nenhum acordo com parcelas para o período selecionado.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          groupedData.map(({ agreement, monthlyInstallments }) => (
+            <AgreementInstallmentsCard
+              key={agreement.id}
+              agreement={agreement}
+              installments={monthlyInstallments}
+              onPay={(id) => payInstallmentMutation.mutate(id)}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -693,8 +712,8 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
   }, []);
 
   const filteredAgreements = useMemo(() => {
-    // A propriedade 'has_alvara' agora virá da API, então não precisamos mais do mock
-    return agreements.filter((agreement) => {
+    const withMock = agreements.map(ag => ({ ...ag, has_alvara: Math.random() > 0.5 }));
+    return withMock.filter((agreement) => {
       const hay = `${agreement.entities?.name ?? ''} ${agreement.cases?.case_number ?? ''} ${(agreement as any)?.executed_entities?.name ?? ''}`.toLowerCase();
       const searchMatch = hay.includes(searchTerm.toLowerCase());
       const statusMatch = statusFilter === "all" || agreement.status === statusFilter;
@@ -773,23 +792,19 @@ function AgreementsTab({ agreements, onSendMessage, onNewAgreement }: {
   );
 }
 
-// ===================== ALVARÁS COM DESIGN APERFEIÇOADO (AGORA COM DADOS REAIS) =====================
+// ===================== ALVARÁS COM DESIGN APERFEIÇOADO =====================
 function AlvarasTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   
-  // ✅ SUBSTITUIÇÃO DOS DADOS MOCADOS PELA CHAMADA DA API
   const { data: alvaras = [], isLoading, isError, error } = useQuery<Alvara[]>({
     queryKey: ['alvaras'],
-    // ❗ NOTA: apiClient.getAlvaras() é um novo método que precisa ser criado no seu `api-client.ts`
-    // e uma rota correspondente, ex: `app/api/alvaras/route.ts`
     queryFn: () => apiClient.getAlvaras(), 
-    staleTime: 60_000, // Cache por 1 minuto
+    staleTime: 60_000,
   });
 
-  // Mutação para marcar o alvará como recebido
   const markAsReceivedMutation = useMutation({
     mutationFn: (alvaraId: number) => apiClient.updateAlvaraStatus(alvaraId, true),
     onSuccess: () => {
@@ -881,17 +896,25 @@ function AlvarasTab() {
 
       <div className="space-y-4">
         {isLoading ? (
-          <div className="text-center py-8"><Loader2 className="h-8 w-8 mx-auto animate-spin text-slate-500" /></div>
+          <Card className="border-0 shadow-xl">
+            <CardContent className="text-center py-8">
+              <Loader2 className="h-8 w-8 mx-auto animate-spin text-slate-500" />
+            </CardContent>
+          </Card>
         ) : isError ? (
-          <div className="text-center py-8 text-red-600">Erro ao carregar alvarás: {String(error?.message)}</div>
+          <Card className="border-0 shadow-xl border-red-200">
+            <CardContent className="text-center py-8 text-red-600">
+              Erro ao carregar alvarás: {String(error?.message)}
+            </CardContent>
+          </Card>
         ) : filteredAlvaras.length === 0 ? (
           <Card className="border-0 shadow-xl">
-             <CardContent className="text-center py-12">
-               <Receipt className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-               <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum alvará encontrado</h3>
-               <p className="text-slate-500">Nenhum alvará corresponde aos filtros atuais.</p>
-             </CardContent>
-           </Card>
+            <CardContent className="text-center py-12">
+              <Receipt className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum alvará encontrado</h3>
+              <p className="text-slate-500">Nenhum alvará corresponde aos filtros atuais.</p>
+            </CardContent>
+          </Card>
         ) : (
           filteredAlvaras.map((alvara) => (
             <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
@@ -934,6 +957,7 @@ function AlvarasTab() {
     </div>
   );
 }
+
 // ===================== OVERDUE COM DESIGN APERFEIÇOADO =====================
 function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallments: OverdueInstallment[], onSendMessage: (i: OverdueInstallment) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -1195,7 +1219,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   );
 }
 
-// ===================== ROOT COM DESIGN APERFEIÇOADO =====================
+// ===================== ROOT COMPONENT COM DESIGN APERFEIÇOADO =====================
 export function FinancialModule() {
   const { toast } = useToast();
 
@@ -1207,7 +1231,6 @@ export function FinancialModule() {
     staleTime: 10_000,
   });
   
-  // ✅ REMOVIDO o useState para alvaras, agora os dados vêm do useQuery na AlvarasTab
   const [expenses, setExpenses] = useState<Expense[]>(mockExpenses);
   const [overdueInstallments] = useState<OverdueInstallment[]>(mockOverdueInstallments);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
@@ -1227,29 +1250,6 @@ export function FinancialModule() {
     setMessageText(`Prezado(a) ${agreement.entities.name},\n\nLembramos que a parcela do seu acordo referente ao processo ${agreement.cases?.case_number || 'sem número'} está em atraso.\n\nAtenciosamente,\nCássio Miguel Advocacia`);
     setMessageModalOpen(true);
   }, [toast]);
-
-  const handleSendOverdueMessage = useCallback((installment: OverdueInstallment) => {
-    setSelectedRecipient({ name: installment.client_name, type: 'parcela' });
-    setMessageText(`Prezado(a) ${installment.client_name},\n\nSua parcela nº ${installment.installment_number} do processo ${installment.case_number} está em atraso.\n\nAtenciosamente,\nCássio Miguel Advocacia`);
-    setMessageModalOpen(true);
-  }, []);
-  
-  // Esta função agora está dentro da AlvarasTab e usa useMutation
-  // const handleMarkAsReceived = useCallback((alvaraId: number) => { ... });
-
-  const handleAddExpense = useCallback(() => {
-    toast({ title: "Em desenvolvimento", description: "Funcionalidade de adicionar despesa será implementada em breve." });
-  }, [toast]);
-
-  const handleToggleExpenseStatus = useCallback((expenseId: number) => {
-    setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, status: e.status === 'paid' ? 'pending' : 'paid' } : e));
-    toast({ title: "Sucesso!", description: "Status da despesa atualizado!" });
-  }, [toast]);
-
-  const handleSendMessageAction = useCallback(() => {
-    toast({ title: "Mensagem Enviada!", description: `Lembrete enviado para ${selectedRecipient?.name}` });
-    setMessageModalOpen(false);
-  }, [selectedRecipient, toast]);
 
   if (error) {
     return (
@@ -1301,12 +1301,12 @@ export function FinancialModule() {
 
       <Tabs defaultValue="monthly_installments" className="space-y-6">
         <TabsList className="grid grid-cols-6 w-full bg-slate-100/50 p-1 rounded-2xl border-0">
-            <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
-            <TabsTrigger value="received_payments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Banknote className="h-4 w-4" /><span>Recebidos do Mês</span></TabsTrigger>
-            <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
-            <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span></TabsTrigger>
-            <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
-            <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
+          <TabsTrigger value="monthly_installments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Calendar className="h-4 w-4" /><span>Parcelas do Mês</span></TabsTrigger>
+          <TabsTrigger value="received_payments" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Banknote className="h-4 w-4" /><span>Recebidos do Mês</span></TabsTrigger>
+          <TabsTrigger value="acordos" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><FileText className="h-4 w-4" /><span>Acordos</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{safeAgreements.length}</Badge></TabsTrigger>
+          <TabsTrigger value="alvaras" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><Receipt className="h-4 w-4" /><span>Alvarás</span></TabsTrigger>
+          <TabsTrigger value="atraso" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><AlertCircle className="h-4 w-4" /><span>Atrasados</span><Badge variant="destructive" className="ml-2 bg-gradient-to-r from-red-500 to-rose-600 text-white">{overdueInstallments.length}</Badge></TabsTrigger>
+          <TabsTrigger value="despesas" className="flex items-center gap-2 rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-emerald-700 py-3"><CreditCard className="h-4 w-4" /><span>Despesas</span><Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-700">{expenses.length}</Badge></TabsTrigger>
         </TabsList>
 
         <TabsContent value="monthly_installments"><MonthlyInstallmentsTab /></TabsContent>
