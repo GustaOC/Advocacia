@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSÃO CORRIGIDA COM AS SUAS ESTRUTURAS ORIGINAIS
+// lib/api-client.ts - VERSÃO CORRIGIDA E ATUALIZADA
 
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
@@ -146,6 +146,19 @@ export interface ReceivedPayment {
   case_number: string | null;
 }
 
+// *** NOVA INTERFACE PARA ALVARÁS ***
+export interface Alvara {
+  id: number;
+  case_id: number;
+  case_number: string | null;
+  value: number;
+  received: boolean;
+  issue_date: string;
+  received_date?: string | null;
+  creditor_name: string | null;
+  court: string | null;
+}
+
 
 // ============================================================================
 // INSTÂNCIA DO AXIOS (sem alterações)
@@ -227,7 +240,7 @@ export class ApiClient {
   async createFinancialAgreement(data: any): Promise<FinancialAgreement> {
     const payload: any = {
       case_id: String(data.case_id),
-      debtor_id: String(data.client_entity_id), 
+      debtor_id: String(data.client_entity_id),
       creditor_id: String(data.creditor_id ?? data.client_entity_id),
       total_amount: Number(data.total_value ?? data.total_amount),
       down_payment: Number(data.entry_value ?? data.down_payment ?? 0),
@@ -302,6 +315,20 @@ export class ApiClient {
   async getReceivedByMonth(year: number, month: number): Promise<ReceivedPayment[]> {
     return instance.get('/payments/by-month', { params: { year, month } });
   }
+  
+  // *** NOVO MÉTODO PARA BUSCAR ALVARÁS ***
+  async getAlvaras(): Promise<Alvara[]> {
+    return instance.get('/alvaras');
+  }
+
+  // *** NOVO MÉTODO PARA ATUALIZAR O STATUS DE UM ALVARÁ ***
+  async updateAlvaraStatus(alvaraId: number, received: boolean): Promise<any> {
+    // Este método irá mudar o status do acordo financeiro para 'PAGO'
+    // que, por sua vez, reflete o alvará como "recebido".
+    return instance.put(`/financial-agreements/${alvaraId}`, { 
+      status: received ? 'PAGO' : 'ATIVO' 
+    });
+  }
 
   // Métodos de Autenticação
   async getCurrentUser(): Promise<any> { return instance.get('/auth/me'); }
@@ -335,7 +362,7 @@ export class ApiClient {
     const remainingValue = data.totalValue - data.entryValue;
     const installmentValue = data.installments > 0 ? remainingValue / data.installments : 0;
     return { remainingValue, installmentValue, entryPercentage: (data.entryValue / data.totalValue) * 100 };
-    }
+  }
 }
 
 // ============================================================================
