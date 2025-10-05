@@ -1,4 +1,4 @@
-// lib/services/caseService.ts - VERSÃO FINAL E ROBUSTA
+// lib/services/caseService.ts - VERSÃO FINAL E ROBUSTA COM LÓGICA DE ALVARÁ
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -6,7 +6,7 @@ import { CaseSchema } from "@/lib/schemas";
 import { AuthUser } from "@/lib/auth";
 import { logAudit } from "./auditService";
 
-
+// Função auxiliar para normalizar a estrutura de dados das partes do processo
 function normalizeParties(caseItem: any) {
   if (!caseItem?.case_parties) return caseItem;
   caseItem.case_parties = caseItem.case_parties.map((party: any) => ({
@@ -18,11 +18,14 @@ function normalizeParties(caseItem: any) {
   }));
   return caseItem;
 }
+
+// Schema para a criação de um caso, exigindo os IDs do cliente e do executado
 const CaseCreateSchema = CaseSchema.extend({
   client_entity_id: z.number(),
   executed_entity_id: z.number(),
 });
 
+// Busca paginada de todos os casos
 export async function getCases(page: number = 1, limit: number = 10) {
   const supabase = createAdminClient();
   const from = (page - 1) * limit;
@@ -50,6 +53,7 @@ export async function getCases(page: number = 1, limit: number = 10) {
   return { data: (data || []).map(d => normalizeParties(d)), count: count || 0 };
 }
 
+// Busca um único caso pelo seu ID
 export async function getCaseById(id: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -74,6 +78,7 @@ export async function getCaseById(id: string) {
   return normalizeParties(data);
 }
 
+// Cria um novo caso e, se aplicável, o acordo financeiro associado
 export async function createCase(caseData: unknown, user: AuthUser) {
     const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseCreateSchema.parse(caseData);
     const supabase = createAdminClient();
@@ -111,21 +116,45 @@ export async function createCase(caseData: unknown, user: AuthUser) {
       notes: 'Caso criado no sistema.'
     });
 
-    if (newCase.status === 'Acordo' && newCase.agreement_value && newCase.agreement_type) {
-        const agreementData = {
-            case_id: newCase.id, 
-            debtor_id: client_entity_id,
-            agreement_type: newCase.agreement_type, 
-            total_amount: newCase.agreement_value,
-            down_payment: newCase.down_payment || 0,
-            number_of_installments: newCase.installments || 1,
-            start_date: newCase.installment_due_date || new Date().toISOString(),
-            status: 'active' as const, 
-            notes: `Acordo criado junto com o caso #${newCase.id}.`
-        };
-        const { error: agreementError } = await supabase.from('financial_agreements').insert(agreementData);
-        if (agreementError) {
-            console.error(`Erro ao criar acordo financeiro inicial para o caso ${newCase.id}:`, agreementError);
+    // --- LÓGICA UNIFICADA PARA CRIAÇÃO DE ACORDO FINANCEIRO ---
+    if (newCase.status === 'Acordo') {
+        // Lógica para acordo padrão
+        if (newCase.agreement_value && newCase.agreement_type) {
+            const agreementData = {
+                case_id: newCase.id, 
+                debtor_id: executed_entity_id, // Executado é quem deve
+                creditor_id: client_entity_id, // Cliente é quem recebe
+                agreement_type: 'Extrajudicial', // Tipo fixo ou do form
+                total_amount: newCase.agreement_value,
+                down_payment: newCase.down_payment || 0,
+                number_of_installments: newCase.installments || 1,
+                start_date: newCase.installment_due_date || new Date().toISOString(),
+                status: 'ATIVO' as const, 
+                notes: `Acordo (padrão) criado junto com o caso #${newCase.id}.`
+            };
+            const { error: agreementError } = await supabase.from('financial_agreements').insert(agreementData);
+            if (agreementError) {
+                console.error(`Erro ao criar acordo financeiro padrão para o caso ${newCase.id}:`, agreementError);
+            }
+        }
+        // Lógica para acordo de ALVARÁ
+        if (newCase.has_alvara && newCase.alvara_value) {
+            const alvaraAgreementData = {
+                case_id: newCase.id,
+                debtor_id: executed_entity_id,
+                creditor_id: client_entity_id,
+                agreement_type: 'A_VISTA',
+                total_amount: newCase.alvara_value,
+                down_payment: 0,
+                number_of_installments: 1,
+                start_date: new Date().toISOString(),
+                status: 'ATIVO' as const,
+                notes: `Acordo financeiro referente ao ALVARÁ do caso #${newCase.id}.`
+            };
+            const { error: alvaraError } = await supabase.from('financial_agreements').insert(alvaraAgreementData);
+            if (alvaraError) {
+                console.error(`Erro ao criar acordo financeiro de ALVARÁ para o caso ${newCase.id}:`, alvaraError);
+            }
         }
     }
 
@@ -133,39 +162,27 @@ export async function createCase(caseData: unknown, user: AuthUser) {
       .from("cases").select(`*, case_parties (role, entity_id, entities:entity_id (id, name))`)
       .eq('id', newCase.id).single();
     
-    if (createdCaseWithParties) {
-      createdCaseWithParties.case_parties = createdCaseWithParties.case_parties.map((party: any) => ({
-        role: party.role,
-        entities: party.entities
-      }));
-    }
-    
     return normalizeParties(createdCaseWithParties);
 }
 
+// Atualiza um caso existente e gerencia o acordo financeiro associado
 export async function updateCase(id: number, caseData: unknown, user: AuthUser) {
     const parsedData = CaseSchema.partial().parse(caseData);
     const supabase = createAdminClient();
 
     const { data: currentCase, error: fetchError } = await supabase
-        .from("cases").select(`*, case_parties (role, entity_id, entities:entity_id (*))`)
+        .from("cases").select(`*, case_parties (role, entity_id)`)
         .eq("id", id).single();
 
     if (fetchError || !currentCase) {
         throw new Error("Não foi possível encontrar o caso para atualização.");
     }
-
-    // *** CORREÇÃO APLICADA AQUI ***
-    // Define explicitamente quais campos pertencem à tabela 'cases'.
-    // Todos os outros campos do 'CaseSchema' serão ignorados durante o update.
-    const caseFields: (keyof typeof parsedData)[] = [
-      'title', 'case_number', 'status', 'lawyer_id', 'priority', 'description',
-      'agreement_type', 'agreement_value', 'down_payment', 'installments', 'installment_due_date'
-    ];
     
+    // Filtra os campos para garantir que apenas colunas da tabela 'cases' sejam enviadas no update
+    const caseFields = Object.keys(CaseSchema.shape);
     const caseUpdateData: Partial<typeof parsedData> = {};
-    for (const key of caseFields) {
-      if (key in parsedData) {
+    for (const key of Object.keys(parsedData)) {
+      if (caseFields.includes(key)) {
         // @ts-ignore
         caseUpdateData[key] = parsedData[key];
       }
@@ -173,7 +190,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
 
     const { data: updatedCase, error: updateError } = await supabase
         .from("cases")
-        .update(caseUpdateData) // Usamos o objeto filtrado para a atualização
+        .update(caseUpdateData)
         .eq("id", id)
         .select('*')
         .single();
@@ -183,6 +200,7 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         throw new Error("Não foi possível atualizar o caso.");
     }
     
+    // Log de auditoria e histórico de status
     const statusChanged = currentCase.status !== updatedCase.status;
     if (statusChanged) {
         await supabase.from('case_status_history').insert({
@@ -190,25 +208,49 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
             changed_by_user_id: user.id, changed_by_user_email: user.email,
         });
     }
+    await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
 
+    // --- LÓGICA ROBUSTA PARA GERENCIAR ACORDOS FINANCEIROS ---
     const clientParty = currentCase.case_parties.find((p: any) => p.role === 'Cliente');
-    const clientEntityId = clientParty?.entity_id;
+    const executedParty = currentCase.case_parties.find((p: any) => p.role === 'Executado');
 
-    if (!clientEntityId) {
-        console.warn(`[caseService.updateCase] Cliente não encontrado para o caso ${id}. Ações financeiras ignoradas.`);
+    if (!clientParty || !executedParty) {
+        console.warn(`[caseService.updateCase] Partes não encontradas para o caso ${id}. Ações financeiras ignoradas.`);
         return updatedCase;
     }
+    
+    // VERIFICA SE O CASO FOI ATUALIZADO PARA "ACORDO" COM ALVARÁ
+    const becameAlvaraAgreement = updatedCase.status === 'Acordo' && updatedCase.has_alvara && updatedCase.alvara_value && (!currentCase.has_alvara || currentCase.status !== 'Acordo');
+    
+    if (becameAlvaraAgreement) {
+        console.log(`Criando NOVO acordo financeiro para o ALVARÁ do caso ${id}`);
+        const { error } = await supabase.from('financial_agreements').insert({
+            case_id: id,
+            debtor_id: executedParty.entity_id,
+            creditor_id: clientParty.entity_id,
+            agreement_type: 'A_VISTA',
+            total_amount: Number(updatedCase.alvara_value),
+            number_of_installments: 1,
+            start_date: new Date().toISOString(),
+            status: 'ATIVO',
+            notes: `Acordo gerado a partir da definição de um ALVARÁ no caso #${id}.`
+        });
+        if (error) console.error(`Erro ao CRIAR acordo de alvará para o caso ${id}:`, error);
+    }
+    
+    // A lógica original para acordos padrão pode ser mantida ou ajustada conforme a regra de negócio.
+    // Por exemplo, você pode decidir que um alvará e um acordo padrão não podem coexistir,
+    // ou podem ser acordos separados. Abaixo, mantenho a lógica original para o acordo padrão.
 
     const { data: existingAgreement } = await supabase
-        .from('financial_agreements').select('id, status').eq('case_id', id).maybeSingle();
+        .from('financial_agreements').select('id').eq('case_id', id).ilike('notes', '%(padrão)%').maybeSingle();
 
-    const hasAgreementData = updatedCase.agreement_value && updatedCase.agreement_type;
-
-    if (updatedCase.status === 'Acordo' && hasAgreementData) {
+    if (updatedCase.status === 'Acordo' && updatedCase.agreement_value && updatedCase.agreement_type) {
         const agreementPayload = {
             case_id: id,
-            debtor_id: clientEntityId,
-            agreement_type: updatedCase.agreement_type,
+            debtor_id: executedParty.entity_id,
+            creditor_id: clientParty.entity_id,
+            agreement_type: 'Extrajudicial',
             total_amount: Number(updatedCase.agreement_value),
             down_payment: Number(updatedCase.down_payment) || 0,
             number_of_installments: Number(updatedCase.installments) || 1,
@@ -216,28 +258,21 @@ export async function updateCase(id: number, caseData: unknown, user: AuthUser) 
         };
 
         if (existingAgreement) {
-            console.log(`Atualizando acordo existente para o caso ${id}`);
-            const { error } = await supabase
-                .from('financial_agreements')
-                .update({ ...agreementPayload, status: 'active' })
-                .eq('id', existingAgreement.id);
-            if (error) console.error(`Erro ao ATUALIZAR acordo para o caso ${id}:`, error);
+            console.log(`Atualizando acordo padrão existente para o caso ${id}`);
+            await supabase.from('financial_agreements').update({ ...agreementPayload, status: 'ATIVO' }).eq('id', existingAgreement.id);
         } else {
-            console.log(`Criando NOVO acordo para o caso ${id}`);
-            const { error } = await supabase
-                .from('financial_agreements')
-                .insert({ ...agreementPayload, status: 'active', notes: `Acordo gerado a partir do caso #${id}.` });
-            if (error) console.error(`Erro ao CRIAR acordo para o caso ${id}:`, error);
+            console.log(`Criando NOVO acordo padrão para o caso ${id}`);
+            await supabase.from('financial_agreements').insert({ ...agreementPayload, status: 'ATIVO', notes: `Acordo (padrão) gerado a partir do caso #${id}.` });
         }
     } else if (statusChanged && currentCase.status === 'Acordo' && existingAgreement) {
-        console.log(`Excluindo acordo para o caso ${id} pois o status mudou de 'Acordo' para '${updatedCase.status}'`);
+        console.log(`Excluindo acordo padrão para o caso ${id} pois o status mudou.`);
         await supabase.from('financial_agreements').delete().eq('id', existingAgreement.id);
     }
     
-    await logAudit('CASE_UPDATE', user, { caseId: updatedCase.id, updatedFields: Object.keys(parsedData) });
     return updatedCase;
 }
 
+// Busca o histórico de status de um caso
 export async function getCaseHistory(caseId: number) {
     const supabase = createAdminClient();
     const { data, error } = await supabase

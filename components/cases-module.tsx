@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+// ADICIONADO O SWITCH
+import { Switch } from "@/components/ui/switch";
 import { Plus, Search, Eye, Edit, Trash2, Loader2, Briefcase, Filter, Upload, AlertTriangle, Clock, LayoutGrid, List, Star, TrendingUp, DollarSign, Calendar, FileSignature, Handshake, Store, Scale } from "lucide-react";
 import { apiClient, type Entity, type Case } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +30,9 @@ interface ExtendedCase extends Case {
   installments?: number | null;
   down_payment?: number | null;
   installment_due_date?: string | null;
+  // NOVOS CAMPOS ADICIONADOS
+  has_alvara?: boolean | null;
+  alvara_value?: number | null;
 }
 
 interface CasesModuleProps {
@@ -123,6 +128,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                 agreement_value: caseData.agreement_value ? parseFloat(String(caseData.agreement_value)) : null,
                 installments: caseData.installments ? parseInt(String(caseData.installments), 10) : null,
                 down_payment: caseData.down_payment ? parseFloat(String(caseData.down_payment)) : null,
+                // NOVO CAMPO ADICIONADO AQUI
+                alvara_value: caseData.alvara_value ? parseFloat(String(caseData.alvara_value)) : null,
             };
             return isEditMode
                 ? apiClient.updateCase(String(dataToSave.id!), dataToSave)
@@ -171,6 +178,8 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         setCurrentCase({
             title: '', case_number: '', court: '', priority: 'Média', status: 'Em andamento',
             description: '', value: null, client_entity_id: undefined, executed_entity_id: undefined,
+            // NOVO CAMPO ADICIONADO AQUI
+            has_alvara: false,
         });
         setIsModalOpen(true);
     };
@@ -385,6 +394,23 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                                         <div><Label className="text-slate-700 font-semibold">Parcelas:</Label><p className="text-sm">{selectedCaseForView.installments || 'N/A'}</p></div>
                                         <div><Label className="text-slate-700 font-semibold">Vencimento da Parcela:</Label><p className="text-sm">{selectedCaseForView.installment_due_date ? new Date(selectedCaseForView.installment_due_date).toLocaleDateString('pt-BR') : 'N/A'}</p></div>
                                     </div>
+                                    {/* SEÇÃO DE EXIBIÇÃO DO ALVARÁ */}
+                                    <div className="border-t pt-4 mt-4 space-y-2">
+                                         <div className="flex justify-between items-center">
+                                            <Label className="text-slate-700 font-semibold">Possui Alvará como Pagamento:</Label>
+                                            <Badge variant={selectedCaseForView.has_alvara ? "default" : "outline"}>
+                                                {selectedCaseForView.has_alvara ? "Sim" : "Não"}
+                                            </Badge>
+                                        </div>
+                                        {selectedCaseForView.has_alvara && (
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-slate-700 font-semibold">Valor do Alvará:</Label>
+                                                <p className="text-sm font-bold text-green-700">
+                                                    {selectedCaseForView.alvara_value ? `R$ ${selectedCaseForView.alvara_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'N/A'}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             <div><Label className="text-slate-700 font-semibold">Descrição</Label><p className="text-sm bg-slate-50 p-3 rounded-md">{selectedCaseForView.description || 'Nenhuma descrição fornecida.'}</p></div>
@@ -431,6 +457,47 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                                     <div className="space-y-2"><Label className="text-slate-700 font-semibold">Nº de Parcelas</Label><Input type="number" value={currentCase.installments ?? ''} onChange={(e) => setCurrentCase({ ...currentCase, installments: parseInt(e.target.value, 10) })} className="bg-white border-2 border-slate-200 rounded-xl" /></div>
                                     <div className="space-y-2"><Label className="text-slate-700 font-semibold">Vencimento da 1ª Parcela</Label><Input type="date" value={currentCase.installment_due_date || ''} onChange={(e) => setCurrentCase({ ...currentCase, installment_due_date: e.target.value })} className="bg-white border-2 border-slate-200 rounded-xl" /></div>
                                 </div>
+                                {/* INÍCIO DA SEÇÃO DO ALVARÁ */}
+                                <div className="border-t pt-4 mt-4 space-y-4">
+                                    <h5 className="font-semibold flex items-center text-slate-800">
+                                        <FileSignature className="mr-2 h-4 w-4 text-blue-600" />
+                                        Informações do Alvará
+                                    </h5>
+                                    <div className="flex items-center space-x-2 pt-2">
+                                        <Switch
+                                        id="has_alvara"
+                                        checked={currentCase.has_alvara || false}
+                                        onCheckedChange={(checked) =>
+                                            setCurrentCase({ ...currentCase, has_alvara: checked, alvara_value: checked ? currentCase.alvara_value : null })
+                                        }
+                                        />
+                                        <Label htmlFor="has_alvara" className="text-slate-700 font-semibold">
+                                        Possui Alvará como parte do pagamento?
+                                        </Label>
+                                    </div>
+
+                                    {currentCase.has_alvara && (
+                                        <div className="space-y-2">
+                                        <Label htmlFor="alvara_value" className="text-slate-700 font-semibold">
+                                            Valor do Alvará
+                                        </Label>
+                                        <Input
+                                            id="alvara_value"
+                                            type="number"
+                                            placeholder="5000,00"
+                                            value={currentCase.alvara_value ?? ''}
+                                            onChange={(e) =>
+                                            setCurrentCase({
+                                                ...currentCase,
+                                                alvara_value: parseFloat(e.target.value)
+                                            })
+                                            }
+                                            className="bg-white border-2 border-slate-200 rounded-xl"
+                                        />
+                                        </div>
+                                    )}
+                                </div>
+                                {/* FIM DA SEÇÃO DO ALVARÁ */}
                             </div>
                         )}
                         <div className="space-y-2"><Label htmlFor="description" className="text-slate-700 font-semibold">Descrição</Label><Textarea id="description" value={currentCase.description || ''} onChange={(e) => setCurrentCase({ ...currentCase, description: e.target.value })} placeholder="Descrição detalhada do caso..." className="min-h-[100px] bg-white border-2 border-slate-200 rounded-xl" /></div>
