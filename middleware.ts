@@ -1,5 +1,7 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+// middleware.ts - VERSÃO COMPLETA E CORRIGIDA
+
+import { NextResponse, type NextRequest } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Lista de rotas que NÃO exigem autenticação
 const PUBLIC_PATHS = [
@@ -16,15 +18,12 @@ const PUBLIC_API_PATTERNS = [
   '/api/auth/callback',
 ];
 
-/**
- * Verifica se um determinado caminho (pathname) é público.
- */
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) {
     return true;
   }
-  // Permite acesso a arquivos estáticos e de imagem do Next.js
-  if (pathname.startsWith('/_next/') || pathname.includes('/favicon.ico')) {
+  // Permite acesso a arquivos estáticos e de imagem
+  if (pathname.startsWith('/_next/') || pathname.includes('/favicon.ico') || pathname.endsWith('.png')) {
     return true;
   }
   for (const pattern of PUBLIC_API_PATTERNS) {
@@ -35,55 +34,11 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const res = NextResponse.next();
 
-  // Inicia uma resposta que será modificada ao longo do middleware
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-
-  // ✅ CORREÇÃO PRINCIPAL: Criação do cliente Supabase usando @supabase/ssr
-  // Isso garante que os cookies sejam lidos e escritos no formato correto.
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          // A cada `set`, precisamos recriar a resposta para garantir que os
-          // cookies sejam passados corretamente para a próxima etapa.
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: '', ...options });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({ name, value: '', ...options });
-        },
-      },
-    }
-  );
-
-  // É crucial chamar getSession() (ou getUser()) para que o Supabase
-  // atualize o cookie de sessão se ele estiver expirado.
-  const { data: { session } } = await supabase.auth.getSession();
-
-  // Adiciona os cabeçalhos de segurança em todas as respostas
+  // ✅ CORREÇÃO: Aplicando os Headers de Segurança diretamente no middleware
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline';
@@ -94,29 +49,41 @@ export async function middleware(request: NextRequest) {
     frame-ancestors 'none';
     form-action 'self';
   `.replace(/\s{2,}/g, " ").trim();
-  
-  response.headers.set("Content-Security-Policy", cspHeader);
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  response.headers.set("Referrer-Policy", "origin-when-cross-origin");
 
-  // Se a rota for pública, retorna a resposta permitindo o acesso.
+  res.headers.set("Content-Security-Policy", cspHeader);
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  res.headers.set("Referrer-Policy", "origin-when-cross-origin");
+
+  // Se a rota for pública, permite o acesso sem verificar a sessão
   if (isPublic(pathname)) {
-    return response;
+    return res;
   }
 
-  // Se a sessão não existir (usuário não logado) e a rota for protegida,
-  // redireciona para a página de login.
-  if (!session) {
-    console.warn(`[Middleware] Acesso negado para rota protegida: ${pathname}. Redirecionando para login.`);
-    const redirectUrl = new URL('/login', request.url);
-    redirectUrl.searchParams.set('redirectedFrom', pathname);
+  try {
+    const supabase = createSupabaseServerClient(req, res);
+    
+    // Verifica se há um usuário na sessão
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    // Se houver erro ou nenhum usuário, redireciona para a página de login
+    if (error || !user) {
+      console.warn(`[Middleware] Acesso negado para rota protegida: ${pathname}. Redirecionando para login.`);
+      const redirectUrl = new URL('/login', req.url);
+      redirectUrl.searchParams.set('redirectedFrom', pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
+    
+    // Se o usuário estiver autenticado, permite o acesso
+    return res;
+
+  } catch (e) {
+    console.error('[Middleware] Erro inesperado:', e);
+    // Em caso de erro, redireciona para o login como medida de segurança
+    const redirectUrl = new URL('/login?error=middleware_failed', req.url);
     return NextResponse.redirect(redirectUrl);
   }
-
-  // Se o usuário estiver autenticado, permite o acesso à rota protegida.
-  return response;
 }
 
 // Configuração do matcher para definir quais rotas o middleware deve interceptar

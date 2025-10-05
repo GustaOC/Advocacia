@@ -1,36 +1,35 @@
-// app/api/alvaras/route.ts - VERSÃO CORRIGIDA
+// app/api/alvaras/route.ts - VERSÃO CORRIGIDA PARA USAR MÉTODOS ESTÁTICOS
 
-import { NextResponse } from 'next/server';
-// CORREÇÃO: Importações para autenticação via Supabase Auth Helpers
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { FinancialService } from '@/lib/services/financialService';
-import { AuthUser } from '@/lib/auth'; // Apenas para a tipagem do usuário
+import { NextResponse, type NextRequest } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { FinancialService } from '@/lib/services/financialService'; // Importa a classe
+import { AuthUser } from '@/lib/auth'; // Importação necessária para o _authUser
 
 /**
  * GET /api/alvaras
  * Busca e retorna uma lista de todos os acordos que são considerados alvarás.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const res = new NextResponse();
+  const supabase = createSupabaseServerClient(req, res);
+
   try {
-    // CORREÇÃO: Método padrão para obter o usuário em rotas de API
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { session } } = await supabase.auth.getSession();
+    // 1. Obter o usuário da sessão
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    const user = session?.user as AuthUser | null;
-
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
+    
+    // 2. ✅ CORREÇÃO: Chamar o método estático diretamente na classe
+    // Não criamos uma instância com 'new', chamamos 'FinancialService.getAlvaras(...)'
+    const alvaras = await FinancialService.getAlvaras(user as AuthUser);
 
-    // 2. Chama o service para buscar os dados dos alvarás no banco
-    const alvaras = await FinancialService.getAlvaras(user);
-
-    // 3. Retorna os dados em formato JSON
+    // 3. Retornar os dados com sucesso
     return NextResponse.json(alvaras);
 
   } catch (error) {
-    console.error('❌ Erro ao buscar alvarás:', error);
+    console.error('❌ Erro inesperado em /api/alvaras:', error);
     const errorMessage = error instanceof Error ? error.message : 'Um erro inesperado ocorreu';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
