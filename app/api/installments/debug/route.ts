@@ -1,45 +1,49 @@
-// app/api/installments/debug/route.ts
+// app/api/installments/debug/route.ts - Rota de teste para diagnóstico
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
-import { getSessionUser } from '@/lib/auth'
+export const dynamic = 'force-dynamic';
 
-export const dynamic = 'force-dynamic' // CORREÇÃO APLICADA
+export async function GET(req: NextRequest) {
+  const supabase = createSupabaseServerClient();
 
-// NOTE: Rota de depuração para testar a lógica de atualização de parcelas
-export async function GET(request: Request) {
   try {
-    const user = await getSessionUser()
-    if (!user || user.role !== 'admin') {
-      return new Response('Unauthorized', { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const agreementId = searchParams.get('agreement_id')
-
-    if (!agreementId) {
-      return new Response('Missing agreement_id', { status: 400 })
-    }
-
-    const supabase = createAdminClient()
-    const { error } = await supabase.rpc('update_installments_for_agreement', {
-      p_agreement_id: parseInt(agreementId),
-    })
+    console.log('A executar a consulta de diagnóstico...');
+    const { data, error } = await supabase
+      .from('financial_installments')
+      .select(`
+        id,
+        due_date,
+        amount,
+        status,
+        agreement:financial_agreements (
+          id,
+          debtor:entities!fk_financial_agreements_debtor (id, name),
+          cases (
+            case_number,
+            case_parties (
+              role,
+              entities (id, name)
+            )
+          )
+        )
+      `)
+      .limit(5); // Apenas as primeiras 5 para teste
 
     if (error) {
-      console.error('ERRO no debug:', error)
-      return new Response(`Erro ao atualizar parcelas: ${error.message}`, {
-        status: 500,
-      })
+      console.error('Erro na consulta de diagnóstico:', error);
+      return NextResponse.json({ error: 'Erro na consulta de diagnóstico', details: error.message }, { status: 500 });
     }
 
+    console.log('Dados encontrados:', data);
     return NextResponse.json({
-      message: 'Função update_installments_for_agreement executada com sucesso.',
-    })
+      message: 'Consulta de diagnóstico executada com sucesso.',
+      count: data?.length || 0,
+      data: data,
+    });
+
   } catch (error: any) {
-    console.error('ERRO no debug:', error)
-    return new Response(`Erro inesperado: ${error.message}`, {
-      status: 500,
-    })
+    console.error('Erro fatal na rota de diagnóstico:', error);
+    return NextResponse.json({ error: 'Erro fatal na rota de diagnóstico.', details: error?.message }, { status: 500 });
   }
 }

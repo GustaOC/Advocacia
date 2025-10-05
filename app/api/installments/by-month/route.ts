@@ -1,13 +1,11 @@
-// app/api/installments/by-month/route.ts - VERSÃO FINALÍSSIMA (corrigida)
+// app/api/installments/by-month/route.ts - VERSÃO FINAL E DEFINITIVA
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const cookieStore = cookies(); // mantido caso seja usado por middlewares/autenticação
-  const supabase = createSupabaseServerClient(); 
+  const supabase = createSupabaseServerClient();
 
   const { searchParams } = new URL(req.url);
   const year = searchParams.get('year');
@@ -23,19 +21,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Ano e mês devem ser números válidos' }, { status: 400 });
   }
 
-  // ---- CORREÇÃO DE BORDA/UTC ----
-  // Janela correta: [1º dia 00:00 UTC, 1º dia do mês seguinte 00:00 UTC)
-  const monthStartUTC = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0, 0)).toISOString();
-  const nextMonthStartUTC = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0, 0)).toISOString();
+  // Abordagem mais simples e robusta: criar strings no formato AAAA-MM-DD
+  const monthStart = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
+  
+  // Calcula o primeiro dia do mês seguinte para usar como limite superior exclusivo
+  const nextMonthDate = new Date(yearNum, monthNum, 1);
+  const nextMonthYear = nextMonthDate.getFullYear();
+  const nextMonthMonth = nextMonthDate.getMonth() + 1;
+  const nextMonthStart = `${nextMonthYear}-${String(nextMonthMonth).padStart(2, '0')}-01`;
 
   try {
     const { data: installments, error } = await supabase
       .from('financial_installments')
+      // A consulta SELECT que foi validada pela rota /debug
       .select(`
-        *,
+        id,
+        due_date,
+        amount,
+        status,
         agreement:financial_agreements (
-          *,
-          debtor:entities!fk_financial_agreements_debtor (id, name), 
+          id,
+          total_amount,
+          number_of_installments,
+          debtor:entities!fk_financial_agreements_debtor (id, name),
           cases (
             case_number,
             case_parties (
@@ -45,16 +53,19 @@ export async function GET(req: NextRequest) {
           )
         )
       `)
-      .gte('due_date', monthStartUTC)   // >= início do mês
-      .lt('due_date', nextMonthStartUTC) // < início do mês seguinte (exclusivo)
+      // Filtro de data que corresponde exatamente ao formato da base de dados
+      .gte('due_date', monthStart)
+      .lt('due_date', nextMonthStart)
       .order('due_date', { ascending: true });
 
     if (error) {
       console.error('Erro detalhado do Supabase:', error);
       throw new Error(`Falha na consulta ao Supabase: ${error.message}`);
     }
+    
+    const validInstallments = installments?.filter(inst => inst.agreement) || [];
 
-    return NextResponse.json(installments);
+    return NextResponse.json(validInstallments);
 
   } catch (error: any) {
     console.error('Erro ao buscar parcelas:', error?.message || error);

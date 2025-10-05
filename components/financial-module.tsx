@@ -1,4 +1,4 @@
-// components/financial-module.tsx - VERSÃO OTIMIZADA (corrigida de tipagem)
+// components/financial-module.tsx - VERSÃO CORRIGIDA E OTIMIZADA
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition } from "react";
@@ -260,7 +260,7 @@ type ExpandedAgreementLite = {
   total_amount?: number | null;
   number_of_installments?: number | null;
   cases?: { case_number?: string | null } | null;
-  entities?: { name?: string | null } | null;           // cliente
+  entities?: { name?: string | null } | null;          // cliente
   executed_entities?: { name?: string | null } | null;  // executado (quando existir)
   // outros campos podem existir aqui dependendo do select
 };
@@ -270,12 +270,24 @@ function AgreementInstallmentsCard({
   installments,
   onPay
 }: {
-  agreement: ExpandedAgreementLite;            // <- NÃO usamos FinancialAgreement aqui
+  agreement: ExpandedAgreementLite;
   installments: MonthlyInstallment[];
   onPay: (installmentId: number) => void;
 }) {
   const clientName = agreement.entities?.name ?? "Cliente N/A";
   const executedName = agreement.executed_entities?.name ?? "Executado N/A";
+  
+  // Calcular o total baseado nas parcelas se não tiver no agreement
+  const totalValue = useMemo(() => {
+    if (agreement.total_amount != null) {
+      return agreement.total_amount;
+    }
+    // Se não tem total_amount, calcula baseado nas parcelas
+    return installments.reduce((sum, inst) => sum + (Number(inst.amount) || 0), 0);
+  }, [agreement.total_amount, installments]);
+
+  // Usar o número de parcelas do agreement ou contar as parcelas
+  const numberOfInstallments = agreement.number_of_installments ?? installments.length;
 
   const getStatusBadge = (status: MonthlyInstallment['status']) => {
     const variants = {
@@ -297,8 +309,8 @@ function AgreementInstallmentsCard({
             <p className="text-sm text-slate-500 font-mono">{agreement.cases?.case_number || 'Sem número'}</p>
           </div>
           <div className="text-right">
-            <p className="font-bold text-lg text-green-600">{formatCurrency(agreement.total_amount ?? 0)}</p>
-            <p className="text-sm text-slate-500">{agreement.number_of_installments ?? 0} parcelas</p>
+            <p className="font-bold text-lg text-green-600">{formatCurrency(totalValue)}</p>
+            <p className="text-sm text-slate-500">{numberOfInstallments} parcelas</p>
           </div>
         </div>
         {installments.length > 0 ? (
@@ -334,7 +346,7 @@ function AgreementInstallmentsCard({
           </Table>
         ) : (
           <div className="text-center py-6 text-slate-500 text-sm bg-slate-50 rounded-lg border border-slate-200">
-            Nenhuma parcela com vencimento neste mês.
+            Nenhuma parcela encontrada para este acordo.
           </div>
         )}
       </CardContent>
@@ -342,11 +354,14 @@ function AgreementInstallmentsCard({
   );
 }
 
-// ===================== PARCELAS DO MÊS (agrupamento corrigido) =====================
+// ===================== PARCELAS DO MÊS (agora corrigido e funcional) =====================
 function MonthlyInstallmentsTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+  const [selectedDate, setSelectedDate] = useState({ 
+    month: new Date().getMonth() + 1, 
+    year: new Date().getFullYear() 
+  });
   const [isPending, startTransition] = useTransition();
 
   const { data: allInstallments = [], isLoading, isError, error } = useQuery<MonthlyInstallment[]>({
@@ -358,37 +373,71 @@ function MonthlyInstallmentsTab() {
   });
 
   const groupedData = useMemo(() => {
-    // Mapa: agreementId(number) -> { agreement(normalizado), monthlyInstallments[] }
-    const agreementsMap = new Map<number, { agreement: ExpandedAgreementLite; monthlyInstallments: MonthlyInstallment[] }>();
-
-    for (const inst of allInstallments) {
-      const ag: any = inst.agreement;
-      if (!ag || ag.id == null) continue;
-
-      // aceita id string ou number
-      const agId = Number(ag.id);
-      if (!Number.isFinite(agId)) continue;
-
-      if (!agreementsMap.has(agId)) {
-        // normaliza o agreement com id: number
-        const normalized: ExpandedAgreementLite = {
-          ...(ag as object),
-          id: agId,
-        } as ExpandedAgreementLite;
-        agreementsMap.set(agId, { agreement: normalized, monthlyInstallments: [] });
-      }
-
-      // NÃO refiltra por mês/ano aqui: a API já retornou somente o mês solicitado
-      agreementsMap.get(agId)!.monthlyInstallments.push(inst);
+    if (!allInstallments || allInstallments.length === 0) {
+      return [];
     }
 
-    // ordena parcelas por due_date dentro de cada acordo
-    for (const g of agreementsMap.values()) {
-      g.monthlyInstallments.sort((a, b) => {
-        const da = new Date(a.due_date).getTime();
-        const db = new Date(b.due_date).getTime();
-        return da - db;
-      });
+    const agreementsMap = new Map<number, { 
+      agreement: ExpandedAgreementLite; 
+      monthlyInstallments: MonthlyInstallment[] 
+    }>();
+
+    for (const inst of allInstallments) {
+      // Verificação mais robusta da estrutura do acordo
+      const ag = inst.agreement;
+      
+      if (!ag || typeof ag !== 'object') {
+        continue;
+      }
+
+      const agId = Number(ag.id);
+      if (!Number.isFinite(agId)) {
+        continue;
+      }
+
+      // Se o acordo ainda não está no mapa, cria a entrada
+      if (!agreementsMap.has(agId)) {
+        // Extrair cliente e executado da estrutura correta
+        const client = ag.debtor; // Usando 'debtor' conforme o debug
+        
+        // Buscar o executado nos case_parties
+        let executedEntity = null;
+        if (ag.cases?.case_parties && Array.isArray(ag.cases.case_parties)) {
+          const executedParty = ag.cases.case_parties.find(
+            (p: any) => p.role === 'Executado'
+          );
+          executedEntity = executedParty?.entities;
+        }
+
+        const normalized: ExpandedAgreementLite = {
+          id: agId,
+          total_amount: (ag as any).total_amount ?? null,  
+          number_of_installments: (ag as any).number_of_installments ?? null,  
+          cases: {
+            case_number: ag.cases?.case_number || 'Sem número'
+          },
+          entities: client ? { name: client.name } : { name: "Cliente não identificado" },
+          executed_entities: executedEntity ? { name: executedEntity.name } : { name: "Executado não identificado" },
+        };
+
+        agreementsMap.set(agId, { 
+          agreement: normalized, 
+          monthlyInstallments: [] 
+        });
+      }
+
+      // Adiciona a parcela ao acordo
+      const agreementGroup = agreementsMap.get(agId);
+      if (agreementGroup) {
+        agreementGroup.monthlyInstallments.push(inst);
+      }
+    }
+
+    // Ordena as parcelas por data dentro de cada grupo
+    for (const group of agreementsMap.values()) {
+      group.monthlyInstallments.sort(
+        (a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      );
     }
 
     return Array.from(agreementsMap.values());
@@ -397,13 +446,18 @@ function MonthlyInstallmentsTab() {
   const { totalToReceive, totalReceived } = useMemo(() => {
     let toReceive = 0;
     let received = 0;
-    groupedData.forEach(({ monthlyInstallments }) => {
-      monthlyInstallments.forEach(inst => {
+    
+    for (const { monthlyInstallments } of groupedData) {
+      for (const inst of monthlyInstallments) {
         const amount = Number(inst.amount) || 0;
-        if (normalizeStatus(inst.status) === 'PAGA') received += amount;
-        else toReceive += amount;
-      });
-    });
+        if (normalizeStatus(inst.status) === 'PAGA') {
+          received += amount;
+        } else {
+          toReceive += amount;
+        }
+      }
+    }
+    
     return { totalToReceive: toReceive, totalReceived: received };
   }, [groupedData]);
 
@@ -432,6 +486,7 @@ function MonthlyInstallmentsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Cards de resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
@@ -460,7 +515,7 @@ function MonthlyInstallmentsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Balanço do Mês</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived - totalToReceive)}</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalReceived)}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-blue-600" />
             </div>
@@ -468,13 +523,16 @@ function MonthlyInstallmentsTab() {
         </Card>
       </div>
 
+      {/* Seletor de data */}
       <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex items-center gap-3">
               <Label className="text-slate-700 font-semibold">Mês:</Label>
               <Select value={String(selectedDate.month)} onValueChange={(v) => handleDateChange('month', v)}>
-                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl">
+                  <SelectValue placeholder="Mês" />
+                </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)}>
@@ -483,9 +541,12 @@ function MonthlyInstallmentsTab() {
                   ))}
                 </SelectContent>
               </Select>
+              
               <Label className="text-slate-700 font-semibold">Ano:</Label>
               <Select value={String(selectedDate.year)} onValueChange={(v) => handleDateChange('year', v)}>
-                <SelectTrigger className="w-[120px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectTrigger className="w-[120px] h-12 bg-white border-2 border-slate-200 rounded-xl">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 5 }, (_, i) => (
                     <SelectItem key={i} value={String(new Date().getFullYear() - i)}>
@@ -499,6 +560,7 @@ function MonthlyInstallmentsTab() {
         </CardContent>
       </Card>
 
+      {/* Lista de parcelas */}
       <div className="space-y-4">
         {(isLoading || isPending) ? (
           <Card className="border-0 shadow-xl">
@@ -520,8 +582,8 @@ function MonthlyInstallmentsTab() {
           <Card className="border-0 shadow-xl">
             <CardContent className="text-center py-12">
               <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhum acordo encontrado</h3>
-              <p className="text-slate-500">Nenhum acordo com parcelas para o período selecionado.</p>
+              <h3 className="text-lg font-semibold text-slate-600 mb-2">Nenhuma parcela encontrada</h3>
+              <p className="text-slate-500">Nenhuma parcela com vencimento em {new Date(0, selectedDate.month - 1).toLocaleString('pt-BR', { month: 'long' })}/{selectedDate.year}.</p>
             </CardContent>
           </Card>
         ) : (
@@ -840,7 +902,7 @@ function AlvarasTab() {
               <Input placeholder="Buscar por processo, credor ou vara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-12 h-12 bg-white border-2 border-slate-200 focus:border-purple-400 rounded-xl" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="W-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] h-12 bg-white border-2 border-slate-200 rounded-xl"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="received">Recebidos</SelectItem>
@@ -874,7 +936,7 @@ function AlvarasTab() {
           </Card>
         ) : (
           filteredAlvaras.map((alvara) => (
-            <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duração-300 bg-white group`}>
+            <Card key={alvara.id} className={`border-l-4 ${alvara.received ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
@@ -951,7 +1013,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
@@ -962,9 +1024,9 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
-            <div className="flex items-center justificar-between">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Atraso Médio</p>
                 <p className="text-2xl font-bold text-purple-600">{filtered.length > 0 ? Math.round(filtered.reduce((s, i) => s + i.days_overdue, 0) / filtered.length) : 0} dias</p>
@@ -997,7 +1059,7 @@ function OverdueTab({ overdueInstallments, onSendMessage }: { overdueInstallment
 
       <div className="space-y-4">
         {filtered.map((installment) => (
-          <Card key={installment.id} className="border-l-4 border-l-red-500 border-0 shadow-xl hover:shadow-2xl transition-all duração-300 bg-white group">
+          <Card key={installment.id} className="border-l-4 border-l-red-500 border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
@@ -1052,7 +1114,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
               <div>
@@ -1063,9 +1125,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
-            <div className="flex items-center justificar-between">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Despesas Pagas</p>
                 <p className="text-2xl font-bold text-green-600">{formatCurrency(paidExpenses)}</p>
@@ -1074,9 +1136,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
-            <div className="flex items-center justificar-between">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Despesas Pendentes</p>
                 <p className="text-2xl font-bold text-orange-600">{formatCurrency(pendingExpenses)}</p>
@@ -1085,9 +1147,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duração-500 bg-white relative overflow-hidden">
+        <Card className="border-0 shadow-xl group hover:shadow-2xl transition-all duration-500 bg-white relative overflow-hidden">
           <CardContent className="p-6 relative z-10">
-            <div className="flex items-center justificar-between">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-600 font-medium">Total de Itens</p>
                 <p className="text-2xl font-bold text-blue-600">{filteredExpenses.length}</p>
@@ -1100,7 +1162,7 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
 
       <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
         <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row justificar-between items-start lg:items-center gap-4">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
@@ -1133,9 +1195,9 @@ function ExpensesTab({ expenses, onAddExpense, onToggleExpenseStatus }: { expens
 
       <div className="space-y-4">
         {filteredExpenses.map((expense) => (
-          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duração-300 bg-white group`}>
+          <Card key={expense.id} className={`border-l-4 ${expense.status === 'paid' ? 'border-l-green-500' : 'border-l-orange-500'} border-0 shadow-xl hover:shadow-2xl transition-all duration-300 bg-white group`}>
             <CardContent className="p-6">
-              <div className="flex items-center justificar-between">
+              <div className="flex items-center justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <h4 className="font-semibold text-slate-900 group-hover:text-purple-700 transition-colors">{expense.description}</h4>
@@ -1218,7 +1280,7 @@ export function FinancialModule() {
 
   if (isLoading) {
     return (
-      <div className="flex justificar-center items-center h-96 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl">
+      <div className="flex justify-center items-center h-96 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl">
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-slate-500 mx-auto" />
           <p className="text-slate-600 font-medium">Carregando dados financeiros...</p>
@@ -1232,7 +1294,7 @@ export function FinancialModule() {
       {/* Header */}
       <div className="relative bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 rounded-3xl p-8 text-white overflow-hidden">
         <div className="relative z-10">
-          <div className="flex justificar-between items-center">
+          <div className="flex justify-between items-center">
             <div>
               <h2 className="text-4xl font-bold mb-3">Módulo Financeiro</h2>
               <p className="text-emerald-100 text-xl">Controle total sobre acordos, alvarás, e despesas</p>
