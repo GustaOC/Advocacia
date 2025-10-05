@@ -1,8 +1,8 @@
-// lib/services/financialService.ts
+// lib/services/financialService.ts - SEU CÓDIGO ORIGINAL COM CORREÇÕES
+
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { AuthUser } from "@/lib/auth";
-// A importação foi mantida caso você use o tipo EnhancedAgreement em outro lugar.
+import { AuthUser } from "@/lib/auth"; // <-- 1. CORREÇÃO: ADICIONADA IMPORTAÇÃO FALTANTE
 import { Installment, Payment, PaymentSchema, EnhancedAgreement } from "@/lib/schemas";
 
 // Função auxiliar para auditoria
@@ -31,7 +31,7 @@ function toDate(d: string | Date): Date {
 /** Normaliza status para 'PENDENTE' | 'PAGA' | 'ATRASADA' */
 function normalizeStatus(raw?: string): "PENDENTE" | "PAGA" | "ATRASADA" {
   const s = String(raw ?? "").toUpperCase();
-  if (s === "PAGO" || s === "PAGA" || s === "PAID") return "PAGA";
+  if (s === "PAGO" || s === "PAGA" || s === "PAID" || s === 'CONCLUIDO') return "PAGA";
   if (s === "ATRASADO" || s === "ATRASADA" || s === "OVERDUE") return "ATRASADA";
   return "PENDENTE";
 }
@@ -51,6 +51,20 @@ export type MonthlyInstallmentDTO = {
     } | null;
     debtor: { name: string } | null;
   } | null;
+};
+
+// <-- 2. CORREÇÃO: TIPO MOVIDO PARA FORA DA CLASSE
+/** DTO para a interface de Alvará no frontend. */
+export type AlvaraDTO = {
+    id: number;
+    case_id: number;
+    case_number: string | null;
+    value: number;
+    received: boolean;
+    issue_date: string; // YYYY-MM-DD
+    received_date?: string | null; // YYYY-MM-DD
+    creditor_name: string | null;
+    court: string | null;
 };
 
 export class FinancialService {
@@ -230,23 +244,23 @@ export class FinancialService {
         status: normalizeStatus(it.status),
         agreement: ag
           ? {
-              id: Number(ag.id),
-              cases: caseId
-                ? {
-                    case_number: casesById[caseId]?.case_number ?? null,
-                    title: casesById[caseId]?.title ?? null,
-                    case_parties: (casePartiesByCaseId[caseId] ?? []).map(
-                      (p) => ({
-                        role: p.role,
-                        entities: { name: p.name },
-                      })
-                    ),
-                  }
-                : null,
-              debtor: debtorId
-                ? { name: debtorNamesById[debtorId] ?? "" }
-                : null,
-            }
+            id: Number(ag.id),
+            cases: caseId
+              ? {
+                case_number: casesById[caseId]?.case_number ?? null,
+                title: casesById[caseId]?.title ?? null,
+                case_parties: (casePartiesByCaseId[caseId] ?? []).map(
+                  (p) => ({
+                    role: p.role,
+                    entities: { name: p.name },
+                  })
+                ),
+              }
+              : null,
+            debtor: debtorId
+              ? { name: debtorNamesById[debtorId] ?? "" }
+              : null,
+          }
           : null,
       };
     });
@@ -317,15 +331,9 @@ export class FinancialService {
       throw new Error("Não foi possível buscar as parcelas.");
     }
 
-    return ((data as any[]) || []).map((x) => ({
-      id: x.id,
-      agreement_id: x.agreement_id ?? undefined,
-      installment_number: Number(x.installment_number),
-      amount: Number(x.amount),
+    return ((data as any[]) || []).map((x: any) => ({
+      ...x,
       due_date: toDate(x.due_date),
-      status: x.status,
-      created_at: x.created_at ? new Date(x.created_at) : undefined,
-      updated_at: x.updated_at ? new Date(x.updated_at) : undefined,
     })) as Installment[];
   }
 
@@ -349,14 +357,8 @@ export class FinancialService {
     if (!data) return null;
 
     return {
-      id: data.id,
-      agreement_id: data.agreement_id ?? undefined,
-      installment_number: Number(data.installment_number),
-      amount: Number(data.amount),
+      ...data,
       due_date: toDate(data.due_date),
-      status: data.status,
-      created_at: data.created_at ? new Date(data.created_at) : undefined,
-      updated_at: data.updated_at ? new Date(data.updated_at) : undefined,
     } as Installment;
   }
 
@@ -398,7 +400,6 @@ export class FinancialService {
               ).toISOString(),
           payment_method: parsed.payment_method,
           notes: parsed.notes ?? null,
-          // created_by: authUser.id, // <<<<<<< LINHA REMOVIDA
         },
       ])
       .select(
@@ -460,14 +461,68 @@ export class FinancialService {
 
     // 4) Retorno tipado
     return {
-      id: inserted.id,
-      installment_id: inserted.installment_id,
-      amount_paid: Number(inserted.amount_paid),
-      payment_date: new Date(inserted.payment_date),
-      payment_method: inserted.payment_method,
-      notes: inserted.notes ?? undefined,
-      created_at: inserted.created_at ? new Date(inserted.created_at) : undefined,
+      ...inserted,
+      payment_date: toDate(inserted.payment_date),
     } as Payment;
+  }
+  
+  // <-- 3. ADIÇÃO: NOVO MÉTODO PARA BUSCAR ALVARÁS
+  /**
+   * BUSCA DE ALVARÁS
+   * - Identifica alvarás como acordos do tipo 'A_VISTA'.
+   * - Junta informações do processo (cases) e do credor (entities).
+   */
+  static async getAlvaras(
+    _authUser: AuthUser
+  ): Promise<AlvaraDTO[]> {
+    const supabase = createAdminClient();
+
+    console.log("🔍 Buscando acordos do tipo 'A_VISTA' (alvarás)...");
+
+    const { data, error } = await supabase
+      .from("financial_agreements")
+      .select(`
+        id,
+        case_id,
+        total_amount,
+        status,
+        start_date,
+        updated_at,
+        notes,
+        cases (
+          case_number
+        ),
+        creditor:creditor_id (
+          name
+        )
+      `)
+      .eq('agreement_type', 'A_VISTA'); // Filtro principal para identificar alvarás
+
+    if (error) {
+      console.error("❌ Erro ao buscar alvarás no banco de dados:", error);
+      throw new Error("Não foi possível carregar os alvarás.");
+    }
+
+    if (!data) {
+      return [];
+    }
+    
+    console.log(`📊 Encontrados ${data.length} alvarás.`);
+
+    // Mapeia o resultado da consulta para o formato esperado pelo frontend (AlvaraDTO)
+    const result: AlvaraDTO[] = data.map((ag: any) => ({
+      id: ag.id,
+      case_id: ag.case_id,
+      case_number: ag.cases?.case_number ?? 'N/A',
+      value: Number(ag.total_amount) || 0,
+      received: ['PAGO', 'pago', 'CONCLUIDO'].includes(ag.status), 
+      issue_date: toIsoDateOnly(ag.start_date),
+      received_date: ['PAGO', 'pago', 'CONCLUIDO'].includes(ag.status) ? (ag.updated_at ? toIsoDateOnly(ag.updated_at) : toIsoDateOnly(new Date())) : null,
+      creditor_name: ag.creditor?.name ?? 'Não informado',
+      court: null, // Campo não disponível no schema atual
+    }));
+
+    return result;
   }
 
   // --- MÉTODOS ADICIONADOS ---
@@ -507,13 +562,9 @@ export class FinancialService {
    */
   static async updateFinancialAgreement(agreementId: string, data: Partial<EnhancedAgreement>, user: AuthUser) {
     const supabase = createAdminClient();
-
-    // ***** LINHA CORRIGIDA *****
-    // Removemos a validação com .partial() que estava causando o erro.
-    // O Supabase irá ignorar campos que não existem na tabela, tornando a operação segura.
     const { data: updatedAgreement, error } = await supabase
       .from('financial_agreements')
-      .update(data) // Passamos o objeto 'data' diretamente
+      .update(data as any)
       .eq('id', agreementId)
       .select()
       .single();
@@ -525,7 +576,7 @@ export class FinancialService {
 
     await logAudit('FINANCIAL_AGREEMENT_UPDATE', user, {
         agreementId,
-        updatedFields: Object.keys(data) // Usamos 'data' aqui também
+        updatedFields: Object.keys(data)
     });
 
     return updatedAgreement;
