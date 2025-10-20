@@ -197,7 +197,78 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
         saveCaseMutation.mutate(currentCase);
     };
 
-    const handleImportCases = async () => { };
+    const handleImportCases = async () => {
+        if (!importFile) {
+            toast({
+                title: "Erro",
+                description: "Por favor, selecione um arquivo Excel para importar.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsImporting(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", importFile);
+
+            const response = await fetch('/api/cases/import', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || "Falha ao importar processos.");
+            }
+
+            // Exibir resultado da importação
+            if (result.successCount > 0) {
+                toast({
+                    title: "Importação concluída!",
+                    description: `${result.successCount} processo(s) importado(s) com sucesso.`,
+                });
+            }
+
+            // Exibir erros se houver
+            if (result.errors && result.errors.length > 0) {
+                console.error("Erros de importação:", result.errors);
+
+                // Mostrar detalhes dos erros
+                const errorDetails = result.errors.map((e: any) => `Linha ${e.row}: ${e.error}`).join('\n');
+                toast({
+                    title: `${result.errorCount} erro(s) encontrado(s)`,
+                    description: result.errors.length <= 3
+                        ? errorDetails
+                        : `${result.errors.slice(0, 3).map((e: any) => `Linha ${e.row}: ${e.error}`).join('\n')}\n... e mais ${result.errors.length - 3} erro(s)`,
+                    variant: "destructive",
+                    duration: 10000,
+                });
+            }
+
+            // Se nenhum caso foi importado
+            if (result.successCount === 0 && result.errorCount === 0) {
+                toast({
+                    title: "Nenhum caso importado",
+                    description: "O arquivo não contém dados válidos para importação.",
+                    variant: "destructive",
+                });
+            }
+
+            setIsImportModalOpen(false);
+            setImportFile(null);
+            queryClient.invalidateQueries({ queryKey: ['cases'] });
+        } catch (error: any) {
+            toast({
+                title: "Erro ao importar",
+                description: error.message,
+                variant: "destructive",
+            });
+        } finally {
+            setIsImporting(false);
+        }
+    };
 
     const filteredCases = useMemo(() => {
         if (!cases) return [];
@@ -508,6 +579,75 @@ export function CasesModule({ initialFilters }: CasesModuleProps) {
                             {saveCaseMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /><span>Salvando...</span></>) : (<><Plus className="mr-2 h-4 w-4" /><span>{isEditMode ? 'Salvar Alterações' : 'Criar Caso'}</span></>)}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de Importação */}
+            <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+                <DialogContent className="max-w-md bg-white/95 backdrop-blur-lg border-0 shadow-2xl rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center space-x-2">
+                            <Upload className="h-5 w-5 text-purple-600" />
+                            <span>Importar Processos</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-600">
+                            Importe múltiplos processos a partir de um arquivo Excel
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="file-upload" className="text-slate-700 font-semibold">Arquivo Excel (.xlsx)</Label>
+                            <Input
+                                id="file-upload"
+                                type="file"
+                                accept=".xlsx,.xls"
+                                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                                disabled={isImporting}
+                                className="bg-white border-2 border-slate-200 rounded-xl"
+                            />
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                                <p className="text-sm text-blue-800 font-medium mb-1">Colunas necessárias:</p>
+                                <ul className="text-xs text-blue-700 space-y-1">
+                                    <li>• Cliente</li>
+                                    <li>• Executado</li>
+                                    <li>• Numero Processo (opcional)</li>
+                                    <li>• Observacao (título do caso)</li>
+                                    <li>• Status (Em andamento, Acordo, Extinto, Pago)</li>
+                                    <li>• Prioridade (Alta, Média, Baixa)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setIsImportModalOpen(false);
+                                    setImportFile(null);
+                                }}
+                                disabled={isImporting}
+                                className="border-2 border-slate-200 rounded-xl"
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleImportCases}
+                                disabled={!importFile || isImporting}
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-lg rounded-xl"
+                            >
+                                {isImporting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Importando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Importar
+                                    </>
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

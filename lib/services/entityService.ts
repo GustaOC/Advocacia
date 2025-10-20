@@ -50,16 +50,36 @@ function toDbEntity(input: any) {
  */
 export async function getEntities() {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("entities")
-    .select("*")
-    .order("name", { ascending: true });
 
-  if (error) {
-    console.error("Erro ao buscar entidades:", error.message);
-    throw new Error("Não foi possível buscar as entidades.");
+  // Buscar TODAS as entidades sem limite (paginação manual se necessário)
+  let allData: any[] = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error, count } = await supabase
+      .from("entities")
+      .select("*", { count: 'exact' })
+      .order("name", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      console.error("Erro ao buscar entidades:", error.message);
+      throw new Error("Não foi possível buscar as entidades.");
+    }
+
+    if (data) {
+      allData = allData.concat(data);
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
   }
-  return data;
+
+  console.log(`[entityService.getEntities] Total carregado: ${allData.length} entidades`);
+  return allData;
 }
 
 /**

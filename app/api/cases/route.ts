@@ -12,12 +12,10 @@ async function GET_handler(req: NextRequest) {
   try {
     await requirePermission("cases_view");
     
-    // ==> PASSO 5: LENDO PARÂMETROS DE PAGINAÇÃO DA REQUISIÇÃO
+    // Parâmetros de paginação
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
-    // ✅ CORREÇÃO: Aumente o limite para um número grande para buscar todos os casos
-    const limit = parseInt(searchParams.get("limit") || "1000"); // Aumentado de 10 para 1000
-    // ==> FIM DO PASSO 5
+    const limit = parseInt(searchParams.get("limit") || "999999"); // Retornar TODOS os processos
 
     const { data, count } = await caseService.getCases(page, limit);
     

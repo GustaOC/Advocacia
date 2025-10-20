@@ -9,7 +9,11 @@ import * as XLSX from "xlsx";
 const ImportEntitySchema = z.object({
   "Nome Completo": z.string().min(2, "O nome é obrigatório."),
   "Cpf": z.string().optional().nullable().or(z.literal("")),
-  "Email": z.string().email("Email inválido.").optional().nullable().or(z.literal("")),
+  "Email": z.union([
+    z.string().email("Email inválido."),
+    z.literal(""),
+    z.null()
+  ]).optional(),
   "Endereço": z.string().optional().nullable().or(z.literal("")),
   "Nº": z.union([z.string(), z.number()]).optional().nullable(),
   "Bairro": z.string().optional().nullable().or(z.literal("")),
@@ -97,10 +101,10 @@ function normalizeRowData(row: any): any {
         break;
       }
     }
-    
-    // Se o campo não foi encontrado, definir como null
+
+    // Se o campo não foi encontrado, definir como string vazia (não null!)
     if (!(targetField in normalized)) {
-      normalized[targetField] = null;
+      normalized[targetField] = "";
     }
   }
   

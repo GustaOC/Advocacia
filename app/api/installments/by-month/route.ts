@@ -1,11 +1,13 @@
-// app/api/installments/by-month/route.ts - VERSÃO FINAL E DEFINITIVA
+// app/api/installments/by-month/route.ts - VERSÃO FINALÍSSIMA
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServerClient();
+  const cookieStore = cookies();
+  const supabase = createSupabaseServerClient(); 
 
   const { searchParams } = new URL(req.url);
   const year = searchParams.get('year');
@@ -21,29 +23,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Ano e mês devem ser números válidos' }, { status: 400 });
   }
 
-  // Abordagem mais simples e robusta: criar strings no formato AAAA-MM-DD
-  const monthStart = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
-  
-  // Calcula o primeiro dia do mês seguinte para usar como limite superior exclusivo
-  const nextMonthDate = new Date(yearNum, monthNum, 1);
-  const nextMonthYear = nextMonthDate.getFullYear();
-  const nextMonthMonth = nextMonthDate.getMonth() + 1;
-  const nextMonthStart = `${nextMonthYear}-${String(nextMonthMonth).padStart(2, '0')}-01`;
+  const startDate = new Date(yearNum, monthNum - 1, 1).toISOString();
+  const endDate = new Date(yearNum, monthNum, 0).toISOString();
 
   try {
     const { data: installments, error } = await supabase
       .from('financial_installments')
-      // A consulta SELECT que foi validada pela rota /debug
       .select(`
-        id,
-        due_date,
-        amount,
-        status,
+        *,
         agreement:financial_agreements (
-          id,
-          total_amount,
-          number_of_installments,
-          debtor:entities!fk_financial_agreements_debtor (id, name),
+          *,
+          debtor:entities!fk_financial_agreements_debtor (id, name), 
           cases (
             case_number,
             case_parties (
@@ -53,22 +43,19 @@ export async function GET(req: NextRequest) {
           )
         )
       `)
-      // Filtro de data que corresponde exatamente ao formato da base de dados
-      .gte('due_date', monthStart)
-      .lt('due_date', nextMonthStart)
+      .gte('due_date', startDate)
+      .lte('due_date', endDate)
       .order('due_date', { ascending: true });
 
     if (error) {
       console.error('Erro detalhado do Supabase:', error);
       throw new Error(`Falha na consulta ao Supabase: ${error.message}`);
     }
-    
-    const validInstallments = installments?.filter(inst => inst.agreement) || [];
 
-    return NextResponse.json(validInstallments);
+    return NextResponse.json(installments);
 
   } catch (error: any) {
-    console.error('Erro ao buscar parcelas:', error?.message || error);
-    return NextResponse.json({ error: 'Falha ao buscar dados das parcelas.', details: error?.message }, { status: 500 });
+    console.error('Erro ao buscar parcelas:', error.message);
+    return NextResponse.json({ error: 'Falha ao buscar dados das parcelas.', details: error.message }, { status: 500 });
   }
 }

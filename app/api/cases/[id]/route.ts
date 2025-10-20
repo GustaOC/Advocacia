@@ -31,11 +31,7 @@ async function PUT_handler(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const user = await getSessionUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  await requirePermission('UPDATE_CASE')
+  const user = await requirePermission('cases_edit')
 
   // ✅ CORREÇÃO: Convertendo o ID de string para número.
   const caseId = Number(params.id)

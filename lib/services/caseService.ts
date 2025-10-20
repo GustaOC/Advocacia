@@ -28,12 +28,70 @@ const CaseCreateSchema = CaseSchema.extend({
 // Busca paginada de todos os casos
 export async function getCases(page: number = 1, limit: number = 10) {
   const supabase = createAdminClient();
+
+  console.log(`[caseService.getCases] Recebido: page=${page}, limit=${limit}`);
+
+  // Se o limit for muito grande, fazer múltiplas queries para buscar TODOS os registros
+  if (limit >= 100000) {
+    console.log(`[caseService.getCases] MODO BULK - Buscando TODOS os registros em múltiplas queries`);
+
+    // Primeira query para pegar o count total
+    const { count: totalCount, error: countError } = await supabase
+      .from("cases")
+      .select("*", { count: "exact", head: true });
+
+    if (countError) {
+      console.error("Erro ao buscar count:", countError);
+      throw new Error("Não foi possível buscar o total de casos.");
+    }
+
+    console.log(`[caseService.getCases] Total de casos no banco: ${totalCount}`);
+
+    // Supabase limita a 1000 por query, então vamos buscar em lotes
+    const batchSize = 1000;
+    const totalBatches = Math.ceil((totalCount || 0) / batchSize);
+    let allData: any[] = [];
+
+    for (let i = 0; i < totalBatches; i++) {
+      const from = i * batchSize;
+      const to = from + batchSize - 1;
+
+      console.log(`[caseService.getCases] Buscando lote ${i + 1}/${totalBatches} (${from}-${to})`);
+
+      const { data: batchData, error: batchError } = await supabase
+        .from("cases")
+        .select(`*, case_parties (role, entity_id, entities:entity_id (id, name, document))`)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (batchError) {
+        console.error(`Erro ao buscar lote ${i + 1}:`, batchError);
+        continue;
+      }
+
+      allData = allData.concat(batchData || []);
+    }
+
+    console.log(`[caseService.getCases] Total carregado: ${allData.length} casos`);
+
+    return { data: allData.map(d => normalizeParties(d)), count: totalCount || 0 };
+  }
+
+  // Paginação normal - otimizada
   const from = (page - 1) * limit;
   const to = from + limit - 1;
+  console.log(`[caseService.getCases] Aplicando range: from=${from}, to=${to}`);
 
   const { data, error, count } = await supabase
     .from("cases")
-    .select(`*, case_parties (role, entity_id, entities:entity_id (id, name, document))`, { count: "exact" })
+    .select(`
+      *,
+      case_parties (
+        role,
+        entity_id,
+        entities:entity_id (id, name)
+      )
+    `, { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -41,15 +99,9 @@ export async function getCases(page: number = 1, limit: number = 10) {
     console.error("Erro ao buscar casos:", error);
     throw new Error("Não foi possível buscar os casos.");
   }
-  
-  const normalizedData = (data || []).map(caseItem => ({
-    ...caseItem,
-    case_parties: caseItem.case_parties.map((party: any) => ({
-      role: party.role,
-      entities: party.entities
-    }))
-  }));
-  
+
+  console.log(`[caseService.getCases] Retornados: ${data?.length || 0} casos de um total de ${count}`);
+
   return { data: (data || []).map(d => normalizeParties(d)), count: count || 0 };
 }
 
@@ -80,20 +132,46 @@ export async function getCaseById(id: string) {
 
 // Cria um novo caso e, se aplicável, o acordo financeiro associado
 export async function createCase(caseData: unknown, user: AuthUser) {
-    const { client_entity_id, executed_entity_id, ...restOfCaseData } = CaseCreateSchema.parse(caseData);
-    const supabase = createAdminClient();
+    try {
+      console.log('[caseService.createCase] Recebendo caseData:', JSON.stringify(caseData, null, 2));
+      // Remove campos que não pertencem à tabela 'cases' (serão usados em 'case_parties')
+      const { client_entity_id, executed_entity_id, debtor_id, creditor_id, ...caseInsertData } = CaseCreateSchema.parse(caseData);
+      console.log('[caseService.createCase] Dados validados com sucesso. caseInsertData:', JSON.stringify(caseInsertData, null, 2));
+      const supabase = createAdminClient();
 
-    const { data: newCase, error: caseError } = await supabase
-      .from("cases")
-      .insert(restOfCaseData)
-      .select()
-      .single();
+      // Filtra apenas colunas existentes/seguras da tabela 'cases'
+      const ALLOWED_CASE_COLUMNS = new Set(['title','case_number','status'] as const);
+      const filteredInsert: any = {};
+      for (const [k, v] of Object.entries(caseInsertData)) {
+        if (ALLOWED_CASE_COLUMNS.has(k as any)) filteredInsert[k] = v;
+      }
 
-    if (caseError) {
-      console.error("Erro ao criar caso:", caseError);
-      if (caseError.code === '23505') throw new Error("Já existe um caso com este número de processo.");
-      throw new Error("Não foi possível criar o caso.");
-    }
+      // Ajusta o status para o enum real do banco (case_status)
+      // Domínio do app (CaseSchema): 'Em Andamento' | 'Finalizado' | 'Arquivado' | 'Suspenso' | 'Acordo'
+      // Domínio no DB (eusado na UI): 'Em andamento' | 'Pago' | 'Extinto' | 'Suspenso' | 'Acordo'
+      if (typeof filteredInsert.status === 'string') {
+        const statusMap: Record<string, string> = {
+          'Em Andamento': 'Em andamento',
+          'Finalizado': 'Pago',
+          'Arquivado': 'Extinto',
+          'Acordo': 'Acordo',
+          'Suspenso': 'Suspenso',
+        };
+        const mapped = statusMap[filteredInsert.status];
+        if (mapped) filteredInsert.status = mapped;
+      }
+
+      const { data: newCase, error: caseError } = await supabase
+        .from("cases")
+        .insert(filteredInsert)
+        .select()
+        .single();
+
+      if (caseError) {
+        console.error("[caseService.createCase] Erro do Supabase ao inserir caso:", caseError);
+        if (caseError.code === '23505') throw new Error("Já existe um caso com este número de processo.");
+        throw new Error("Não foi possível criar o caso.");
+      }
 
     const partiesToInsert = [
       { case_id: newCase.id, entity_id: client_entity_id, role: 'Cliente' },
@@ -158,11 +236,18 @@ export async function createCase(caseData: unknown, user: AuthUser) {
         }
     }
 
-    const { data: createdCaseWithParties } = await supabase
-      .from("cases").select(`*, case_parties (role, entity_id, entities:entity_id (id, name))`)
-      .eq('id', newCase.id).single();
-    
-    return normalizeParties(createdCaseWithParties);
+      const { data: createdCaseWithParties } = await supabase
+        .from("cases").select(`*, case_parties (role, entity_id, entities:entity_id (id, name))`)
+        .eq('id', newCase.id).single();
+
+      return normalizeParties(createdCaseWithParties);
+    } catch (error: any) {
+      console.error("[caseService.createCase] Erro ao criar caso:", error);
+      if (error instanceof z.ZodError) {
+        console.error("[caseService.createCase] Erros de validação:", error.errors);
+      }
+      throw error;
+    }
 }
 
 // Atualiza um caso existente e gerencia o acordo financeiro associado
@@ -284,3 +369,4 @@ export async function getCaseHistory(caseId: number) {
     }
     return data;
 }
+

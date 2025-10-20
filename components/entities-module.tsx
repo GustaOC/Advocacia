@@ -136,7 +136,9 @@ export default function EntitiesModule() {
   const { data: clients = [], isLoading, isError, error } = useQuery<Client[]>({
     queryKey: ["entities"],
     queryFn: () => apiClient.getEntities(),
-    staleTime: 60_000,
+    staleTime: 30_000, // Cache por 30 segundos
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
   const saveMutation = useMutation({

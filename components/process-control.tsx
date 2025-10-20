@@ -10,9 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Trash2, Plus, Search, Eye, Edit, Clock, CheckCircle, XCircle, 
-  Users, Scale, AlertTriangle, FileText, Loader2, FolderOpen
+import {
+  Trash2, Plus, Search, Eye, Edit, Clock, CheckCircle, XCircle,
+  Users, Scale, AlertTriangle, FileText, Loader2, FolderOpen, Upload
 } from "lucide-react"
 import { DocumentsModule } from "./documents-module"
 import { useToast } from "@/hooks/use-toast"
@@ -37,6 +37,7 @@ interface Case {
   next_deadline?: string;
   client_id?: number;
   client_name?: string;
+  priority?: string;
 }
 interface ProcessTimeline {
   id: number;
@@ -53,17 +54,29 @@ export function ProcessControl() {
   const [selectedProcess, setSelectedProcess] = useState<(Case & { timeline?: ProcessTimeline[] }) | null>(null);
   const [processes, setProcesses] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 50;
 
   const loadProcesses = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/cases'); // Busca da API de casos
+      const response = await fetch('/api/cases?limit=999999'); // Buscar TODOS os processos
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Falha ao carregar os processos.");
       }
-      const data: Case[] = await response.json();
+      const result = await response.json();
+      // A API retorna { cases: data, total: count }
+      const data: Case[] = result.cases || result;
+      const total = result.total || 0;
       setProcesses(data);
+      setTotalCount(total);
+      setTotalPages(Math.ceil(total / itemsPerPage));
     } catch (error: any) {
       toast({
         title: "Erro ao carregar dados",
@@ -73,19 +86,69 @@ export function ProcessControl() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, itemsPerPage]);
 
   useEffect(() => {
     loadProcesses();
   }, [loadProcesses]);
 
+  const handleImport = async () => {
+    if (!importFile) {
+      toast({
+        title: "Erro",
+        description: "Por favor, selecione um arquivo Excel para importar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const response = await fetch('/api/cases/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao importar processos.");
+      }
+
+      toast({
+        title: "Importação concluída",
+        description: `${result.successCount} processo(s) importado(s) com sucesso. ${result.errorCount > 0 ? `${result.errorCount} erro(s) encontrado(s).` : ''}`,
+      });
+
+      if (result.errors && result.errors.length > 0) {
+        console.error("Erros de importação:", result.errors);
+      }
+
+      setShowImportDialog(false);
+      setImportFile(null);
+      loadProcesses();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao importar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Filtrar e mostrar TODOS os processos (sem paginação)
   const filteredProcesses = useMemo(() =>
     processes.filter(p => {
-      const searchMatch = 
+      const searchMatch = !searchTerm ||
         p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.case_number || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.case_parties.some(party => party.entities.name.toLowerCase().includes(searchTerm.toLowerCase()));
-      
+
       const statusMatch = filterStatus === "all" || p.status === filterStatus;
 
       return searchMatch && statusMatch;
@@ -121,16 +184,25 @@ export function ProcessControl() {
         <CardContent className="p-6 flex justify-between items-center">
           <div className="relative flex-1 max-w-lg">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-            <Input 
-              placeholder="Buscar por título, número ou parte..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-              className="pl-10 h-11" 
+            <Input
+              placeholder="Buscar por título, número ou parte..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-10 h-11"
             />
           </div>
-          <Button className="h-11 bg-slate-800 hover:bg-slate-900">
-            <Plus className="mr-2 h-4 w-4" /> Novo Processo
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => setShowImportDialog(true)}
+            >
+              <Upload className="mr-2 h-4 w-4" /> Importar
+            </Button>
+            <Button className="h-11 bg-slate-800 hover:bg-slate-900">
+              <Plus className="mr-2 h-4 w-4" /> Novo Processo
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -142,6 +214,7 @@ export function ProcessControl() {
                 <TableHead>Título do Caso</TableHead>
                 <TableHead>Nº do Processo</TableHead>
                 <TableHead>Partes</TableHead>
+                <TableHead>Prioridade</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -161,6 +234,20 @@ export function ProcessControl() {
                       {processItem.case_parties.length > 2 && <Badge variant="secondary">...</Badge>}
                     </div>
                   </TableCell>
+                  <TableCell>
+                    {processItem.priority && (
+                      <Badge
+                        variant="outline"
+                        className={
+                          processItem.priority === 'Alta' ? 'bg-red-100 text-red-800' :
+                          processItem.priority === 'Média' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }
+                      >
+                        {processItem.priority}
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{getStatusBadge(processItem.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => setSelectedProcess(processItem)}>
@@ -174,6 +261,72 @@ export function ProcessControl() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Total de Processos */}
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-center">
+            <div className="text-sm font-medium text-slate-700">
+              Total: {totalCount} processos carregados
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modal de Importação */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Upload className="h-5 w-5" />
+              <span>Importar Processos</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Arquivo Excel (.xlsx)</Label>
+              <Input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                disabled={isImporting}
+              />
+              <p className="text-sm text-slate-500">
+                O arquivo deve conter as colunas: Cliente, Executado, Numero Processo, Observacao, Status, Prioridade
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setImportFile(null);
+                }}
+                disabled={isImporting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleImport}
+                disabled={!importFile || isImporting}
+                className="bg-slate-800 hover:bg-slate-900"
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Detalhes do Processo */}
       <Dialog open={!!selectedProcess} onOpenChange={() => setSelectedProcess(null)}>
